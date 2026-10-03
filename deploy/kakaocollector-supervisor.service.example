@@ -1,0 +1,15 @@
+[Unit]
+Description=Bounded redroid restart supervisor
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/kakaotalk-mcp
+ExecStart=/usr/bin/python3 /opt/kakaotalk-mcp/deploy/supervisor.py
+Restart=on-failure
+RestartSec=30
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

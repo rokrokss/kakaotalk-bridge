@@ -1,0 +1,61 @@
+# Local real-device test host on Apple Silicon. App containers still use compose.yaml.
+minimumLimaVersion: 2.0.0
+base:
+  - template:_images/ubuntu-24.04
+vmType: vz
+arch: aarch64
+cpus: 6
+memory: 8GiB
+disk: 40GiB
+# No host home directory or project secrets are automatically shared with the guest.
+mounts: []
+containerd:
+  system: false
+  user: false
+portForwards:
+  - guestPort: 8443
+    hostPort: 18443
+    hostIP: 127.0.0.1
+  - guestPortRange: [1, 65535]
+    proto: any
+    ignore: true
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euo pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y docker.io docker-compose-v2 "linux-modules-extra-$(uname -r)"
+      modprobe binder_linux devices=binder,hwbinder,vndbinder
+      printf '%s\n' binder_linux > /etc/modules-load.d/kakaocollector.conf
+      printf '%s\n' 'options binder_linux devices=binder,hwbinder,vndbinder' > /etc/modprobe.d/kakaocollector.conf
+      mkdir -p /dev/binderfs
+      if ! mountpoint -q /dev/binderfs; then mount -t binder binder /dev/binderfs; fi
+      chmod 666 /dev/binderfs/binder /dev/binderfs/hwbinder /dev/binderfs/vndbinder
+      # binderfs is recreated on every boot, before Docker recreates its devices.
+      cat > /etc/systemd/system/kakaocollector-binder.service <<'UNIT'
+      [Unit]
+      Description=Binder devices for local redroid tests
+      After=systemd-modules-load.service
+      Before=docker.service
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/bin/mkdir -p /dev/binderfs
+      ExecStart=/bin/mount -t binder binder /dev/binderfs
+      ExecStart=/bin/chmod 666 /dev/binderfs/binder /dev/binderfs/hwbinder /dev/binderfs/vndbinder
+      [Install]
+      WantedBy=multi-user.target
+      UNIT
+      systemctl daemon-reload
+      systemctl enable kakaocollector-binder.service
+      systemctl enable --now docker
+probes:
+  - script: |
+      #!/bin/bash
+      set -euo pipefail
+      test -d /sys/module/binder_linux
+      sudo docker info >/dev/null
+      sudo docker compose version
+    hint: Check /var/log/cloud-init-output.log inside the guest.

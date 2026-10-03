@@ -1,0 +1,21 @@
+services:
+  redroid:
+    # Apple Silicon guests cannot execute the 32-bit ARM vendor programs.
+    image: redroid/redroid:14.0.0_64only-latest@sha256:0a611199ba2e0b5d60af39b3327a517f6407231f4352114ed3bd3cbfe2be69aa
+    # Bind the binderfs inode itself; a copied character node returns ENXIO.
+    volumes:
+      - type: bind
+        source: /dev/binderfs/binder
+        target: /dev/binder
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /dev/binderfs/hwbinder
+        target: /dev/hwbinder
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /dev/binderfs/vndbinder
+        target: /dev/vndbinder
+        bind:
+          create_host_path: false

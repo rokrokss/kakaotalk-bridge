@@ -1,0 +1,235 @@
+name: ${COMPOSE_PROJECT_NAME:-kakaotalk-collector}
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-server: &server
+  image: ${COLLECTOR_IMAGE:-kakaotalk-collector/server:0.1.0}
+  build:
+    context: .
+    dockerfile: docker/server.Dockerfile
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging: *logging
+
+x-device: &device
+  image: ${DEVICE_IMAGE:-kakaotalk-collector/device:0.1.0}
+  build:
+    context: .
+    dockerfile: docker/device.Dockerfile
+    secrets: [bridge_keystore, bridge_key_password]
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging: *logging
+
+services:
+  redroid:
+    image: ${REDROID_IMAGE:-redroid/redroid:14.0.0-latest@sha256:a3e654caad74faed03cd5ead057a989e06f507778cda678e5d3b9772e0092f1c}
+    privileged: true
+    restart: "no"
+    command:
+      - androidboot.redroid_width=1200
+      - androidboot.redroid_height=1920
+      - androidboot.redroid_dpi=240
+      - androidboot.redroid_fps=15
+      - androidboot.redroid_gpu_mode=guest
+      - androidboot.use_memfd=1
+      - ro.build.characteristics=tablet
+      - ro.product.model=SM-T970
+      - ro.product.brand=Samsung
+    volumes: [android-data:/data]
+    ports: ["127.0.0.1:${ADB_PORT:-5555}:5555"]
+    networks: [device-net]
+    mem_limit: 4g
+    pids_limit: 2048
+    logging: *logging
+
+  api:
+    <<: *server
+    restart: unless-stopped
+    environment:
+      DEVICE_ID: ${DEVICE_ID:-personal-tablet}
+      RETENTION_DAYS: ${RETENTION_DAYS:-30}
+      DB_PATH: /data/collector.db
+    secrets: [ingest_token, read_token, device_token, backup_key]
+    volumes: [collector-data:/data]
+    networks: [backend-net]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  gateway:
+    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    # The upstream caddy binary carries this file capability; keep it in the bounding set.
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp, /config, /data]
+    volumes: [./docker/Caddyfile:/etc/caddy/Caddyfile:ro]
+    secrets: [tls_cert, tls_key]
+    ports: ["${HTTPS_BIND:-127.0.0.1}:${HTTPS_PORT:-8443}:8443"]
+    networks:
+      device-net:
+        ipv4_address: ${GATEWAY_IP:-172.29.87.3}
+      backend-net: {}
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+
+  device-agent:
+    <<: *device
+    restart: unless-stopped
+    environment:
+      ADB_TARGET: redroid:5555
+      DEVICE_ID: ${DEVICE_ID:-personal-tablet}
+      API_URL: http://api:8000
+    volumes: [device-state:/state]
+    secrets: [device_token]
+    networks: [device-net, backend-net]
+    depends_on:
+      redroid:
+        condition: service_started
+      api:
+        condition: service_healthy
+
+  iris-collector:
+    <<: *device
+    command: [iris-watch]
+    restart: unless-stopped
+    environment:
+      ADB_TARGET: redroid:5555
+      DEVICE_ID: ${DEVICE_ID:-personal-tablet}
+      API_URL: http://api:8000
+    volumes: [iris-state:/state]
+    secrets: [ingest_token]
+    networks: [device-net, backend-net]
+    depends_on:
+      redroid:
+        condition: service_started
+      api:
+        condition: service_healthy
+
+  admin:
+    <<: *device
+    command: [web-ui]
+    restart: unless-stopped
+    environment:
+      ADB_TARGET: redroid:5555
+      DEVICE_ID: ${DEVICE_ID:-personal-tablet}
+      API_URL: http://api:8000
+      BRIDGE_URL: https://${GATEWAY_IP:-172.29.87.3}:8443
+    volumes:
+      - device-state:/state
+      - ./inputs/kakao:/inputs/kakao:ro
+    secrets: [admin_token, read_token, ingest_token, tls_cert]
+    networks: [device-net, backend-net]
+    depends_on:
+      redroid:
+        condition: service_started
+      api:
+        condition: service_healthy
+
+  bootstrap:
+    <<: *device
+    profiles: [setup]
+    command: [bootstrap]
+    environment:
+      ADB_TARGET: redroid:5555
+      DEVICE_ID: ${DEVICE_ID:-personal-tablet}
+      BRIDGE_URL: https://${GATEWAY_IP:-172.29.87.3}:8443
+    volumes:
+      - device-state:/state
+      - ./inputs/kakao:/inputs/kakao:ro
+    secrets: [ingest_token, tls_cert]
+    networks: [device-net]
+    depends_on:
+      redroid:
+        condition: service_started
+
+  mcp:
+    <<: *server
+    profiles: [mcp]
+    command: [python, -m, server.mcp_adapter]
+    stdin_open: true
+    environment:
+      API_URL: http://api:8000
+    secrets: [read_token]
+    networks: [backend-net]
+
+  dot-plugin:
+    <<: *server
+    image: ${DOT_IMAGE:-kakaotalk-collector/dot:0.1.0}
+    profiles: [dot]
+    restart: unless-stopped
+    command: [uvicorn, dot_plugin.app:create_app, --factory, --host, 0.0.0.0, --port, "8787", --no-access-log]
+    environment:
+      API_URL: http://api:8000
+      DOT_PUBLIC_URL: ${DOT_PUBLIC_URL:-https://kakao.example.invalid}
+      DOT_DB_PATH: /data/dot.db
+    secrets: [read_token, mcp_link_key, mcp_storage_key]
+    volumes: [dot-state:/data]
+    ports: ["127.0.0.1:${DOT_HTTP_PORT:-18787}:8787"]
+    networks: [backend-net, dot-net]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health/live', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  android-data:
+  collector-data:
+  device-state:
+  iris-state:
+  dot-state:
+
+networks:
+  device-net:
+    ipam:
+      config:
+        - subnet: ${DEVICE_SUBNET:-172.29.87.0/24}
+          # Keep automatic assignments away from the fixed gateway IP after daemon restarts.
+          ip_range: ${DEVICE_IP_RANGE:-172.29.87.128/25}
+  backend-net:
+    internal: true
+  dot-net:
+
+secrets:
+  admin_token:
+    file: ./secrets/admin_token
+  ingest_token:
+    file: ./secrets/ingest_token
+  read_token:
+    file: ./secrets/read_token
+  device_token:
+    file: ./secrets/device_token
+  tls_cert:
+    file: ./secrets/tls_cert.pem
+  tls_key:
+    file: ./secrets/tls_key.pem
+  bridge_keystore:
+    file: ./secrets/bridge.jks
+  bridge_key_password:
+    file: ./secrets/bridge_key_password
+  backup_key:
+    file: ./secrets/backup_key
+  mcp_link_key:
+    file: ./secrets/mcp_link_key
+  mcp_storage_key:
+    file: ./secrets/mcp_storage_key

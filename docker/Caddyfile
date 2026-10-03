@@ -1,0 +1,24 @@
+{
+    admin off
+    auto_https off
+    servers {
+        protocols h1 h2
+    }
+}
+:8443 {
+    tls /run/secrets/tls_cert /run/secrets/tls_key
+    request_body {
+        max_size 1MB
+    }
+    # Device status is only reachable from the device-agent on backend-net.
+    @device path /internal/v1/device-status
+    respond @device 404
+    redir / /admin/ 302
+    redir /admin /admin/ 302
+    handle /admin/* {
+        reverse_proxy admin:8080
+    }
+    handle {
+        reverse_proxy api:8000
+    }
+}
