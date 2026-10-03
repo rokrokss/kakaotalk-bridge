@@ -150,9 +150,26 @@ PASS smoke-test grant revoked; no active subscription created
 
 별도로 공개 DNS의 Funnel IP를 지정한 HTTPS `/health/live` 요청도 `{"status":"alive"}`를 반환했습니다. 단위 테스트는 서명·콜백 실패·재시도·만료·철회·키 회전·서버 재생성 후 미처리 복구·필터·보관 경계 등을 검증합니다. 실제 Dot 이벤트 실행의 완료 여부는 ChatGPT 계정에서 구독하고 새 메시지를 수신한 뒤 별도로 확인해야 합니다.
 
-실제 ChatGPT 웹에서는 `KakaoTalk Dot`의 사용자 지정 MCP 생성 흐름을 진행해 자체 OAuth 승인 페이지까지 도달했고, CIMD와 권한 범위가 인식되었습니다. 승인 폼을 제출할 때 Chrome에서 `ERR_BLOCKED_BY_CLIENT`가 발생해 계정 연결 완료는 확인하지 못했습니다. 서버에 승인 POST가 도착하지 않았고 실제 Dot 구독도 아직 없습니다. 승인 화면을 갱신해 연결 키를 입력한 상태로 남겼습니다. 시간이 지나 승인 상태가 만료되면 ChatGPT 플러그인 화면에서 연결을 다시 시작해야 합니다.
+초기 ChatGPT 웹 검사에서는 `KakaoTalk Dot`의 사용자 지정 MCP 생성 흐름을 진행해 자체 OAuth 승인 페이지까지 도달했고, CIMD와 권한 범위가 인식되었습니다. 승인 폼을 제출할 때 Chrome에서 `ERR_BLOCKED_BY_CLIENT`가 발생해 당시에는 계정 연결 완료를 확인하지 못했습니다.
 
 브라우저 폼 정책에는 승인된 OAuth client의 정확한 origin을 포함하도록 보완했습니다. Chromium의 폼 리디렉션 검사에서도 ChatGPT callback으로 돌아갈 수 있게 하기 위한 변경이며, 위 `ERR_BLOCKED_BY_CLIENT`의 원인이 이 정책이었다고 입증한 것은 아닙니다. 서버 변경 뒤 공개 OAuth smoke 검사도 다시 통과했습니다.
+
+후속 검사에서 사용자가 보고한 `invalid_origin`은 승인 HTML의 `no-referrer` 설정으로 설명되었습니다. `6f6270e`에서 승인 HTML만 `same-origin`으로 바꾸고 dot-plugin 컨테이너에 배포했습니다. 실제 Chrome 폼을 새로 불러와 제출한 뒤 ChatGPT로 복귀했고, `KakaoTalk Dot`의 연결된 계정에 `Personal KakaoTalk collector / Primary`가 표시되었습니다. 서버의 유효한 ChatGPT CIMD grant도 1건 확인했습니다. 나머지 6개 컨테이너는 ID가 그대로 유지되었습니다. 실제 Dot 이벤트 구독은 아직 0건이며 자동 작업 실행 검증은 별도입니다.
+
+```text
+uv run pytest -q
+123 passed, 1 warning in 5.51s
+uv run ruff check .
+All checks passed!
+gitleaks git --staged --redact=100 --no-banner
+no leaks found
+uv run python scripts/smoke-dot.py https://your-host.example
+PASS public TLS, unauthenticated MCP 401, OAuth discovery, OIDC 404
+PASS OAuth owner approval, PKCE S256 and token exchange
+PASS MCP 2.0 discovery, 7 tools, message.created event, profile and status
+PASS real collector read: rows=1, cursor=1131, source=iris_db; text not printed
+PASS smoke-test grant revoked; no active subscription created
+```
 
 구현: `dot_plugin/app.py`(MCP), `auth.py`(OAuth), `events.py`(구독/처리 커서), `network.py`(콜백 검증/전송), `storage.py`(영속 상태). 테스트: `tests/test_dot_plugin.py`, `tests/test_dot_network.py`.
 
