@@ -76,7 +76,7 @@ class Source:
         raise AssertionError(path)
 
 
-def link(client, method="none"):
+def begin_link(client, method="none"):
     response = client.post(
         "/register",
         json={
@@ -101,8 +101,14 @@ def link(client, method="none"):
     }
     page = client.get("/authorize", params=query)
     assert page.status_code == 200, page.text
+    assert page.headers["referrer-policy"] == "same-origin"
     assert "form-action 'self' https://chatgpt.com;" in page.headers["content-security-policy"]
     ticket = re.search(r'name="ticket" value="([^"]+)"', page.text)[1]
+    return registration, ticket
+
+
+def link(client, method="none"):
+    registration, ticket = begin_link(client, method)
     approval = client.post(
         "/authorize",
         data={"ticket": ticket, "link_key": "L" * 43},
@@ -110,6 +116,7 @@ def link(client, method="none"):
         follow_redirects=False,
     )
     assert approval.status_code == 303, approval.text
+    assert approval.headers["referrer-policy"] == "no-referrer"
     assert "form-action 'self' https://chatgpt.com;" in approval.headers["content-security-policy"]
     redirect = parse_qs(urlsplit(approval.headers["location"]).query)
     assert redirect["iss"] == [BASE] and redirect["state"] == ["state-value"]
@@ -206,6 +213,31 @@ def test_discovery_401_oauth_metadata_and_complete_results(plugin):
 def test_dcr_rejects_redirects_that_cannot_form_safe_csp_sources(plugin, redirect):
     client, *_ = plugin
     assert client.post("/register", json={"redirect_uris": [redirect]}).status_code == 400
+
+
+@pytest.mark.parametrize("origin", [None, "null", "https://foreign.example", BASE + ".evil.example"])
+def test_approval_requires_exact_origin_even_with_valid_ticket_cookie_and_key(plugin, origin):
+    client, *_ = plugin
+    _, ticket = begin_link(client)
+    data = {"ticket": ticket, "link_key": "L" * 43}
+    headers = {"Referer": BASE + "/authorize"}
+    if origin is not None:
+        headers["Origin"] = origin
+    denied = client.post("/authorize", data=data, headers=headers, follow_redirects=False)
+    assert denied.status_code == 403
+    assert denied.json() == {"error": "invalid_origin"}
+    assert denied.headers["referrer-policy"] == "no-referrer"
+    # Rejection must not consume the valid browser-bound approval.
+    approved = client.post(
+        "/authorize", data=data, headers={"Origin": BASE}, follow_redirects=False
+    )
+    assert approved.status_code == 303
+
+
+def test_non_approval_responses_do_not_send_referrers(plugin):
+    client, *_ = plugin
+    for path in ["/", "/health/live", "/.well-known/oauth-authorization-server", "/authorize"]:
+        assert client.get(path).headers["referrer-policy"] == "no-referrer"
 
 
 def test_signal_then_read_ack_and_restart_without_payload(plugin):

@@ -215,11 +215,11 @@ def create_app(config=None, collector=None, state=None, verifier=None, sender=No
             "Content-Security-Policy",
             "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
         )
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
         response.headers.update(
             {
                 "Cache-Control": "no-store",
                 "X-Content-Type-Options": "nosniff",
-                "Referrer-Policy": "no-referrer",
                 "X-Frame-Options": "DENY",
             }
         )
@@ -279,6 +279,10 @@ def create_app(config=None, collector=None, state=None, verifier=None, sender=No
             raise AuthError()
         page, cookie, redirect = auth.authorize(dict(request.query_params))
         response = HTMLResponse(page)
+        # Native form POSTs under no-referrer carry Origin: null. Preserve the
+        # same-origin Origin for CSRF validation without leaking a referrer to
+        # the external OAuth callback. Other responses retain no-referrer.
+        response.headers["Referrer-Policy"] = "same-origin"
         # Chromium also applies form-action to the POST's 303 redirect. Permit
         # only this approved client's origin, keeping the key POST same-origin.
         response.headers["Content-Security-Policy"] = (

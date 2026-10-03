@@ -113,11 +113,14 @@ uv run python scripts/smoke-dot.py https://your-host.example
 
 smoke 검사는 임시 OAuth 등록/승인/PKCE 교환 → MCP 검색 → 실제 최신 행 조회 → 임시 grant 철회를 수행합니다. 본문과 키는 출력하지 않으며 이벤트 구독을 생성하지 않습니다. 개발 PC에서 연결 키 파일에 접근할 수 있어야 합니다. Linux에서 키 소유자를 변경한 경우에는 적절한 운영자 권한으로 실행합니다.
 
+smoke 검사는 HTTP 클라이언트에서 Origin을 직접 지정하므로 브라우저의 폼 정책을 재현하지 않습니다. 브라우저 인증 변경은 실제 승인 폼 제출과 ChatGPT 복귀도 확인해야 합니다.
+
 이 배포의 공개 연결만 중단하려면 `tailscale funnel --https=443 off`를 실행합니다. 다른 서비스가 이 Funnel 설정을 재사용하게 되면 중단 전에 경로를 다시 확인하세요. 터널만 중단하려면 `launchctl bootout gui/$(id -u) "$HOME/Library/LaunchAgents/dev.kakaocollector.dot-tunnel.plist"`를 실행합니다.
 
 ## 인증과 상태 보관
 
 - OAuth owner 승인 키는 충분히 긴 랜덤 값이고 URL에 넣지 않습니다. 승인 폼은 쿠키·Origin에 결합하며 PKCE S256, 정확한 redirect URI와 resource audience를 검증합니다.
+- 승인 HTML의 `Referrer-Policy`는 `same-origin`입니다. `no-referrer`는 브라우저의 일반 폼 POST에서 `Origin: null`을 만들어 정상 승인을 거부하게 합니다. 외부 callback에는 referrer를 보내지 않으며 승인 응답과 나머지 경로는 `no-referrer`를 유지합니다. 서버는 누락·null·다른 Origin을 계속 거부합니다. 관련 동작: [Fetch 표준](https://fetch.spec.whatwg.org/#append-a-request-origin-header).
 - DCR과 ChatGPT의 검증된 CIMD 문서를 지원합니다. CIMD fetch가 실패하면 임의 client/redirect를 허용하지 않습니다. CIMD는 `none`, DCR은 `none`/`client_secret_basic`/`client_secret_post`를 지원합니다. private_key_jwt는 제공하지 않습니다.
 - access token은 30분, refresh grant는 30일입니다. refresh token을 회전하며 이미 사용한 refresh token 재사용 시 해당 grant를 철회합니다.
 - `dot-state`에는 OAuth·구독·consumer·웹훅 대기열이 저장됩니다. 값은 `secrets/mcp_storage_key`로 암호화합니다. 키를 잃으면 이 상태를 복구할 수 없습니다. 수집 DB 자체의 암호화와는 별개입니다.

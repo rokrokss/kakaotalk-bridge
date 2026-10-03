@@ -56,6 +56,7 @@ def smoke(base, key_path):
         }
         page = client.get("/authorize?" + urlencode(query))
         assert page.status_code == 200
+        assert page.headers["referrer-policy"] == "same-origin"
         ticket = re.search(r'name="ticket" value="([^"]+)"', page.text)[1]
         approval = client.post(
             "/authorize",
@@ -63,6 +64,7 @@ def smoke(base, key_path):
             headers={"Origin": base},
         )
         assert approval.status_code == 303
+        assert approval.headers["referrer-policy"] == "no-referrer"
         location = urlsplit(approval.headers["location"])
         assert location.scheme + "://" + location.netloc + location.path == redirect
         callback = parse_qs(location.query)
