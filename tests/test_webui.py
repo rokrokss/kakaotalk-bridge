@@ -292,6 +292,30 @@ def wait_job(client):
     raise AssertionError("job did not finish")
 
 
+def test_login_check_reports_existing_approval_without_restarting_setup(console):
+    client, android = console
+    headers = signin(client)
+    android.login_check.return_value = False
+    client.post("/admin/api/action", json={"name": "login-check"}, headers=headers)
+    result = wait_job(client)
+    assert result["job"]["state"] == "done"
+    assert "이미 수집 승인이 완료" in result["job"]["message"]
+    android.session_status.assert_called_once()
+    android.bootstrap.assert_not_called()
+    android.confirm.assert_not_called()
+
+
+def test_login_check_failure_explains_required_screen_without_leaking_content(console):
+    client, android = console
+    headers = signin(client)
+    android.login_check.side_effect = RuntimeError("private account and UI contents")
+    client.post("/admin/api/action", json={"name": "login-check"}, headers=headers)
+    result = wait_job(client)
+    assert result["job"]["state"] == "failed"
+    assert "로그인 전 화면" in result["job"]["message"]
+    assert "private account" not in json.dumps(result)
+
+
 def test_session_inspection_is_authenticated_and_invalidates_after_input(console):
     client, android = console
     assert client.get("/admin/api/state").status_code == 401

@@ -126,7 +126,7 @@ class Android:
         self.enable_keyboard()
 
     def login_check(self):
-        cli.login_check()
+        return cli.login_check()
 
     def confirm(self, phone, tablet):
         cli.confirm_secondary(phone, tablet)

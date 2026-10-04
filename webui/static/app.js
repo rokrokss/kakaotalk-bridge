@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 let csrf = '', active = false, paused = false, fetching = false, rendering = false;
 let frame = null, pointer = null, blobURL = null, busy = false, generation = 0;
 let setupInitialized = false, precheckValid = false, collectionApproved = false;
+let loginAlreadyApproved = false;
 const messages = {
   session_required: '관리자 인증이 만료됐습니다. 키를 다시 입력하세요.',
   device_busy: '기기 작업 중입니다. 잠시 후 다시 시도하세요.',
@@ -26,7 +27,7 @@ function locked() {
   active = false;
   csrf = '';
   frame = pointer = null;
-  busy = precheckValid = collectionApproved = setupInitialized = false;
+  busy = precheckValid = collectionApproved = setupInitialized = loginAlreadyApproved = false;
   $('console').hidden = true;
   $('login-panel').hidden = false;
   $('logout').hidden = true;
@@ -162,6 +163,10 @@ function renderSessions(s, stale) {
   // 30-minute deadline. The server revalidates the device and app on approval.
   precheckValid = proof?.state === 'valid' && proof.expires_at > Date.now() / 1000;
   collectionApproved = fresh && s.collection_approval === 'approved';
+  loginAlreadyApproved = s?.collection_approval === 'approved';
+  $('login-check-help').textContent = loginAlreadyApproved
+    ? '이미 수집 승인이 완료되어 검사가 필요 없습니다. 현재 상태는 ‘상태 확인’으로 확인하세요.'
+    : '로그인 전에만 사용합니다. 검사 통과 후 30분 안에 태블릿에서 로그인하세요.';
   $('approval-detail').textContent = precheckValid
     ? `${localTime(proof.expires_at)}까지 양쪽 로그인을 확인하세요.`
     : collectionApproved ? '앱과 기기의 승인 기록이 일치합니다.'
@@ -175,6 +180,7 @@ function renderSessions(s, stale) {
 
 function updateControls() {
   document.querySelectorAll('[data-action], [data-key], #install, #send-text').forEach(button => { button.disabled = busy; });
+  $('login-check').disabled = busy || loginAlreadyApproved;
   $('confirm').disabled = busy || !precheckValid || !$('phone-active').checked || !$('tablet-active').checked;
   $('phone-recheck').disabled = busy || !collectionApproved || !$('phone-rechecked').checked;
 }
@@ -189,6 +195,11 @@ async function updateState() {
     $('job').hidden = !state.job.message;
     $('job').textContent = state.job.message;
     $('job').dataset.state = state.job.state;
+    const loginJob = ['login-check', 'confirm-secondary'].includes(state.job.action);
+    $('login-check-result').hidden = !loginJob || !state.job.message;
+    $('login-check-result').textContent = loginJob ? state.job.message : '';
+    $('login-check-result').dataset.state = state.job.state;
+    $('login-check').textContent = busy && state.job.action === 'login-check' ? '검사 중…' : '로그인 옵션 검사';
     const collector = state.collector.state;
     $('collector-status').dataset.state = collector;
     $('collector-status').textContent = collector === 'collecting_partial' ? '메시지 수집 중'
@@ -210,8 +221,23 @@ async function action(name, extra = {}) {
   if (!active || busy) return;
   busy = true;
   updateControls();
+  if (name === 'login-check') {
+    $('login-check').textContent = '검사 중…';
+    $('login-check-result').textContent = '태블릿 설정과 로그인 옵션을 확인하고 있습니다.';
+    $('login-check-result').dataset.state = 'running';
+    $('login-check-result').hidden = false;
+  }
   try { await api('action', { name, ...extra }); await updateState(); }
-  catch (error) { busy = false; updateControls(); feedback(error.message); }
+  catch (error) {
+    busy = false;
+    $('login-check').textContent = '로그인 옵션 검사';
+    if (name === 'login-check') {
+      $('login-check-result').textContent = error.message;
+      $('login-check-result').dataset.state = 'failed';
+    }
+    updateControls();
+    feedback(error.message);
+  }
 }
 
 document.querySelectorAll('[data-action]').forEach(button => {

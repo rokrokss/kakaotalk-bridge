@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from device import login_guard
+from device import login_guard, session_status
 
 PKG = "dev.kakaocollector.bridge"
 REMOTE_CONFIG = f"/data/user/0/{PKG}/files/enrollment.json"
@@ -201,21 +201,25 @@ def provision(config):
 
 def login_check():
     connect()
-    # Rechecking revokes collection first, including any prior successful attestation.
     config = json.loads(adb("shell", "cat", REMOTE_CONFIG))
+    signature = login_guard.device_signature(adb)
+    if session_status.enrollment_evidence(config, {}, signature)["collection_approval"] == "approved":
+        print("Collection is already approved. Use session-check to inspect its status.")
+        return False
+    # A failed inspection must leave the existing approval and proof untouched.
+    proof = login_guard.prelogin(adb)
+    proof["epoch"] = config["enrollment_epoch"]
     config["secondary_login_version"] = 0
     # Do not launch the Bridge Activity: the foreground KakaoTalk login UI must stay visible.
     provision_file(config)
     proof_path = Path("/state/prelogin.json")
-    proof_path.unlink(missing_ok=True)
-    proof = login_guard.prelogin(adb)
-    proof["epoch"] = config["enrollment_epoch"]
     proof_path.write_text(json.dumps(proof))
     proof_path.chmod(0o600)
     print(
         "PASS: tablet configuration and selected secondary-login checkbox observed. No login was submitted."
     )
     print("After manual login, verify both devices stay logged in before confirm-secondary.")
+    return True
 
 
 def confirm_secondary(phone_active=False, tablet_active=False):

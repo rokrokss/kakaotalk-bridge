@@ -297,6 +297,7 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
     def run_action(body):
         nonlocal session_snapshot, snapshot_invalidated
         try:
+            already_approved = False
             with lock:
                 if body.name == "bootstrap":
                     device.bootstrap()
@@ -305,7 +306,7 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
                 elif body.name == "keyboard":
                     device.enable_keyboard()
                 elif body.name == "login-check":
-                    device.login_check()
+                    already_approved = device.login_check() is False
                 elif body.name == "confirm-secondary":
                     device.confirm(body.phone_active, body.tablet_active)
                 elif body.name in ("phone-active", "phone-lost"):
@@ -323,7 +324,11 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
                 "bootstrap": "설치했습니다. 카카오톡을 열어 로그인 옵션을 검사하세요.",
                 "open-kakao": "카카오톡을 열었습니다.",
                 "keyboard": "입력기를 연결했습니다. 태블릿의 입력칸을 선택하세요.",
-                "login-check": "보조 로그인 옵션 검사를 통과했습니다. 이제 화면에서 로그인하세요.",
+                "login-check": (
+                    "이미 수집 승인이 완료되어 있습니다. 현재 상태는 ‘상태 확인’으로 확인하세요."
+                    if already_approved
+                    else "보조 로그인 옵션 검사를 통과했습니다. 이제 화면에서 로그인하세요."
+                ),
                 "confirm-secondary": "양쪽 로그인을 확인했습니다. 메시지 수집을 시작합니다.",
                 "session-check": "현재 화면과 로그인 확인 기록을 검사했습니다.",
                 "phone-active": "핸드폰에서 직접 확인한 시각을 갱신했습니다.",
@@ -333,8 +338,10 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
         except Exception:  # noqa: BLE001 — isolate background jobs without leaking credentials
             # Login UI dumps, input strings, filesystem paths and exception bodies stay private.
             message = (
-                "보조 로그인 확인 실패. ‘다른 기기와 함께 사용’ 선택 여부, 검사 유효시간 및 양쪽 세션을 확인하세요."
-                if body.name in ("login-check", "confirm-secondary", "phone-active")
+                "로그인 옵션을 확인하지 못했습니다. 로그인 전 화면에서 ‘다른 기기와 함께 사용’을 선택하세요. 기존 수집 승인은 변경하지 않았습니다."
+                if body.name == "login-check"
+                else "보조 로그인 확인 실패. 검사 유효시간 및 양쪽 세션을 확인하세요."
+                if body.name in ("confirm-secondary", "phone-active")
                 else "수집 중단을 완료하지 못했습니다. 기기 연결과 Iris 수집 상태를 확인하세요."
                 if body.name == "phone-lost"
                 else "작업에 실패했습니다. redroid 연결, APK 배치 및 설치 상태를 확인하세요."

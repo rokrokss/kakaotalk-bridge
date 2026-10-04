@@ -98,8 +98,9 @@
                 <li>
                   <h3>보조 기기로 로그인</h3>
                   <p>카카오톡의 <strong>‘다른 기기와 함께 사용’</strong>을 선택한 뒤 검사하세요. 이 옵션이 없으면 로그인을 진행하지 마세요.</p>
-                  <button data-action="login-check" class="wide">로그인 옵션 검사</button>
-                  <p class="hint">검사 통과 후 태블릿에서 로그인하세요. 검사는 30분간 유효합니다.</p>
+                  <button id="login-check" data-action="login-check" class="wide" aria-describedby="login-check-help">로그인 옵션 검사</button>
+                  <p id="login-check-help" class="hint">로그인 전에만 사용합니다. 검사 통과 후 30분 안에 태블릿에서 로그인하세요.</p>
+                  <p id="login-check-result" class="job" role="status" hidden></p>
                 </li>
                 <li>
                   <h3>양쪽 로그인 확인</h3>
