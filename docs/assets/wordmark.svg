@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="128" viewBox="0 0 560 128" role="img" aria-labelledby="title desc">
+  <title id="title">KakaoTalk MCP</title>
+  <desc id="desc">말풍선 로고와 KakaoTalk MCP 이름.</desc>
+  <style>.word{fill:#242320}@media(prefers-color-scheme:dark){.word{fill:#edece6}}</style>
+  <rect x="8" y="16" width="96" height="96" rx="21" fill="#f6df80"/>
+  <g transform="translate(8 16) scale(.75)">
+    <path d="M39 27h50a13 13 0 0 1 13 13v35a13 13 0 0 1-13 13H62l-22 17V88h-1a13 13 0 0 1-13-13V40a13 13 0 0 1 13-13Z" fill="#242320"/>
+    <path d="M46 47h36M46 64h24" fill="none" stroke="#f6df80" stroke-width="7" stroke-linecap="round"/>
+  </g>
+  <text class="word" x="130" y="80" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="47" font-weight="650" letter-spacing="-1.7">KakaoTalk MCP</text>
+</svg>

@@ -46,6 +46,7 @@ WORKDIR /app
 COPY device/ device/
 COPY server/ server/
 COPY webui/ webui/
+COPY assets/logo.svg assets/logo.svg
 COPY --from=bridge-build /src/bridge/build/outputs/apk/release/bridge-release.apk /opt/bridge.apk
 COPY --from=iris-build /iris/app/build/outputs/apk/release/app-release-unsigned.apk /opt/iris.apk
 COPY --from=iris-build /opt/iris-source.tar.gz /opt/iris-source.tar.gz

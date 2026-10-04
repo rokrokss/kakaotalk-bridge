@@ -1,4 +1,4 @@
-# KakaoTalk MCP
+<h1><img src="docs/assets/wordmark.svg" width="420" height="96" alt="KakaoTalk MCP"></h1>
 
 내 카카오톡 메시지를 내 서버에 모으고, ChatGPT에서 조회합니다.
 
@@ -16,12 +16,7 @@ redroid를 보조 태블릿으로 실행하고 Iris로 메시지를 읽습니다
 
 ## 어디서 실행되나요?
 
-```text
-내 서버                                      ChatGPT
-redroid의 카카오톡 → Iris → 수집 API / SQLite ← OAuth / MCP
-       ↑
-웹 관리 화면에서 로그인·화면 조작
-```
+![내 서버의 보조 태블릿에서 Iris로 메시지를 읽어 저장하고, ChatGPT가 OAuth와 MCP로 조회합니다.](docs/assets/message-flow.svg)
 
 | 구성 | 역할 | 접근 범위 |
 | --- | --- | --- |

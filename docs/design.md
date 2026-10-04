@@ -4,19 +4,9 @@
 
 계정 하나와 redroid 인스턴스 하나를 운영합니다. 저장소의 기본 수집 경로는 Iris입니다. 초기 알림 기반 설계와 구현 이력은 Git 기록에 남아 있습니다.
 
-```mermaid
-flowchart LR
-    Browser[관리자 브라우저] -->|사설 HTTPS| Gateway[Caddy]
-    Gateway --> Admin[admin]
-    Admin -->|화면·입력·로그인 검사| Android[redroid / 카카오톡]
-    Android --> Iris[Iris 읽기 전용 프로세스]
-    Iris -->|loopback ADB forward| Collector[iris-collector]
-    Collector --> API[수집 API]
-    Agent[device-agent] -->|기기 상태| API
-    API --> DB[(SQLite)]
-    Dot[ChatGPT] -->|OAuth / 공개 HTTPS| MCP[dot-plugin]
-    MCP -->|read 토큰| API
-```
+![관리자는 사설 HTTPS로 태블릿을 조작하고, ChatGPT는 공개 HTTPS와 OAuth로 MCP에 접속합니다. Iris는 redroid 안에서 실행하며 수집기가 메시지를 API와 SQLite에 저장합니다.](assets/architecture.svg)
+
+[구성도 원본](assets/architecture.svg) · [간단한 메시지 흐름](assets/message-flow.svg)
 
 ## 서비스 경계
 

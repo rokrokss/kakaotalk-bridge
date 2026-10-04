@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="336" viewBox="0 0 960 336" role="img" aria-labelledby="title desc">
+  <title id="title">카카오톡에서 ChatGPT까지</title>
+  <desc id="desc">내 서버의 redroid 보조 태블릿 안에서 Iris가 카카오톡 메시지를 읽고 수집 API와 SQLite에 저장한다. ChatGPT는 공개 HTTPS와 OAuth로 MCP에 요청해 저장된 메시지를 조회한다. 관리자 접속은 사설 HTTPS를 사용하며 자동 이벤트 구독은 없다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="m1 1 5 3-5 3" fill="none" stroke="#807b6c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+  <rect width="960" height="336" rx="16" fill="#faf9f6"/>
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif" fill="#242320">
+    <text x="32" y="43" font-size="21" font-weight="650">카카오톡에서 ChatGPT까지</text>
+    <rect x="24" y="68" width="614" height="194" rx="12" fill="#f1efe7" stroke="#dedad0"/>
+    <text x="44" y="97" fill="#717069" font-size="13">내 서버</text>
+    <rect x="44" y="116" width="242" height="122" rx="8" fill="#fff" stroke="#dedad0"/>
+    <rect x="360" y="116" width="254" height="122" rx="8" fill="#fff" stroke="#dedad0"/>
+    <rect x="718" y="116" width="218" height="122" rx="8" fill="#fff" stroke="#dedad0"/>
+    <rect x="64" y="137" width="30" height="36" rx="5" fill="#f6df80"/>
+    <rect x="72" y="144" width="14" height="21" rx="2" fill="none" stroke="#242320" stroke-width="1.8"/>
+    <text x="107" y="162" font-size="21" font-weight="600">보조 태블릿</text>
+    <text x="64" y="210" font-size="14" fill="#717069">redroid · 카카오톡 · Iris</text>
+    <path d="M296 177h53" stroke="#807b6c" stroke-width="1.8" marker-end="url(#arrow)"/>
+    <text x="323" y="159" text-anchor="middle" font-size="12" fill="#717069">수집</text>
+    <text x="380" y="162" font-size="21" font-weight="600">메시지 저장</text>
+    <text x="380" y="210" font-size="14" fill="#717069">수집 API · SQLite</text>
+    <path d="M624 177h83" stroke="#807b6c" stroke-width="1.8" marker-end="url(#arrow)"/>
+    <text x="677" y="158" text-anchor="middle" font-size="12" fill="#717069">요청 시 조회</text>
+    <text x="738" y="162" font-size="21" font-weight="600">ChatGPT</text>
+    <text x="738" y="210" font-size="14" fill="#717069">OAuth · MCP</text>
+    <text x="44" y="292" font-size="13" fill="#717069">관리 화면: 사설 HTTPS</text>
+    <text x="718" y="292" font-size="13" fill="#717069">MCP: 공개 HTTPS + OAuth</text>
+  </g>
+</svg>

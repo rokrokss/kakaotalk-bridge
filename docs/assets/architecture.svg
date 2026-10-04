@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="772" viewBox="0 0 1120 772" role="img" aria-labelledby="title desc">
+  <title id="title">KakaoTalk MCP 시스템 구성</title>
+  <desc id="desc">관리자 브라우저는 사설 HTTPS로 gateway와 admin을 통해 redroid를 조작한다. redroid 안의 Iris에서 나온 메시지를 iris-collector가 API와 SQLite에 저장한다. ChatGPT는 공개 HTTPS와 OAuth로 dot-plugin에 접속하고 플러그인은 read 토큰으로 API를 조회한다. 핸드폰 세션은 직접 확인하며 이벤트는 별도 구독 시에만 동작한다. 보조 상태 서비스 device-agent는 API에 기기 상태를 보고한다.</desc>
+  <defs>
+    <marker id="request" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#77766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="data" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#a1832e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+  <rect width="1120" height="772" rx="16" fill="#faf9f6"/>
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif" fill="#242320">
+    <text x="32" y="45" font-size="24" font-weight="650">접속과 메시지 수집</text>
+    <path d="M726 38h34" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
+    <text x="772" y="44" font-size="13" fill="#717069">조회·조작</text>
+    <path d="M905 38h34" stroke="#a1832e" stroke-width="2" marker-end="url(#data)"/>
+    <text x="951" y="44" font-size="13" fill="#717069">메시지 저장</text>
+
+    <rect x="48" y="92" width="270" height="94" rx="10" fill="#fff" stroke="#dedad0"/>
+    <text x="72" y="130" font-size="22" font-weight="600">관리자 브라우저</text>
+    <text x="72" y="159" font-size="15" fill="#717069">화면 조작 · 로그인 확인</text>
+    <rect x="790" y="92" width="282" height="94" rx="10" fill="#fff" stroke="#dedad0"/>
+    <text x="814" y="130" font-size="22" font-weight="600">ChatGPT</text>
+    <text x="814" y="159" font-size="15" fill="#717069">메시지 조회 · 검색</text>
+
+    <rect x="24" y="254" width="1072" height="464" rx="12" fill="#f1efe7" stroke="#dedad0"/>
+    <text x="370" y="284" font-size="14" fill="#717069">내 서버 · Docker Compose</text>
+    <path d="M183 186v126" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
+    <text x="196" y="224" font-size="14" fill="#717069">사설 HTTPS</text>
+    <path d="M930 186v126" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
+    <text x="765" y="224" font-size="14" fill="#717069">공개 HTTPS + OAuth</text>
+
+    <rect x="48" y="318" width="270" height="94" rx="8" fill="#fff" stroke="#dedad0"/>
+    <text x="72" y="356" font-size="22" font-weight="600">관리 화면</text>
+    <text x="72" y="385" font-size="15" fill="#717069">gateway · admin</text>
+    <rect x="810" y="318" width="238" height="94" rx="8" fill="#fff" stroke="#dedad0"/>
+    <text x="834" y="356" font-size="22" font-weight="600">MCP 플러그인</text>
+    <text x="834" y="385" font-size="15" fill="#717069">dot-plugin</text>
+    <path d="M183 412v80" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
+    <text x="196" y="455" font-size="14" fill="#717069">ADB · 화면과 입력</text>
+    <path d="M930 412v138" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
+    <text x="945" y="478" font-size="14" fill="#717069">read 토큰</text>
+
+    <rect x="48" y="498" width="270" height="178" rx="8" fill="#fff" stroke="#dedad0"/>
+    <text x="72" y="535" font-size="22" font-weight="600">보조 태블릿</text>
+    <text x="72" y="562" font-size="15" fill="#717069">redroid · 카카오톡</text>
+    <rect x="68" y="588" width="230" height="66" rx="6" fill="#fbf3d6" stroke="#e2d5a5"/>
+    <text x="85" y="614" font-size="17" font-weight="600">Iris</text>
+    <text x="85" y="637" font-size="13" fill="#717069">태블릿 안에서 DB 읽기</text>
+
+    <rect x="426" y="558" width="238" height="118" rx="8" fill="#fff" stroke="#dedad0"/>
+    <text x="450" y="595" font-size="21" font-weight="600">iris-collector</text>
+    <text x="450" y="623" font-size="15" fill="#717069">행 조회 · 저장 재시도</text>
+    <text x="450" y="650" font-size="13" fill="#717069">ADB forward로 Iris 연결</text>
+    <rect x="810" y="558" width="238" height="118" rx="8" fill="#fff" stroke="#dedad0"/>
+    <text x="834" y="595" font-size="22" font-weight="600">수집 API</text>
+    <text x="834" y="623" font-size="15" fill="#717069">SQLite · 메시지와 커서</text>
+    <text x="834" y="650" font-size="13" fill="#717069">기본 30일 보관</text>
+    <path d="M298 621h121" fill="none" stroke="#a1832e" stroke-width="2" marker-end="url(#data)"/>
+    <path d="M664 621h139" fill="none" stroke="#a1832e" stroke-width="2" marker-end="url(#data)"/>
+    <text x="735" y="608" text-anchor="middle" font-size="13" fill="#8a722c">본문 · ID</text>
+
+    <text x="450" y="470" font-size="14" fill="#717069">핸드폰 로그인 유지는 직접 확인</text>
+    <text x="450" y="495" font-size="14" fill="#717069">이벤트는 별도 구독 시 사용</text>
+    <text x="32" y="750" font-size="13" fill="#717069">주요 경로만 표시했습니다. device-agent는 기기 상태를 API에 보고합니다.</text>
+  </g>
+</svg>

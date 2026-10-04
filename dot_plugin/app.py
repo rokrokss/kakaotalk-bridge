@@ -246,6 +246,10 @@ def create_app(config=None, collector=None, state=None, verifier=None, sender=No
     def stylesheet():
         return FileResponse(Path(__file__).with_name("static") / "style.css")
 
+    @app.get("/assets/logo.svg")
+    def logo():
+        return FileResponse(Path(__file__).parent.parent / "assets" / "logo.svg")
+
     @app.get("/")
     def index():
         response = HTMLResponse(
@@ -260,7 +264,7 @@ def create_app(config=None, collector=None, state=None, verifier=None, sender=No
             )
         )
         response.headers["Content-Security-Policy"] = (
-            "default-src 'none'; style-src 'self'; form-action 'self'; "
+            "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; "
             "frame-ancestors 'none'; base-uri 'none'"
         )
         return response
@@ -307,7 +311,7 @@ def create_app(config=None, collector=None, state=None, verifier=None, sender=No
         # Chromium also applies form-action to the POST's 303 redirect. Permit
         # only this approved client's origin, keeping the key POST same-origin.
         response.headers["Content-Security-Policy"] = (
-            f"default-src 'none'; style-src 'self'; form-action 'self' {redirect}; "
+            f"default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self' {redirect}; "
             "frame-ancestors 'none'; base-uri 'none'"
         )
         response.set_cookie(
