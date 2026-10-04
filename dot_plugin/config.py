@@ -16,10 +16,10 @@ class Config:
     storage_key: bytes
     api_url: str = "http://api:8000"
     read_token: str = ""
-    approval_mode: str = "key"
+    approval_mode: str = "passkey"
 
     def __post_init__(self):
-        if self.approval_mode not in {"key", "admin"}:
+        if self.approval_mode not in {"key", "admin", "passkey"}:
             raise ValueError("Invalid approval mode")
         u = urlsplit(self.public_url)
         if (
@@ -51,9 +51,9 @@ class Config:
         return cls(
             os.environ["DOT_PUBLIC_URL"].rstrip("/"),
             os.getenv("DOT_DB_PATH", "/data/dot.db"),
-            secret("MCP_LINK_KEY") if os.getenv("DOT_APPROVAL_MODE", "admin") == "key" else "",
+            secret("MCP_LINK_KEY") if os.getenv("DOT_APPROVAL_MODE", "passkey") == "key" else "",
             secret("MCP_STORAGE_KEY").encode(),
             os.getenv("API_URL", "http://api:8000"),
             "" if control else secret("READ_TOKEN"),
-            os.getenv("DOT_APPROVAL_MODE", "admin"),
+            os.getenv("DOT_APPROVAL_MODE", "passkey"),
         )

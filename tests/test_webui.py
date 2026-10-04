@@ -9,7 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from webui import device
-from webui.app import COOKIE, create_app
+from webui.app import COOKIE, LEGACY_COOKIE, create_app
+from webui.auth import digest
 
 TOKEN = "test-admin-" + "a" * 64
 ORIGIN = "https://testserver"
@@ -24,7 +25,9 @@ def console():
         "checked_at": time.time(),
         "phone": {"automatic": False},
     }
-    app = create_app(TOKEN, android, lambda: {"state": "needs_attention", "warnings": []})
+    app = create_app(
+        TOKEN, android, lambda: {"state": "needs_attention", "warnings": []}, auth_mode="local"
+    )
     with TestClient(app, base_url=ORIGIN) as client:
         yield client, android
 
@@ -53,6 +56,24 @@ def test_admin_session_security_and_read_token_is_not_admin(console):
     assert response.status_code == 200
     assert client.get("/admin/api/screen").status_code == 401
     android.screenshot.assert_not_called()
+
+
+def test_cookie_is_admin_scoped_and_old_sessions_cannot_be_renamed(console):
+    client, _ = console
+    signin(client)
+    key = client.cookies.get(COOKIE)
+    assert COOKIE in client.build_request("GET", "/admin/api/session").headers["cookie"]
+    for path in ("/authorize", "/mcp", "/admin-evil"):
+        assert COOKIE not in client.build_request("GET", path).headers.get("cookie", "")
+    owner = client.app.state.owner
+    record = owner.state.get("session", digest(key))
+    del record["cookie_scope"]
+    owner.state.put("session", digest(key), record)
+    assert client.get("/admin/api/session").status_code == 401
+    client.cookies.set(LEGACY_COOKIE, key, path="/")
+    response = client.get("/admin/")
+    assert LEGACY_COOKIE in response.headers["set-cookie"]
+    assert "Max-Age=0" in response.headers["set-cookie"]
 
 
 def test_cross_origin_csrf_and_arbitrary_keys_are_rejected(console):

@@ -11,6 +11,7 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from dot_plugin.app import create_app
+from dot_plugin.auth import AuthError, OAuth
 from dot_plugin.config import EVENT, SCOPES, Config
 from dot_plugin.events import Events
 from dot_plugin.network import DeliveryError, signed_headers
@@ -20,6 +21,33 @@ BASE = "https://dot.example.test"
 SECRET = "whsec_" + base64.b64encode(b"s" * 32).decode()
 REDIRECT = "https://chatgpt.com/connector_platform_oauth_redirect"
 VERIFIER = "v" * 64
+
+
+def test_anonymous_registration_cannot_fill_persistent_client_quota(tmp_path, monkeypatch):
+    key = Fernet.generate_key()
+    state = State(str(tmp_path / "clients.db"), key)
+    auth = OAuth(Config(BASE, state.path, "L" * 43, key, approval_mode="key"), state)
+    meta = {"redirect_uris": [REDIRECT]}
+    clients = [auth.register(meta) for _ in range(150)]
+    assert state.all("client") == []
+    for client in clients:
+        assert auth.client(client["client_id"])["redirect_uris"] == [REDIRECT]
+    with pytest.raises(AuthError):
+        auth.client(clients[0]["client_id"][:-8] + "tampered")
+    # Previously approved legacy clients remain usable, including after pending expiry.
+    state.put("client", "client_legacy", {"client_id": "client_legacy", **meta})
+    now = time.time()
+    monkeypatch.setattr(time, "time", lambda: now + 601)
+    with pytest.raises(AuthError):
+        auth.client(clients[0]["client_id"])
+    assert auth.client("client_legacy")["redirect_uris"] == [REDIRECT]
+
+
+def test_approved_registration_survives_pending_expiry(plugin, monkeypatch):
+    _, app, _, registration, _, _, _, _ = plugin
+    now = time.time()
+    monkeypatch.setattr(time, "time", lambda: now + 601)
+    assert app.state.oauth.client(registration["client_id"])["redirect_uris"] == [REDIRECT]
 
 
 class Source:
@@ -69,6 +97,12 @@ class Source:
             return {
                 "items": [{"conversation_ref": "room-a"}],
                 "next_cursor": len(self.rows),
+                "has_more": False,
+            }
+        if path == "/v2/messages":
+            return {
+                "items": [r for r in self.rows if not params.get("q") or params["q"] in r["body"]],
+                "next_cursor": None,
                 "has_more": False,
             }
         if path == "/v1/search":
@@ -133,7 +167,9 @@ def link(client, method="none"):
 
 @pytest.fixture
 def plugin(tmp_path):
-    config = Config(BASE, str(tmp_path / "dot.db"), "L" * 43, Fernet.generate_key())
+    config = Config(
+        BASE, str(tmp_path / "dot.db"), "L" * 43, Fernet.generate_key(), approval_mode="key"
+    )
     source = Source()
     source.add("history before subscription")
     verified, delivered = [], []
@@ -197,7 +233,7 @@ def test_discovery_401_oauth_metadata_and_complete_results(plugin):
     assert discovery["supportedVersions"] == ["2026-07-28"]
     assert discovery["capabilities"]["events"] == {}
     tools = rpc(client, "tools/list")["result"]["tools"]
-    assert len(tools) == 7
+    assert len(tools) == 8
     assert not any("send" in t["name"] for t in tools)
     assert next(t for t in tools if t["name"] == "get_profile")["_meta"]["openai/profile"] is True
     assert rpc(client, "events/list")["result"]["events"][0]["name"] == EVENT
@@ -208,14 +244,20 @@ def test_discovery_401_oauth_metadata_and_complete_results(plugin):
 
 @pytest.mark.parametrize(
     "redirect",
-    ["https://ok.example;script-src.unsafe-inline/cb", "https://ok.example/\ncb", "https://ok.example:abc/cb"],
+    [
+        "https://ok.example;script-src.unsafe-inline/cb",
+        "https://ok.example/\ncb",
+        "https://ok.example:abc/cb",
+    ],
 )
 def test_dcr_rejects_redirects_that_cannot_form_safe_csp_sources(plugin, redirect):
     client, *_ = plugin
     assert client.post("/register", json={"redirect_uris": [redirect]}).status_code == 400
 
 
-@pytest.mark.parametrize("origin", [None, "null", "https://foreign.example", BASE + ".evil.example"])
+@pytest.mark.parametrize(
+    "origin", [None, "null", "https://foreign.example", BASE + ".evil.example"]
+)
 def test_approval_requires_exact_origin_even_with_valid_ticket_cookie_and_key(plugin, origin):
     client, *_ = plugin
     _, ticket = begin_link(client)
@@ -262,8 +304,12 @@ def test_approval_displays_requested_permissions_and_escapes_client_name(plugin,
     assert response.status_code == 200
     assert "<img src=x" not in response.text
     assert "<strong>&lt;img src=x onerror=&quot;alert(1)&quot;&gt;</strong>" in response.text
-    assert ("<li>Read and search stored messages" in response.text) == ("kakao.read" in scope.split())
-    assert ("<li>Subscribe to requested new-message events" in response.text) == ("kakao.events" in scope.split())
+    assert ("<li>Read and search stored messages" in response.text) == (
+        "kakao.read" in scope.split()
+    )
+    assert ("<li>Subscribe to requested new-message events" in response.text) == (
+        "kakao.events" in scope.split()
+    )
     policy = response.headers["content-security-policy"]
     assert "default-src 'none'; style-src 'self';" in policy
     assert "img-src 'self';" in policy

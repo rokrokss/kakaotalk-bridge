@@ -1,6 +1,11 @@
 import json
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+
+class QueryError(ValueError):
+    pass
 
 
 class Collector:
@@ -9,7 +14,16 @@ class Collector:
 
     def get(self, path, **params):
         request = Request(
-            self.config.api_url.rstrip("/") + path + "?" + urlencode(params),
+            self.config.api_url.rstrip("/")
+            + path
+            + "?"
+            + urlencode(
+                {
+                    k: str(v).lower() if isinstance(v, bool) else v
+                    for k, v in params.items()
+                    if v is not None
+                }
+            ),
             headers={"Authorization": "Bearer " + self.config.read_token},
         )
         try:
@@ -18,6 +32,10 @@ class Collector:
                 if len(data) > 8 * 1024 * 1024:
                     raise ValueError
                 return json.loads(data)
+        except HTTPError as exc:
+            if exc.code == 400:
+                raise QueryError("invalid_query_or_expired_cursor") from None
+            raise RuntimeError("collector_unavailable") from None
         except (OSError, ValueError):
             raise RuntimeError("collector_unavailable") from None
 

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="772" viewBox="0 0 1120 772" role="img" aria-labelledby="title desc">
   <title id="title">KakaoTalk Bridge architecture</title>
-  <desc id="desc">An administrator controls redroid through gateway and admin over private HTTPS. iris-collector stores messages from Iris inside redroid through the API in SQLite. Your AI connects to dot-plugin over public HTTPS with OAuth, and the plugin queries the API with the read token. Phone sessions are confirmed manually; events require a separate subscription. device-agent reports device status to the API.</desc>
+  <desc id="desc">An administrator signs in with a passkey and controls redroid through gateway and admin over private HTTPS and authenticated ADB. iris-collector authenticates to Iris inside redroid and stores messages through the API in SQLite. Your AI connects over public HTTPS through dot-ingress, which filters private cookies before forwarding to dot-plugin. The plugin queries the API with the read token. dot-control verifies passkeys with separate public assertion and private administration permissions. Phone sessions are confirmed manually; events require a separate subscription.</desc>
   <defs>
     <marker id="request" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#77766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
     <marker id="data" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#a1832e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
@@ -15,7 +15,7 @@
 
     <rect x="48" y="92" width="270" height="94" rx="10" fill="#fff" stroke="#dedad0"/>
     <text x="72" y="130" font-size="22" font-weight="600">Admin browser</text>
-    <text x="72" y="159" font-size="15" fill="#717069">Screen control · Login checks</text>
+    <text x="72" y="159" font-size="15" fill="#717069">Passkey · Screen control</text>
     <rect x="790" y="92" width="282" height="94" rx="10" fill="#fff" stroke="#dedad0"/>
     <text x="814" y="130" font-size="22" font-weight="600">Your AI</text>
     <text x="814" y="159" font-size="15" fill="#717069">Read messages · Search</text>
@@ -32,9 +32,10 @@
     <text x="72" y="385" font-size="15" fill="#717069">gateway · admin</text>
     <rect x="810" y="318" width="238" height="94" rx="8" fill="#fff" stroke="#dedad0"/>
     <text x="834" y="356" font-size="22" font-weight="600">MCP plugin</text>
-    <text x="834" y="385" font-size="15" fill="#717069">dot-plugin</text>
+    <text x="834" y="383" font-size="13" fill="#717069">dot-ingress → dot-plugin</text>
+    <text x="834" y="401" font-size="12" fill="#717069">Private cookies filtered</text>
     <path d="M183 412v80" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
-    <text x="196" y="455" font-size="14" fill="#717069">ADB · Screen and input</text>
+    <text x="196" y="455" font-size="14" fill="#717069">Authenticated ADB</text>
     <path d="M930 412v138" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
     <text x="945" y="478" font-size="14" fill="#717069">Read token</text>
 
@@ -48,7 +49,7 @@
     <rect x="426" y="558" width="238" height="118" rx="8" fill="#fff" stroke="#dedad0"/>
     <text x="450" y="595" font-size="21" font-weight="600">iris-collector</text>
     <text x="450" y="623" font-size="15" fill="#717069">Fetch rows · Retry storage</text>
-    <text x="450" y="650" font-size="13" fill="#717069">Connect to Iris via ADB forward</text>
+    <text x="450" y="650" font-size="13" fill="#717069">Bearer auth · ADB forward</text>
     <rect x="810" y="558" width="238" height="118" rx="8" fill="#fff" stroke="#dedad0"/>
     <text x="834" y="595" font-size="22" font-weight="600">Collection API</text>
     <text x="834" y="623" font-size="14" fill="#717069">SQLite · Messages and cursors</text>
@@ -59,6 +60,7 @@
 
     <text x="450" y="470" font-size="14" fill="#717069">Confirm the phone session manually</text>
     <text x="450" y="495" font-size="14" fill="#717069">Events require a separate subscription</text>
-    <text x="32" y="750" font-size="13" fill="#717069">Main paths shown. device-agent reports device status to the API.</text>
+    <text x="32" y="744" font-size="12" fill="#717069">Main paths shown. dot-control verifies passkeys; public assertions and private administration use separate credentials.</text>
+    <text x="32" y="762" font-size="12" fill="#717069">adb-init provisions collector keys before Android starts. device-agent reports device status to the API.</text>
   </g>
 </svg>

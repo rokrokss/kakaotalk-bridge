@@ -29,6 +29,7 @@ VOLUMES = [
     "iris-state",
     "admin-state",
     "dot-state",
+    "passkey-state",
 ]
 REGISTRY = "ghcr.io/rokrokss/kakaotalk-bridge-"
 
@@ -92,10 +93,10 @@ def compose(*args, capture=False, **kwargs):
 
 def services():
     return SERVICES + (
-        ["dot-plugin", "dot-control"]
+        ["dot-plugin", "dot-control", "dot-ingress"]
         if read_env().get("DOT_PUBLIC_URL", "").endswith(".invalid") is False
         and read_env().get("DOT_PUBLIC_URL")
-        else []
+        else (["dot-control"] if read_env().get("ADMIN_AUTH_MODE", "passkey") == "passkey" else [])
     )
 
 
@@ -106,7 +107,7 @@ def manifest(path):
     ):
         raise ValueError("Unsupported release manifest")
     refs = {}
-    for kind in ("server", "device"):
+    for kind in ("server", "device", "gateway"):
         ref = data.get("images", {}).get(kind, "")
         if not re.fullmatch(re.escape(REGISTRY + kind) + r"@sha256:[a-f0-9]{64}", ref):
             raise ValueError("Use the digest-pinned official release manifest")
@@ -142,6 +143,7 @@ def init_secrets(source):
         ("mcp_link_key", secrets.token_urlsafe(32)),
         ("mcp_storage_key", base64.urlsafe_b64encode(os.urandom(32)).decode()),
         ("mcp_approval_token", secrets.token_urlsafe(32)),
+        ("mcp_passkey_token", secrets.token_urlsafe(32)),
     ):
         path = root / name
         if not path.exists():
@@ -219,7 +221,7 @@ def image_config(args):
                     file.encode() + b"\0" + hashlib.sha256(path.read_bytes()).digest()
                 )
         tag = "local-" + fingerprint.hexdigest()[:16]
-        refs = {kind: f"kakaotalk-collector/{kind}:{tag}" for kind in ("server", "device")}
+        refs = {kind: f"kakaotalk-collector/{kind}:{tag}" for kind in ("server", "device", "gateway")}
     else:
         if not args.manifest:
             raise RuntimeError(
@@ -230,6 +232,7 @@ def image_config(args):
         "COLLECTOR_IMAGE": refs["server"],
         "DOT_IMAGE": refs["server"],
         "DEVICE_IMAGE": refs["device"],
+        "GATEWAY_IMAGE": refs["gateway"],
     }
 
 
@@ -239,9 +242,9 @@ def prepare_images(args):
     env_update(refs)
     try:
         if args.source:
-            compose("build", "api", "device-agent")
+            compose("build", "api", "device-agent", "gateway")
         else:
-            compose("pull", *SERVICES, "dot-plugin", "dot-control")
+            compose("pull", *SERVICES, "dot-plugin", "dot-control", "dot-ingress")
     except BaseException:
         atomic(ROOT / ".env", previous)
         raise
@@ -256,7 +259,8 @@ def install(args):
                 "COMPOSE_PROJECT_NAME": "kakaotalk-collector",
                 "HTTPS_BIND": "127.0.0.1",
                 "DOT_PUBLIC_URL": "https://kakao.example.invalid",
-                "DOT_APPROVAL_MODE": "admin",
+                "DOT_APPROVAL_MODE": "passkey",
+                "ADMIN_AUTH_MODE": "passkey",
             }
         )
     host_check()
@@ -274,7 +278,7 @@ def install(args):
     compose("up", "-d", "--no-build", *services())
     atomic(ROOT / ".bridge/installed", "1\n")
     print(
-        "Containers started. Run ./bridge admin to set up the tablet; no KakaoTalk login was performed."
+        "Containers started. Run ./bridge expose, then ./bridge passkey-login to register your passkey."
     )
 
 
@@ -338,6 +342,135 @@ def admin_code():
     return compose("exec", "-T", "admin", "python", "-m", "webui.auth", "pair", capture=True)
 
 
+def admin_info():
+    return json.loads(
+        compose("exec", "-T", "admin", "python", "-m", "webui.auth", "info", capture=True)
+    )
+
+
+def admin_url(override=None):
+    if override:
+        return private_url(override)
+    path = ROOT / ".bridge/admin-url"
+    if path.exists():
+        return private_url(path.read_text().strip())
+    if platform.system() == "Darwin":
+        path = ROOT / ".bridge/mac.json"
+        port = str(json.loads(path.read_text())["admin_port"]) if path.exists() else "18443"
+    else:
+        port = read_env().get("HTTPS_PORT", "8443")
+    return private_url("https://localhost:" + port)
+
+
+def open_admin_page(url):
+    url = private_url(url)
+    print("Admin: " + url + "\nSign in with the configured method.")
+    webbrowser.open(url)
+
+
+def ensure_passkey_verifier_secret():
+    path = ROOT / "secrets/mcp_passkey_token"
+    if not path.exists():
+        atomic(path, secrets.token_urlsafe(32) + "\n")
+        path.chmod(0o444)
+    if path.stat().st_size < 32:
+        raise RuntimeError("Invalid mcp_passkey_token; restore it before continuing")
+
+
+def migrate_auth_modes():
+    values = read_env()
+    changes = {
+        name: "passkey"
+        for name in ("ADMIN_AUTH_MODE", "DOT_APPROVAL_MODE")
+        if values.get(name) == "kakao"
+    }
+    if changes:
+        env_update(changes)
+
+
+def passkey_setup(args):
+    if platform.system() == "Darwin" and not args.local:
+        config = json.loads((ROOT / ".bridge/mac.json").read_text())
+        command = [
+            "limactl",
+            "shell",
+            "--workdir=/",
+            config["vm"],
+            "sudo",
+            config["directory"] + "/bridge",
+            "--local",
+            "passkey-login",
+            "--link-only",
+        ]
+        if args.url:
+            command += ["--url", args.url]
+        if args.public_url:
+            command += ["--public-url", args.public_url]
+        if args.enroll:
+            command += ["--enroll"]
+        link = run(command, capture=True)
+    else:
+        # A new limited verifier credential can be added without rotating existing identities.
+        ensure_passkey_verifier_secret()
+        migrate_auth_modes()
+        compose("up", "-d", "--no-build", "--no-deps", "dot-control", capture=True)
+
+        def helper(operation, payload=None):
+            return compose(
+                "exec",
+                "-T",
+                "dot-control",
+                "python",
+                "-m",
+                "server.passkeys",
+                operation,
+                input=payload,
+                capture=True,
+            )
+
+        info = json.loads(helper("info"))
+        origin = private_url(args.url or info.get("admin_origin") or admin_url()).removesuffix(
+            "/admin/"
+        )
+        public = args.public_url or read_env().get("DOT_PUBLIC_URL", "")
+        if public.endswith(".invalid"):
+            public = ""
+        if public:
+            validate_public_url(public)
+            if public != read_env().get("DOT_PUBLIC_URL"):
+                raise ValueError("Run ./bridge connect --url with the public origin first")
+        if (
+            not info["configured"]
+            or info["admin_origin"] != origin
+            or info["public_origin"] != public
+        ):
+            helper("configure", json.dumps({"admin_origin": origin, "public_origin": public}))
+        env_update(
+            {"ADMIN_AUTH_MODE": "passkey", **({"DOT_APPROVAL_MODE": "passkey"} if public else {})}
+        )
+        atomic(ROOT / ".bridge/admin-url", private_url(origin))
+        compose(
+            "up",
+            "-d",
+            "--no-build",
+            "--no-deps",
+            "admin",
+            *(["dot-plugin", "dot-control", "dot-ingress"] if public else []),
+            capture=True,
+        )
+        link = private_url(origin)
+        if args.enroll or not info["registered"]:
+            token = helper("enroll")
+            if not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
+                raise RuntimeError("Invalid enrollment response")
+            link += "#passkey-setup=" + token
+    if args.link_only:
+        print(link)
+    else:
+        print("Open this private setup link (registration links expire in 10 minutes):\n" + link)
+        webbrowser.open(link)
+
+
 def private_url(value):
     parsed = urlsplit(value)
     if (
@@ -361,7 +494,7 @@ def open_admin(code, url):
     webbrowser.open(link)
 
 
-def connect(url):
+def validate_public_url(url):
     parsed = urlsplit(url)
     if (
         parsed.scheme != "https"
@@ -374,11 +507,15 @@ def connect(url):
         or parsed.hostname.endswith(".invalid")
     ):
         raise ValueError("Use your public HTTPS origin, with no trailing slash")
-    env_update({"DOT_PUBLIC_URL": url, "DOT_APPROVAL_MODE": "admin"})
-    compose("up", "-d", "--no-build", "dot-plugin", "dot-control")
-    print(
-        url + "/mcp\nChoose OAuth in ChatGPT, then approve the matching code in admin Connections."
-    )
+
+
+def connect(url):
+    validate_public_url(url)
+    mode = read_env().get("DOT_APPROVAL_MODE", "passkey")
+    env_update({"DOT_PUBLIC_URL": url, "DOT_APPROVAL_MODE": mode})
+    atomic(ROOT / ".bridge/public-url", url)
+    compose("up", "-d", "--no-build", "dot-plugin", "dot-control", "dot-ingress")
+    print(url + "/mcp\nRun ./bridge passkey-login to configure sign-in for this address.")
 
 
 def expose(args):
@@ -422,8 +559,9 @@ def expose(args):
     record_routes()
     admin_url = "https://" + hostname + ":8443"
     atomic(ROOT / ".bridge/admin-url", admin_url)
+    atomic(ROOT / ".bridge/public-url", "https://" + hostname)
     print(
-        f"Private admin: {admin_url}/admin/\nPublic MCP: https://{hostname}/mcp\nRun ./bridge admin to pair this browser."
+        f"Private admin: {admin_url}/admin/\nPublic MCP: https://{hostname}/mcp\nRun ./bridge passkey-login to register sign-in at this address."
     )
 
 
@@ -433,7 +571,12 @@ def volume_names():
 
 
 def snapshot_command(mode, names, *, key=None, stage=None, work=None, image=None):
-    image = image or read_env().get("COLLECTOR_IMAGE", "kakaotalk-collector/server:0.1.0")
+    env = read_env()
+    image = (
+        image
+        or env.get("DOT_IMAGE")
+        or env.get("COLLECTOR_IMAGE", "kakaotalk-collector/server:0.1.0")
+    )
     cmd = [
         "docker",
         "run",
@@ -607,6 +750,7 @@ def restore(path, key):
 
 
 def update(args):
+    ensure_passkey_verifier_secret()
     old = prepare_images(args)
     try:
         old_env = dict(
@@ -642,6 +786,7 @@ def update(args):
         atomic(ROOT / ".env", old)
         backup(helper_image=image_config(args)["COLLECTOR_IMAGE"])
         atomic(ROOT / ".env", new)
+        migrate_auth_modes()
         compose("up", "-d", "--no-build", *services())
         for _ in range(30):
             time.sleep(2)
@@ -768,16 +913,12 @@ def mac(args):
         finally:
             guest("rm", "-f", helper)
     elif args.command == "admin":
-        code = invoke("admin", "--code-only", capture=True)
-        open_admin(
-            code,
-            args.url
-            or (
-                (ROOT / ".bridge/admin-url").read_text().strip()
-                if (ROOT / ".bridge/admin-url").exists()
-                else f"https://localhost:{config['admin_port']}"
-            ),
-        )
+        if args.recovery:
+            code = invoke("admin", "--recovery", "--code-only", capture=True)
+            open_admin(code, admin_url(args.url))
+        else:
+            info = json.loads(invoke("admin", "--info", capture=True))
+            open_admin_page(args.url or info.get("origin") or admin_url())
     elif args.command == "import-apks":
         target = "/tmp/kakao-import-" + secrets.token_hex(8)
         files = list(Path(args.folder).glob("*.apk"))
@@ -849,7 +990,21 @@ def main():
         cmd.add_argument("--admin-port", type=int, default=18443)
     cmd = sub.add_parser("admin")
     cmd.add_argument("--url")
+    cmd.add_argument(
+        "--recovery", action="store_true", help="Issue a one-time emergency browser link"
+    )
     cmd.add_argument("--code-only", action="store_true", help=argparse.SUPPRESS)
+    cmd.add_argument("--info", action="store_true", help=argparse.SUPPRESS)
+    cmd = sub.add_parser(
+        "passkey-login",
+        help="Configure passkeys for admin and MCP",
+    )
+    cmd.add_argument("--url", help="Private HTTPS admin origin; same hostname as public MCP")
+    cmd.add_argument("--public-url", help="Public HTTPS MCP origin")
+    cmd.add_argument(
+        "--enroll", action="store_true", help="Issue a one-time registration/recovery link"
+    )
+    cmd.add_argument("--link-only", action="store_true", help=argparse.SUPPRESS)
     cmd = sub.add_parser("connect")
     cmd.add_argument("--url", required=True)
     cmd = sub.add_parser("import-apks")
@@ -871,7 +1026,9 @@ def main():
             raise ValueError("Invalid snapshot filename")
         if args.local or platform.system() == "Linux":
             recover_activation()
-        if args.command == "expose":
+        if args.command == "passkey-login":
+            passkey_setup(args)
+        elif args.command == "expose":
             expose(args)
         elif platform.system() == "Darwin" and not args.local:
             mac(args)
@@ -880,19 +1037,17 @@ def main():
         elif args.command == "update":
             update(args)
         elif args.command == "admin":
-            code = admin_code()
-            if args.code_only:
-                print(code)
+            if args.info:
+                print(json.dumps(admin_info()))
+            elif args.recovery:
+                code = admin_code()
+                if args.code_only:
+                    print(code)
+                else:
+                    open_admin(code, admin_url(args.url))
             else:
-                open_admin(
-                    code,
-                    args.url
-                    or (
-                        (ROOT / ".bridge/admin-url").read_text().strip()
-                        if (ROOT / ".bridge/admin-url").exists()
-                        else "https://localhost:" + read_env().get("HTTPS_PORT", "8443")
-                    ),
-                )
+                info = admin_info()
+                open_admin_page(args.url or info.get("origin") or admin_url())
         elif args.command == "doctor":
             if not doctor():
                 raise SystemExit(1)
@@ -922,6 +1077,9 @@ def main():
         elif args.command == "stop":
             compose("stop")
         elif args.command == "start":
+            # Older encrypted snapshots predate this verifier-only service credential.
+            ensure_passkey_verifier_secret()
+            migrate_auth_modes()
             pending = ROOT / ".bridge/restored-pending"
             compose(
                 "up",

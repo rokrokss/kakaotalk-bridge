@@ -26,3 +26,5 @@ android/**/build
 
 .bridge
 **/*.kcs
+**/client_secret*.json
+**/kakao-client*.json

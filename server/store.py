@@ -6,7 +6,9 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from server import name_history
 from server.models import Observation
+from server.queries import INDEX_SQL, initialize
 
 
 def now():
@@ -55,6 +57,7 @@ class Store:
             db.execute(
                 "INSERT OR IGNORE INTO metadata VALUES('cursor_epoch',?)", (str(uuid.uuid4()),)
             )
+            initialize(db)
 
     @contextmanager
     def connect(self):
@@ -131,6 +134,8 @@ class Store:
                             p.truncated,
                         ),
                     )
+            db.execute(INDEX_SQL + " WHERE c.observation_id=?", (row,))
+            name_history.index_new(db, observation_id=row)
             if event.source == "iris_db":
                 cursor = max(event.source_seq, progress["after"] if progress else 0)
                 db.execute(
@@ -363,6 +368,12 @@ class Store:
                     (str(highest),),
                 )
             db.execute("DELETE FROM observations WHERE received_at<?", (cutoff,))
+            db.execute(
+                "DELETE FROM identities WHERE NOT EXISTS (SELECT 1 FROM message_lookup m WHERE m.conversation_ref=identities.conversation_ref AND m.sender_ref=identities.sender_ref)"
+            )
+            db.execute(
+                "DELETE FROM rooms WHERE NOT EXISTS (SELECT 1 FROM message_lookup m WHERE m.conversation_ref=rooms.conversation_ref)"
+            )
             db.execute("DELETE FROM gaps WHERE ended_at IS NOT NULL AND ended_at<?", (cutoff,))
         with self.connect() as db:
             db.execute("PRAGMA wal_checkpoint(TRUNCATE)")

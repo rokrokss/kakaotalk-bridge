@@ -5,6 +5,7 @@ import time
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
+from webauthn.helpers.exceptions import WebAuthnException
 
 from dot_plugin.auth import redirect_origin
 from dot_plugin.config import Config
@@ -19,7 +20,7 @@ class Decision(BaseModel):
     approve: bool
 
 
-def create_app(config=None, state=None, control_token=None):
+def create_app(config=None, state=None, control_token=None, passkeys=None, verifier_token=None):
     config = config or Config.from_env(control=True)
     state = state or State(config.database, config.storage_key)
     token = control_token or secret("MCP_APPROVAL_TOKEN")
@@ -27,15 +28,35 @@ def create_app(config=None, state=None, control_token=None):
         raise ValueError("Control token must contain at least 32 characters")
 
     def authenticate(request: Request):
+        expected = token
+        if request.url.path.startswith("/passkeys/public/"):
+            expected = verifier_token or secret("MCP_PASSKEY_TOKEN")
+            if len(expected) < 32:
+                raise HTTPException(503, "passkey_unavailable")
         if not hmac.compare_digest(
-            request.headers.get("authorization", "").encode(), ("Bearer " + token).encode()
+            request.headers.get("authorization", "").encode(), ("Bearer " + expected).encode()
         ):
             raise HTTPException(401, "unauthorized")
 
     app = FastAPI(
         docs_url=None, redoc_url=None, openapi_url=None, dependencies=[Depends(authenticate)]
     )
-    app.add_middleware(BodyLimit, maximum=2048)
+    app.add_middleware(BodyLimit, maximum=32768)
+
+    @app.post("/passkeys/{role}/{operation}")
+    def passkey_call(role: str, operation: str, body: dict):
+        nonlocal passkeys
+        if role not in {"admin", "public"}:
+            raise HTTPException(404)
+        if passkeys is None:
+            from server.passkeys import authority
+
+            passkeys = authority()
+        try:
+            return passkeys.call(role, operation, body)
+        except (ValueError, TypeError, KeyError, WebAuthnException):
+            # Authenticator/parser failures never expose credentials or raw client data.
+            raise HTTPException(400, "passkey_verification_failed") from None
 
     @app.get("/connections")
     def connections():
@@ -51,7 +72,9 @@ def create_app(config=None, state=None, control_token=None):
                 "expires": row["expires"],
             }
             for identity, row in state.all("approval")
-            if row.get("status") == "pending" and row["expires"] > now
+            if config.approval_mode == "admin"
+            and row.get("status") == "pending"
+            and row["expires"] > now
         ]
         grants = [
             {

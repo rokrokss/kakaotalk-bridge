@@ -4,7 +4,9 @@
 
 ## HTTP queries
 
-All `/v1/*` routes require the read token. Ingest and device tokens cannot query them. This example runs on the Linux server and verifies the TLS certificate.
+For named messages, latest-by-send-time queries, room/sender/time filters and context, use the [v2 query API](mcp-queries.md). The v1 endpoints below retain ingestion-order behavior for existing consumers.
+
+All `/v1/*` and `/v2/*` routes require the read token. Ingest and device tokens cannot query them. This example runs on the Linux server and verifies the TLS certificate.
 
 ```bash
 # Pass the token through stdin, not as a curl argument.
@@ -41,4 +43,4 @@ With the collection API running, add the following to your MCP client configurat
 }
 ```
 
-The tools are `get_recent_messages`, `search_messages`, `list_conversations`, and `get_collector_status`. For a remote server, configure the command to run over SSH. The client starts the MCP service with `run`; do not leave it running through `up`.
+The tools are `get_recent_messages`, `search_messages`, `list_conversations`, `get_conversation_context`, and `get_collector_status`. For a remote server, configure the command to run over SSH. The client starts the MCP service with `run`; do not leave it running through `up`.

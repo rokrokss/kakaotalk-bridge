@@ -15,6 +15,8 @@ x-server: &server
   tmpfs: [/tmp]
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
+  mem_limit: 1g
+  pids_limit: 256
   logging: *logging
 
 x-device: &device
@@ -27,9 +29,20 @@ x-device: &device
   tmpfs: [/tmp]
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
+  mem_limit: 1g
+  pids_limit: 256
   logging: *logging
 
 services:
+  adb-init:
+    <<: *device
+    entrypoint: [python, -m, device.adb_auth]
+    command: []
+    restart: "no"
+    network_mode: none
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    volumes: [device-state:/device-state, iris-state:/iris-state, android-data:/android-data]
+
   redroid:
     image: ${REDROID_IMAGE:-redroid/redroid:14.0.0-latest@sha256:a3e654caad74faed03cd5ead057a989e06f507778cda678e5d3b9772e0092f1c}
     privileged: true
@@ -44,11 +57,15 @@ services:
       - ro.build.characteristics=tablet
       - ro.product.model=SM-T970
       - ro.product.brand=Samsung
+      - ro.adb.secure=1
     volumes: [android-data:/data]
     ports: ["127.0.0.1:${ADB_PORT:-5555}:5555"]
     networks: [device-net]
     mem_limit: 4g
     pids_limit: 2048
+    depends_on:
+      adb-init:
+        condition: service_completed_successfully
     logging: *logging
 
   api:
@@ -60,7 +77,7 @@ services:
       DB_PATH: /data/collector.db
     secrets: [ingest_token, read_token, device_token, backup_key]
     volumes: [collector-data:/data]
-    networks: [backend-net]
+    networks: [backend-net, public-read-net]
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
       interval: 15s
@@ -69,13 +86,18 @@ services:
       start_period: 15s
 
   gateway:
-    image: caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    image: ${GATEWAY_IMAGE:-kakaotalk-collector/gateway:2.11.7}
+    build:
+      context: .
+      dockerfile: docker/gateway.Dockerfile
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
     # The upstream caddy binary carries this file capability; keep it in the bounding set.
     cap_add: [NET_BIND_SERVICE]
     security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    pids_limit: 128
     tmpfs: [/tmp, /config, /data]
     volumes: [./docker/Caddyfile:/etc/caddy/Caddyfile:ro]
     secrets: [tls_cert, tls_key]
@@ -132,13 +154,14 @@ services:
       API_URL: http://api:8000
       BRIDGE_URL: https://${GATEWAY_IP:-172.29.87.3}:8443
       ADMIN_AUTH_DB: /auth/admin.db
+      ADMIN_AUTH_MODE: ${ADMIN_AUTH_MODE:-passkey}
       DOT_CONTROL_URL: http://dot-control:8788
     volumes:
       - device-state:/state
       - admin-state:/auth
       - ./inputs/kakao:/inputs/kakao:ro
     secrets: [admin_token, read_token, ingest_token, tls_cert, mcp_approval_token]
-    networks: [device-net, backend-net]
+    networks: [device-net, backend-net, private-control-net]
     depends_on:
       redroid:
         condition: service_started
@@ -187,11 +210,10 @@ services:
       API_URL: http://api:8000
       DOT_PUBLIC_URL: ${DOT_PUBLIC_URL:-https://kakao.example.invalid}
       DOT_DB_PATH: /data/dot.db
-      DOT_APPROVAL_MODE: ${DOT_APPROVAL_MODE:-admin}
-    secrets: [read_token, mcp_link_key, mcp_storage_key]
+      DOT_APPROVAL_MODE: ${DOT_APPROVAL_MODE:-passkey}
+    secrets: [read_token, mcp_link_key, mcp_storage_key, mcp_passkey_token]
     volumes: [dot-state:/data]
-    ports: ["127.0.0.1:${DOT_HTTP_PORT:-18787}:8787"]
-    networks: [backend-net, dot-net]
+    networks: [public-read-net, public-assertion-net, public-ingress-net, dot-net]
     depends_on:
       api:
         condition: service_healthy
@@ -200,6 +222,35 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+
+  dot-ingress:
+    image: ${GATEWAY_IMAGE:-kakaotalk-collector/gateway:2.11.7}
+    build:
+      context: .
+      dockerfile: docker/gateway.Dockerfile
+    profiles: [dot]
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    pids_limit: 128
+    tmpfs: [/tmp, "/config:uid=10001,gid=10001,mode=0700", "/data:uid=10001,gid=10001,mode=0700"]
+    volumes: [./docker/Caddyfile.public:/etc/caddy/Caddyfile:ro]
+    ports: ["127.0.0.1:${DOT_HTTP_PORT:-18787}:8786"]
+    # Docker does not publish ports for containers on exclusively internal networks.
+    networks: [public-ingress-net, public-edge-net]
+    depends_on:
+      dot-plugin:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -T, "3", -O, /dev/null, "http://127.0.0.1:8786/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: *logging
 
   dot-control:
     <<: *server
@@ -210,10 +261,10 @@ services:
     environment:
       DOT_PUBLIC_URL: ${DOT_PUBLIC_URL:-https://kakao.example.invalid}
       DOT_DB_PATH: /data/dot.db
-      DOT_APPROVAL_MODE: admin
-    secrets: [mcp_storage_key, mcp_approval_token]
-    volumes: [dot-state:/data]
-    networks: [backend-net]
+      DOT_APPROVAL_MODE: ${DOT_APPROVAL_MODE:-passkey}
+    secrets: [mcp_storage_key, mcp_approval_token, mcp_passkey_token]
+    volumes: [dot-state:/data, passkey-state:/passkeys]
+    networks: [private-control-net, public-assertion-net]
 
 volumes:
   android-data:
@@ -222,6 +273,7 @@ volumes:
   iris-state:
   dot-state:
   admin-state:
+  passkey-state:
 
 networks:
   device-net:
@@ -232,6 +284,15 @@ networks:
           ip_range: ${DEVICE_IP_RANGE:-172.29.87.128/25}
   backend-net:
     internal: true
+  public-read-net:
+    internal: true
+  private-control-net:
+    internal: true
+  public-assertion-net:
+    internal: true
+  public-ingress-net:
+    internal: true
+  public-edge-net:
   dot-net:
 
 secrets:
@@ -259,3 +320,5 @@ secrets:
     file: ./secrets/mcp_storage_key
   mcp_approval_token:
     file: ./secrets/mcp_approval_token
+  mcp_passkey_token:
+    file: ./secrets/mcp_passkey_token

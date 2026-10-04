@@ -34,7 +34,7 @@ def test_pair_is_atomic_one_use_and_never_changes_existing_password(tmp_path):
 
 def test_owner_session_survives_restart_and_can_be_revoked(tmp_path):
     path = tmp_path / "owner.db"
-    app = create_app(TOKEN, Mock(), dict, auth_db=path)
+    app = create_app(TOKEN, Mock(), dict, auth_db=path, auth_mode="local")
     pair = app.state.owner.issue_pair()
     with TestClient(app, base_url=ORIGIN) as browser:
         response = browser.post(
@@ -48,7 +48,7 @@ def test_owner_session_survives_restart_and_can_be_revoked(tmp_path):
         assert "Secure" in response.headers["set-cookie"]
         assert "HttpOnly" in response.headers["set-cookie"]
         assert "SameSite=strict" in response.headers["set-cookie"]
-    restarted = create_app(TOKEN, Mock(), dict, auth_db=path)
+    restarted = create_app(TOKEN, Mock(), dict, auth_db=path, auth_mode="local")
     with TestClient(restarted, base_url=ORIGIN) as browser:
         browser.cookies.set(COOKIE, cookie)
         session = browser.get("/admin/api/session")
@@ -95,7 +95,7 @@ def test_session_limit_and_rate_limit(tmp_path):
         owner.create_session(1800, "browser")
     assert len(owner.sessions("")) == 10
     assert owner.session(first) is None
-    app = create_app(TOKEN, Mock(), dict, auth_db=tmp_path / "other.db")
+    app = create_app(TOKEN, Mock(), dict, auth_db=tmp_path / "other.db", auth_mode="local")
     with TestClient(app, base_url=ORIGIN) as browser:
         for _ in range(5):
             assert (

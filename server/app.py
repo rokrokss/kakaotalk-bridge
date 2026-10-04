@@ -10,7 +10,8 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from server.config import Settings
-from server.models import Batch, DeviceStatus, Heartbeat, Observation
+from server.models import Batch, DeviceStatus, Heartbeat, MetadataBatch, Observation
+from server.queries import Queries
 from server.store import Conflict, Store
 
 
@@ -42,6 +43,7 @@ class BodyLimit:
 def create_app(settings: Settings | None = None):
     config = settings or Settings.from_env()
     store = Store(config.db_path)
+    queries = Queries(store)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -146,6 +148,36 @@ def create_app(settings: Settings | None = None):
     def iris_cursor(epoch: UUID):
         return store.iris_progress(config.device_id, str(epoch))
 
+    def metadata_gate(epoch, database_id=None):
+        bridge = store.status(config.heartbeat_timeout)["bridge"]
+        if (
+            not bridge
+            or bridge["stale"]
+            or not bridge.get("secondary_login_confirmed")
+            or not bridge.get("listener_connected")
+            or bridge.get("source") != "iris_db"
+            or bridge["enrollment_epoch"] != str(epoch)
+        ):
+            raise HTTPException(423, "iris_confirmation_mismatch")
+        if database_id is not None and bridge.get("database_id") != database_id:
+            raise HTTPException(423, "iris_confirmation_mismatch")
+
+    @app.get("/internal/v1/iris/metadata-targets", dependencies=[Depends(ingest_auth)])
+    def metadata_targets(epoch: UUID):
+        metadata_gate(epoch)
+        return {"items": queries.metadata_targets(config.device_id, str(epoch))}
+
+    @app.post("/internal/v1/iris/metadata", dependencies=[Depends(ingest_auth)])
+    def metadata_update(body: MetadataBatch):
+        check_device(body.device_id)
+        metadata_gate(body.enrollment_epoch, body.database_id)
+        try:
+            return queries.metadata_update(
+                body.device_id, str(body.enrollment_epoch), body.database_id, body.items
+            )
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+
     @app.post("/internal/v1/heartbeat", dependencies=[Depends(ingest_auth)])
     def heartbeat(body: Heartbeat):
         check_device(body.device_id)
@@ -163,6 +195,7 @@ def create_app(settings: Settings | None = None):
         return {
             **store.status(config.heartbeat_timeout),
             "maintenance_failed": app.state.maintenance_failed,
+            "identity_metadata": queries.metadata_status(),
         }
 
     @app.get("/v1/checkpoint", dependencies=[Depends(read_auth)])
@@ -191,5 +224,64 @@ def create_app(settings: Settings | None = None):
     @app.get("/v1/conversations", dependencies=[Depends(read_auth)])
     def conversations(after: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200)):
         return store.conversations(after, limit)
+
+    def query_result(fn, **params):
+        try:
+            return {**fn(**params), "coverage": status()["coverage"]}
+        except (ValueError, OverflowError) as exc:
+            reason = (
+                str(exc)
+                if str(exc)
+                in {
+                    "invalid_or_expired_query_cursor",
+                    "message_not_found_or_expired",
+                    "conversation_unresolved",
+                    "invalid_time_range",
+                    "timezone_required",
+                }
+                else "invalid_query"
+            )
+            raise HTTPException(400, reason) from None
+
+    @app.get("/v2/messages", dependencies=[Depends(read_auth)])
+    def query_messages(
+        limit: int = Query(50, ge=1, le=100),
+        cursor: str | None = Query(None, max_length=2048),
+        q: str | None = Query(None, min_length=1, max_length=256),
+        conversation_ref: str | None = Query(None, min_length=1, max_length=256),
+        sender_ref: str | None = Query(None, min_length=1, max_length=256),
+        sender_name: str | None = Query(None, min_length=1, max_length=256),
+        since: str | None = Query(None, max_length=40),
+        until: str | None = Query(None, max_length=40),
+        include_mine: bool = True,
+    ):
+        return query_result(
+            queries.messages,
+            limit=limit,
+            cursor=cursor,
+            q=q,
+            conversation_ref=conversation_ref,
+            sender_ref=sender_ref,
+            sender_name=sender_name,
+            since=since,
+            until=until,
+            include_mine=include_mine,
+        )
+
+    @app.get("/v2/conversations", dependencies=[Depends(read_auth)])
+    def query_conversations(
+        limit: int = Query(50, ge=1, le=100),
+        cursor: str | None = Query(None, max_length=2048),
+        q: str | None = Query(None, min_length=1, max_length=256),
+    ):
+        return query_result(queries.conversations, limit=limit, cursor=cursor, q=q)
+
+    @app.get("/v2/context", dependencies=[Depends(read_auth)])
+    def query_context(
+        message_id: int = Query(ge=1),
+        before: int = Query(5, ge=0, le=30),
+        after: int = Query(5, ge=0, le=30),
+    ):
+        return query_result(queries.context, message_id=message_id, before=before, after=after)
 
     return app

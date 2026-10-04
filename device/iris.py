@@ -1,9 +1,13 @@
 """Poll the restricted Iris endpoint through loopback ADB; commit before advancing."""
 
 import hashlib
+import hmac
 import json
 import os
+import re
+import secrets
 import subprocess
+import tempfile
 import time
 import uuid
 from datetime import UTC, datetime
@@ -13,10 +17,12 @@ from urllib.request import Request, urlopen
 
 from device import cli, login_guard
 
-BUILD = "iris-ee1dc978-collector-v1"
+BUILD = "iris-ee1dc978-collector-v4"
 REMOTE_APK = "/data/local/tmp/kakaocollector-iris.apk"
 PID_FILE = "/data/local/tmp/kakaocollector-iris.pid"
 ENTRY = "party.qwer.iris.CollectorMain"
+AUTH_DIR = "/data/kakaocollector-iris"
+AUTH_FILE = AUTH_DIR + "/auth.json"
 
 
 def request(url, payload=None, token=None):
@@ -60,16 +66,60 @@ def stop():
     cli.adb("shell", "rm", "-f", PID_FILE, check=False)
 
 
-def ensure_started():
+def ensure_auth(config):
+    """Provision a root-only, enrollment-bound credential; never put it in argv/logs."""
+    raw = cli.adb("shell", "cat", AUTH_FILE, check=False)
+    try:
+        record = json.loads(raw)
+    except ValueError:
+        record = {}
+    if record.get("enrollment_epoch") == config["enrollment_epoch"] and re.fullmatch(
+        r"[A-Za-z0-9_-]{43}", record.get("token", "")
+    ):
+        return record["token"]
+    record = {"enrollment_epoch": config["enrollment_epoch"], "token": secrets.token_urlsafe(32)}
+    cli.adb("shell", "mkdir", "-p", AUTH_DIR)
+    cli.adb("shell", "chown", "0:0", AUTH_DIR)
+    cli.adb("shell", "chmod", "0700", AUTH_DIR)
+    with tempfile.TemporaryDirectory() as folder:
+        local = Path(folder) / "auth.json"
+        local.write_text(json.dumps(record))
+        local.chmod(0o600)
+        cli.adb("push", str(local), AUTH_FILE + ".next")
+    cli.adb("shell", "chown", "0:0", AUTH_FILE + ".next")
+    cli.adb("shell", "chmod", "0600", AUTH_FILE + ".next")
+    if check_enrollment() != config:
+        cli.adb("shell", "rm", "-f", AUTH_FILE + ".next", check=False)
+        raise RuntimeError("enrollment_changed")
+    cli.adb("shell", "mv", AUTH_FILE + ".next", AUTH_FILE)
+    return record["token"]
+
+
+def ensure_started(config=None):
+    config = config or check_enrollment()
+    token = ensure_auth(config)
     expected = hashlib.sha256(Path("/opt/iris.apk").read_bytes()).hexdigest()
     actual = cli.adb("shell", "sha256sum", REMOTE_APK).split()[0]
     if actual != expected:
         raise RuntimeError("iris_binary_changed_rerun_bootstrap")
     cli.adb("forward", "tcp:3000", "tcp:3000")
+
+    def healthy():
+        # Authenticate the listener before sending a bearer credential: an Android
+        # app can otherwise bind the loopback port while Iris is stopped.
+        challenge = secrets.token_hex(32)
+        info = request(
+            "http://127.0.0.1:3000/collector/health?" + urlencode({"challenge": challenge})
+        )
+        proof = hmac.new(
+            token.encode(), (challenge + ":" + BUILD).encode(), hashlib.sha256
+        ).hexdigest()
+        if info.get("build") != BUILD or not hmac.compare_digest(str(info.get("proof", "")), proof):
+            raise RuntimeError("unexpected_iris_server")
+        return token
+
     try:
-        if request("http://127.0.0.1:3000/collector/health").get("build") == BUILD:
-            return
-        raise RuntimeError("unexpected_iris_server")
+        return healthy()
     except OSError:
         pass
     stop()
@@ -80,12 +130,43 @@ def ensure_started():
     )
     for _ in range(10):
         try:
-            if request("http://127.0.0.1:3000/collector/health").get("build") == BUILD:
-                return
+            return healthy()
         except (OSError, ValueError):
             pass
         time.sleep(1)
     raise RuntimeError("iris_start_failed")
+
+
+def upgrade_binary(expected_sha):
+    """Explicit component migration; caller must first stop iris-collector."""
+    if not re.fullmatch(r"[a-f0-9]{64}", expected_sha or ""):
+        raise ValueError("An exact previous Iris APK SHA-256 is required")
+    cli.connect()
+    config = check_enrollment()
+    actual = cli.adb("shell", "sha256sum", REMOTE_APK).split()[0]
+    if actual != expected_sha:
+        raise RuntimeError("iris_previous_binary_mismatch")
+    staged, backup = REMOTE_APK + ".next", REMOTE_APK + ".backup-" + actual
+    wanted = hashlib.sha256(Path("/opt/iris.apk").read_bytes()).hexdigest()
+    cli.adb("push", "/opt/iris.apk", staged)
+    try:
+        if cli.adb("shell", "sha256sum", staged).split()[0] != wanted:
+            raise RuntimeError("iris_upload_checksum_mismatch")
+        if check_enrollment() != config:
+            raise RuntimeError("enrollment_changed")
+        cli.adb("shell", "chmod", "0444", staged)
+        cli.adb("shell", "cp", REMOTE_APK, backup)
+        stop()
+        cli.adb("shell", "mv", staged, REMOTE_APK)
+        try:
+            ensure_started()
+        except BaseException:
+            stop()
+            cli.adb("shell", "cp", backup, REMOTE_APK)
+            raise
+    finally:
+        cli.adb("shell", "rm", "-f", staged, check=False)
+    return {"build": BUILD, "previous_sha256": actual, "sha256": wanted}
 
 
 def make_event(config, database_id, row):
@@ -129,6 +210,8 @@ class Collector:
         self.epoch = str(uuid.UUID(int=0))
         self.last_seq = 0
         self.database_id = None
+        self.metadata_checked = 0
+        self.iris_token = None
 
     def api_request(self, path, payload=None):
         return request(
@@ -158,9 +241,10 @@ class Collector:
         self.epoch = identity(config)
         progress = self.api("/internal/v1/iris/cursor?" + urlencode({"epoch": self.epoch}))
         self.last_seq = progress["after"]
-        ensure_started()
+        self.iris_token = ensure_started(config)
         page = request(
-            "http://127.0.0.1:3000/collector/rows?" + urlencode({"after": self.last_seq})
+            "http://127.0.0.1:3000/collector/rows?" + urlencode({"after": self.last_seq}),
+            token=self.iris_token,
         )
         if page["build"] != BUILD or page["enrollment_epoch"] != config["enrollment_epoch"]:
             raise RuntimeError("iris_identity_mismatch")
@@ -192,7 +276,43 @@ class Collector:
                 raise RuntimeError("iris_row_rejected")
             self.last_seq = event["source_seq"]
         self.heartbeat(True, True)
+        # Metadata is refreshed independently: names must not change a committed row's identity.
+        if time.monotonic() - self.metadata_checked > 10:
+            self.metadata_checked = time.monotonic()
+            try:
+                self.refresh_metadata(config)
+            except (OSError, ValueError, KeyError, RuntimeError):
+                print('{"iris_metadata":"unavailable","action":"check_profile_lookup"}', flush=True)
         return len(events)
+
+    def refresh_metadata(self, config):
+        targets = self.api(
+            "/internal/v1/iris/metadata-targets?" + urlencode({"epoch": self.epoch})
+        )["items"]
+        if not targets:
+            return
+        if check_enrollment() != config:
+            raise RuntimeError("enrollment_changed")
+        result = request(
+            "http://127.0.0.1:3000/collector/metadata", {"targets": targets}, self.iris_token
+        )
+        if (
+            result["build"] != BUILD
+            or result["enrollment_epoch"] != config["enrollment_epoch"]
+            or result["database_id"] != self.database_id
+        ):
+            raise RuntimeError("iris_metadata_identity_mismatch")
+        if check_enrollment() != config:
+            raise RuntimeError("enrollment_changed")
+        self.api(
+            "/internal/v1/iris/metadata",
+            {
+                "device_id": config["device_id"],
+                "enrollment_epoch": self.epoch,
+                "database_id": self.database_id,
+                "items": result["items"],
+            },
+        )
 
 
 def watch():

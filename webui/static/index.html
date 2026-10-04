@@ -6,6 +6,7 @@
   <title>KakaoTalk Bridge · Admin</title>
   <link rel="icon" type="image/svg+xml" href="/admin/logo.svg?v=cc464e4">
   <link rel="stylesheet" href="/admin/style.css">
+  <script src="/admin/passkey.js" defer></script>
   <script src="/admin/app.js" defer></script>
 </head>
 <body>
@@ -20,14 +21,23 @@
     <section id="login-panel" class="login-panel" aria-labelledby="login-title">
       <h1 id="login-title">Open admin console</h1>
       <p>View the tablet screen and message collection status.</p>
-      <p id="pair-help">First visit? Run <code>./bridge admin</code> on the server to open a one-time pairing link.</p>
-      <form id="owner-form">
+      <div id="passkey-panel" hidden>
+        <p id="passkey-help">Use your device, phone or security key.</p>
+        <form id="passkey-form">
+          <button id="passkey-submit" class="primary wide" type="submit">Sign in with a passkey</button>
+          <label class="check"><input id="passkey-remember" type="checkbox">Keep me signed in for 7 days on this device</label>
+        </form>
+        <p id="passkey-status" role="status"></p>
+        <details class="recovery"><summary>Can't sign in?</summary><p>Try the phone or password manager where you saved your passkey. Use a current system browser at the configured server address.</p><p>If all passkeys are lost, run <code>./bridge passkey-login --enroll</code> on your server to open a one-time recovery link.</p></details>
+      </div>
+      <p id="pair-help" hidden></p>
+      <form id="owner-form" hidden>
         <label id="password-label" for="owner-password">Admin password</label>
         <input id="owner-password" type="password" autocomplete="current-password" maxlength="256" required>
         <label class="check"><input id="remember" type="checkbox">Keep me signed in for 7 days on this device</label>
         <button id="owner-submit" type="submit" class="primary wide">Sign in</button>
       </form>
-      <details class="recovery"><summary>Use a recovery key</summary>
+      <details id="recovery-panel" class="recovery" hidden><summary>Use a recovery key</summary>
         <form id="login-form">
           <label for="admin-token">Admin recovery key</label>
           <input id="admin-token" type="password" autocomplete="off" required>
@@ -152,11 +162,21 @@
           <details class="settings-section" id="connections-panel">
             <summary>Connections <span id="pending-count"></span></summary>
             <div class="section-body">
-              <p>Add the MCP address below in ChatGPT and choose OAuth. Approve only the request whose code matches that browser.</p>
+              <p id="connection-help">Add the MCP address below in ChatGPT and choose OAuth. Confirm with your passkey and review access in the connecting browser.</p>
               <code id="mcp-address" class="endpoint">Start the dot profile to connect.</code>
               <button id="refresh-connections" class="quiet">Refresh connections</button>
               <div id="connections-list" aria-live="polite"></div>
               <p class="hint">Connecting does not subscribe to events automatically.</p>
+            </div>
+          </details>
+          <details id="passkeys-panel" class="settings-section" hidden>
+            <summary>Passkeys and recovery</summary>
+            <div class="section-body">
+              <p>Add a backup passkey on another device or security key so you can still sign in if you lose this one.</p>
+              <label for="passkey-label">Name</label><input id="passkey-label" maxlength="80" value="Backup passkey" autocomplete="off">
+              <button id="passkey-add">Add a passkey</button>
+              <p class="hint">Adding or removing a passkey asks you to confirm with an existing one. Removing a passkey signs out admin browsers and disconnects MCP clients.</p>
+              <div id="passkeys-list"></div>
             </div>
           </details>
           <details class="settings-section" id="browsers-panel">

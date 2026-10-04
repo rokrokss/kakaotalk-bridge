@@ -2,13 +2,17 @@
 
 const $ = id => document.getElementById(id);
 let pairing = new URLSearchParams(location.hash.slice(1)).get('pair') || '';
+let passkeyEnrollment = new URLSearchParams(location.hash.slice(1)).get('passkey-setup') || '';
 if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+// Opening a server-issued link in this existing tab must run login initialization again.
+window.addEventListener('hashchange', () => { if (location.hash) location.reload(); });
 let collectionBaseline = null, lastObservation = null, mcpConnected = false;
 let setupState = null, latestState = null;
 let csrf = '', active = false, paused = false, fetching = false, rendering = false;
 let frame = null, pointer = null, blobURL = null, busy = false, generation = 0;
 let setupInitialized = false, precheckValid = false, collectionApproved = false;
 let loginAlreadyApproved = false;
+let loginMode = 'passkey';
 const messages = {
   session_required: 'Your admin session has expired. Sign in again.',
   device_busy: 'A device operation is in progress. Try again shortly.',
@@ -339,18 +343,95 @@ initLogin();
 async function initLogin() {
   try {
     const info = await api('auth-info');
+    loginMode = info.mode;
+    $('passkey-panel').hidden = loginMode !== 'passkey' || !!pairing;
+    $('passkeys-panel').hidden = loginMode !== 'passkey';
+    if (loginMode === 'passkey') {
+      $('passkey-submit').textContent = passkeyEnrollment ? 'Create a passkey' : 'Sign in with a passkey';
+      $('passkey-submit').disabled = !info.configured || (!info.owner_registered && !passkeyEnrollment);
+      $('passkey-remember').closest('label').hidden = !!passkeyEnrollment;
+      $('passkey-help').textContent = passkeyEnrollment
+        ? 'Save a passkey to your device or password manager. This setup link works once.'
+        : !info.owner_registered ? 'Open the setup link issued by ./bridge passkey-login on your server.'
+        : 'Use your device, phone or security key.';
+    }
+    $('recovery-panel').hidden = loginMode !== 'local';
+    $('pair-help').hidden = loginMode !== 'local' && !pairing;
+    $('owner-form').hidden = loginMode !== 'local' || !info.configured;
     if (pairing) {
-      $('pair-help').textContent = info.configured ? 'Pair this browser with your server. This link works once and expires after 10 minutes.' : 'Choose an admin password (at least 12 characters). This is separate from your KakaoTalk password.';
-      $('owner-submit').textContent = info.configured ? 'Pair this browser' : 'Create password and continue';
-      $('owner-password').hidden = $('password-label').hidden = info.configured;
-      $('owner-password').required = !info.configured;
-      $('owner-password').minLength = info.configured ? 0 : 12;
-      $('owner-password').autocomplete = info.configured ? 'current-password' : 'new-password';
+      const passwordNeeded = loginMode === 'local' && !info.configured;
+      $('owner-form').hidden = false;
+      $('pair-help').textContent = passwordNeeded ? 'Choose an admin password (at least 12 characters).' : 'This server-issued recovery link works once. Access lasts 30 minutes.';
+      $('owner-submit').textContent = passwordNeeded ? 'Create password and continue' : 'Recover access';
+      $('owner-password').hidden = $('password-label').hidden = !passwordNeeded;
+      $('owner-password').required = passwordNeeded;
+      $('owner-password').minLength = passwordNeeded ? 12 : 0;
+      $('owner-password').autocomplete = passwordNeeded ? 'new-password' : 'current-password';
+      $('remember').closest('label').hidden = loginMode !== 'local';
+      locked();
+    } else if (passkeyEnrollment && loginMode === 'passkey') {
       locked();
     } else {
-      if (!info.configured) $('owner-form').hidden = true;
+      $('pair-help').textContent = 'Use your admin password or run ./bridge admin --recovery to pair a browser.';
       try { unlocked(await api('session')); } catch { locked(); }
     }
+  } catch (error) { feedback(error.message); }
+}
+$('passkey-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  $('passkey-submit').disabled = true;
+  $('passkey-status').textContent = 'Confirm with your device…';
+  try {
+    let session;
+    if (passkeyEnrollment) {
+      const start = await api('passkeys/register-options', {enrollment: passkeyEnrollment, label: 'My passkey'});
+      const credential = await BridgePasskey.run(start.options, true);
+      session = await api('passkeys/register-verify', {flow: start.flow, credential});
+      passkeyEnrollment = '';
+      $('passkeys-panel').open = true;
+      $('passkey-submit').textContent = 'Sign in with a passkey';
+      $('passkey-remember').closest('label').hidden = false;
+    } else session = await authenticatePasskey('login');
+    $('passkey-status').textContent = '';
+    unlocked(session);
+    await refreshPasskeys();
+  } catch (error) { $('passkey-status').textContent = error.message; }
+  finally { $('passkey-submit').disabled = false; }
+});
+async function authenticatePasskey(purpose) {
+  const start = await api('passkeys/login-options', {purpose, remember: $('passkey-remember').checked});
+  const credential = await BridgePasskey.run(start.options);
+  return api('passkeys/login-verify', {flow: start.flow, credential, purpose, context: start.context});
+}
+$('passkey-add').addEventListener('click', async () => {
+  $('passkey-add').disabled = true;
+  try {
+    const {proof} = await authenticatePasskey('manage');
+    const start = await api('passkeys/register-options', {proof, label: $('passkey-label').value.trim() || 'Backup passkey'});
+    const credential = await BridgePasskey.run(start.options, true);
+    const session = await api('passkeys/register-verify', {flow: start.flow, credential});
+    csrf = session.csrf;
+    await refreshPasskeys();
+    feedback('Backup passkey added.');
+  } catch (error) { feedback(error.message); }
+  finally { $('passkey-add').disabled = false; }
+});
+$('passkeys-panel').addEventListener('toggle', refreshPasskeys);
+async function refreshPasskeys() {
+  if (!active || loginMode !== 'passkey' || !$('passkeys-panel').open) return;
+  try {
+    const {items} = await api('passkeys/credentials', {});
+    $('passkeys-list').replaceChildren(...items.map(row => {
+      const card = document.createElement('div'); card.className = 'connection-card';
+      card.append(paragraph(row.label), paragraph(`Added ${localTime(row.created)} · Last used ${localTime(row.last_used)}`));
+      if (items.length > 1) card.append(button('Remove', async () => {
+        const {proof} = await authenticatePasskey('manage');
+        await api('passkeys/remove', {proof, identity: row.id});
+        locked();
+        feedback('Passkey removed. Sign in again with a remaining passkey.');
+      }));
+      return card;
+    }));
   } catch (error) { feedback(error.message); }
 }
 $('owner-form').addEventListener('submit', async event => {
@@ -360,12 +441,13 @@ $('owner-form').addEventListener('submit', async event => {
   try {
     const session = await api('owner-login', { password, pair: pairing, remember: $('remember').checked });
     pairing = '';
-    $('owner-form').hidden = false;
+    $('owner-form').hidden = loginMode !== 'local';
+    $('pair-help').hidden = loginMode !== 'local';
     $('owner-password').hidden = $('password-label').hidden = false;
     $('owner-password').required = true;
     $('owner-password').autocomplete = 'current-password';
     $('owner-submit').textContent = 'Sign in';
-    $('pair-help').textContent = 'Use your admin password or run ./bridge admin to pair a browser.';
+    $('pair-help').textContent = 'Use your admin password or run ./bridge admin --recovery to pair a browser.';
     unlocked(session);
   } catch (error) { feedback(error.message); }
 });
@@ -418,6 +500,11 @@ async function refreshConnections() {
     if (!active) return;
     mcpConnected = data.grants.length > 0;
     $('mcp-address').textContent = data.resource;
+    $('connection-help').textContent = data.approval_mode === 'passkey'
+      ? 'Add this MCP address in ChatGPT and choose OAuth. Confirm with your passkey, review access, then allow the connection. You can disconnect it here.'
+      : data.approval_mode === 'key'
+        ? 'This server uses legacy connection-key approval. Enter its connection key in the connecting browser.'
+        : 'Add this MCP address in ChatGPT and choose OAuth. Approve only the request whose code matches that browser.';
     $('pending-count').textContent = data.pending.length ? `(${data.pending.length} pending)` : '';
     renderSetup();
     const signature = JSON.stringify(data);

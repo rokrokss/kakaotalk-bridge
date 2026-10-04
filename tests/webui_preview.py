@@ -106,6 +106,7 @@ def create_preview():
             else "needs_attention",
             "warnings": [],
         },
+        auth_mode="local",
     )
 
     @app.get("/test/calls")

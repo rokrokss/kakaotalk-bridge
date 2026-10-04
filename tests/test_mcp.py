@@ -22,6 +22,7 @@ def test_mcp_stdio_registers_only_read_tools():
                 "search_messages",
                 "list_conversations",
                 "get_collector_status",
+                "get_conversation_context",
             }
             assert all(t.annotations.readOnlyHint for t in response.tools)
 

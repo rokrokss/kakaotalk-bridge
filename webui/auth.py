@@ -4,6 +4,7 @@ import argparse
 import base64
 import hashlib
 import hmac
+import json
 import os
 import secrets
 import time
@@ -20,27 +21,36 @@ class OwnerAuth:
     def __init__(self, path, token):
         key = base64.urlsafe_b64encode(hashlib.sha256(("admin-auth-v1:" + token).encode()).digest())
         self.state = State(str(path), key)
+        from server.auth_migration import retire_social_login
+
+        retire_social_login(self.state)
 
     def configured(self):
         return bool(self.state.get("owner", "password"))
 
-    def issue_pair(self):
+    def issue_pair(self, policy="local"):
         value = secrets.token_urlsafe(32)
         with self.state.transaction() as db:
             db.execute("BEGIN IMMEDIATE")
             # Only the most recently issued link is usable.
             db.execute("DELETE FROM records WHERE kind='pair'")
-            self.state.put("pair", digest(value), {"expires": time.time() + 600}, db=db)
+            self.state.put(
+                "pair", digest(value), {"expires": time.time() + 600, "policy": policy}, db=db
+            )
         return value
 
-    def check_pair(self, value, password=None):
+    def check_pair(self, value, password=None, *, policy="local"):
         with self.state.transaction() as db:
             db.execute("BEGIN IMMEDIATE")
             record = self.state.get("pair", digest(value), db=db)
-            if not record or record["expires"] <= time.time():
+            if (
+                not record
+                or record["expires"] <= time.time()
+                or record.get("policy", "local") != policy
+            ):
                 return False
             owner = self.state.get("owner", "password", db=db)
-            if not owner:
+            if not owner and policy == "local":
                 if not password or not 12 <= len(password) <= 256:
                     return False
                 salt = secrets.token_bytes(16)
@@ -59,10 +69,17 @@ class OwnerAuth:
         hashed = self.hash_password(password, salt)
         return bool(owner and hmac.compare_digest(hashed, owner["hash"]))
 
-    def create_session(self, ttl, label, *, exclusive=False):
+    def create_session(self, ttl, label, *, exclusive=False, policy="local"):
         key, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
         now = time.time()
-        record = {"csrf": csrf, "created": now, "expires": now + ttl, "label": label[:120]}
+        record = {
+            "cookie_scope": "admin-v2",
+            "csrf": csrf,
+            "created": now,
+            "expires": now + ttl,
+            "label": label[:120],
+            "policy": policy,
+        }
         with self.state.transaction() as db:
             db.execute("BEGIN IMMEDIATE")
             for identity, old in self.state.all("session", db=db):
@@ -101,14 +118,35 @@ class OwnerAuth:
 
 def main():
     parser = argparse.ArgumentParser(description="Manage private administrator access")
-    parser.add_argument("command", choices=["pair", "reset-password"])
+    parser.add_argument("command", choices=["pair", "reset-password", "info"])
     args = parser.parse_args()
     auth = OwnerAuth(os.getenv("ADMIN_AUTH_DB", "/auth/admin.db"), secret("ADMIN_TOKEN"))
-    if args.command == "reset-password":
+    mode = os.getenv("ADMIN_AUTH_MODE", "passkey")
+    if mode not in {"local", "passkey"}:
+        raise SystemExit("ADMIN_AUTH_MODE must be passkey or local; run ./bridge passkey-login")
+    from server.passkey_client import PasskeyClient
+
+    passkeys = PasskeyClient("admin")
+    if args.command == "info":
+        info = passkeys.call("admin", "info") if mode == "passkey" else {}
+        print(
+            json.dumps(
+                {
+                    "mode": mode,
+                    "configured": info.get("configured", auth.configured()),
+                    "origin": info.get("admin_origin"),
+                    "owner_registered": info.get("registered", auth.configured()),
+                }
+            )
+        )
+    elif args.command == "reset-password":
         auth.reset_password()
-        print("Password and browser sessions cleared. Run the admin command to pair again.")
+        print(
+            "Local password and browser sessions cleared. Use a passkey or ./bridge admin --recovery."
+        )
     else:
-        print(auth.issue_pair())
+        policy = passkeys.call("admin", "info")["policy"] if mode == "passkey" else "local"
+        print(auth.issue_pair(policy))
 
 
 if __name__ == "__main__":

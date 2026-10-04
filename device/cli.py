@@ -39,6 +39,16 @@ def connect():
         timeout=15,
         check=False,
     )
+    # Secure userdebug adbd may start as shell after an Android restart. Only an
+    # already-authorized collector key can request root; no pairing bypass.
+    if adb("shell", "id", "-u", check=False) == "2000":
+        adb("root", check=False)
+        for _ in range(20):
+            time.sleep(0.5)
+            if adb("shell", "id", "-u", check=False) == "0":
+                break
+        else:
+            raise RuntimeError("Authorized root ADB is unavailable")
 
 
 def is_installed(package):
@@ -277,6 +287,7 @@ def main():
         choices=[
             "watch",
             "iris-watch",
+            "iris-upgrade",
             "web-ui",
             "bootstrap",
             "prepare",
@@ -292,6 +303,9 @@ def main():
         "--rotate-epoch",
         action="store_true",
         help="After restoring Android state, start a new identity epoch without clearing the outbox",
+    )
+    parser.add_argument(
+        "--expected-iris-sha256", help="Previous APK hash for an explicit Iris-only migration"
     )
     args = parser.parse_args()
     command = args.command
@@ -310,6 +324,10 @@ def main():
         from device.iris import watch
 
         watch()
+    elif command == "iris-upgrade":
+        from device.iris import upgrade_binary
+
+        print(json.dumps(upgrade_binary(args.expected_iris_sha256)))
     elif command == "probe":
         print(json.dumps(sample()))
     elif command == "prepare":

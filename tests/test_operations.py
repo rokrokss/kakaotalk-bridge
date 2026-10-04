@@ -18,7 +18,7 @@ def test_release_manifest_requires_immutable_official_refs(tmp_path):
         "version": "v0.2.0",
         "images": {
             kind: "ghcr.io/rokrokss/kakaotalk-bridge-" + kind + "@sha256:" + "a" * 64
-            for kind in ("server", "device")
+            for kind in ("server", "device", "gateway")
         },
     }
     path.write_text(json.dumps(data))
@@ -37,18 +37,26 @@ def test_release_manifest_requires_immutable_official_refs(tmp_path):
 def test_admin_uses_private_serve_url_and_allows_tunnel_override(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "ROOT", tmp_path)
     monkeypatch.setattr(cli.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(cli, "admin_code", lambda: "test-pair-code")
+    pairing = Mock(return_value="test-pair-code")
+    monkeypatch.setattr(cli, "admin_code", pairing)
+    monkeypatch.setattr(cli, "admin_info", lambda: {"origin": None})
     monkeypatch.setattr(cli, "recover_activation", Mock())
     opener = Mock()
-    monkeypatch.setattr(cli, "open_admin", opener)
+    monkeypatch.setattr(cli, "open_admin_page", opener)
     (tmp_path / ".bridge").mkdir()
     (tmp_path / ".bridge/admin-url").write_text("https://bridge.example.ts.net:8443")
     monkeypatch.setattr(cli.sys, "argv", ["bridge", "admin"])
     cli.main()
-    opener.assert_called_once_with("test-pair-code", "https://bridge.example.ts.net:8443")
+    opener.assert_called_once_with("https://bridge.example.ts.net:8443/admin/")
+    pairing.assert_not_called()
     monkeypatch.setattr(cli.sys, "argv", ["bridge", "admin", "--url", "https://localhost:18443"])
     cli.main()
-    opener.assert_called_with("test-pair-code", "https://localhost:18443")
+    opener.assert_called_with("https://localhost:18443")
+    monkeypatch.setattr(cli, "open_admin", opener)
+    monkeypatch.setattr(cli.sys, "argv", ["bridge", "admin", "--recovery"])
+    cli.main()
+    pairing.assert_called_once()
+    opener.assert_called_with("test-pair-code", "https://bridge.example.ts.net:8443/admin/")
 
 
 def test_env_update_preserves_identity_and_rejects_shell_syntax(tmp_path, monkeypatch):
@@ -74,6 +82,24 @@ def test_existing_keys_are_not_regenerated_when_incomplete(tmp_path, monkeypatch
     run.assert_not_called()
 
 
+def test_legacy_mode_migration_preserves_installation_and_explicit_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    path = tmp_path / ".env"
+    path.write_text("ADMIN_AUTH_MODE=kakao\nDOT_APPROVAL_MODE=kakao\nDEVICE_ID=existing\n")
+    cli.migrate_auth_modes()
+    assert cli.read_env() == {
+        "ADMIN_AUTH_MODE": "passkey",
+        "DOT_APPROVAL_MODE": "passkey",
+        "DEVICE_ID": "existing",
+    }
+    unchanged = path.read_bytes()
+    cli.migrate_auth_modes()
+    assert path.read_bytes() == unchanged
+    path.write_text("ADMIN_AUTH_MODE=local\nDOT_APPROVAL_MODE=admin\n")
+    cli.migrate_auth_modes()
+    assert cli.read_env() == {"ADMIN_AUTH_MODE": "local", "DOT_APPROVAL_MODE": "admin"}
+
+
 def source_tree(root):
     volumes = root / "snapshot"
     project = root / "project"
@@ -89,11 +115,21 @@ def source_tree(root):
         "CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT); INSERT INTO metadata VALUES('cursor_epoch','old'); CREATE TABLE gaps(started_at TEXT, ended_at TEXT, reason TEXT);"
     )
     db.close()
-    for name in ("admin-state/admin.db", "dot-state/dot.db"):
+    for name in ("admin-state/admin.db", "dot-state/dot.db", "passkey-state/passkeys.db"):
         db = sqlite3.connect(volumes / name)
         db.executescript(
             "CREATE TABLE records(kind TEXT,id TEXT,value BLOB); INSERT INTO records VALUES('session','old','secret'); INSERT INTO records VALUES('settings','profile','same'); INSERT INTO records VALUES('owner','password','keep');"
         )
+        db.executescript(
+            "INSERT INTO records VALUES('kakao-flow','old','pending'); INSERT INTO records VALUES('kakao-enroll','old','pending'); INSERT INTO records VALUES('kakao','config','retire provider config');"
+        )
+        if name.startswith("passkey"):
+            db.executescript(
+                "INSERT INTO records VALUES('passkey','config','keep rp');"
+                "INSERT INTO records VALUES('credential','registered','keep public key');"
+                "INSERT INTO records VALUES('ceremony','pending','remove');"
+                "INSERT INTO records VALUES('enroll','unused','remove');"
+            )
         db.close()
     return volumes, project
 
@@ -132,8 +168,16 @@ def test_full_snapshot_roundtrip_and_authentication_before_restore(tmp_path):
     with sqlite3.connect(destination / "admin-state/admin.db") as db:
         assert not db.execute("SELECT 1 FROM records WHERE kind='session'").fetchall()
         assert db.execute("SELECT 1 FROM records WHERE kind='owner'").fetchone()
+        assert not db.execute("SELECT 1 FROM records WHERE kind='kakao'").fetchone()
+        assert not db.execute("SELECT 1 FROM records WHERE kind='kakao-flow'").fetchone()
+        assert not db.execute("SELECT 1 FROM records WHERE kind='kakao-enroll'").fetchone()
     with sqlite3.connect(destination / "dot-state/dot.db") as db:
-        assert [row[0] for row in db.execute("SELECT kind FROM records")] == ["settings"]
+        assert {row[0] for row in db.execute("SELECT kind FROM records")} == {"settings"}
+    with sqlite3.connect(destination / "passkey-state/passkeys.db") as db:
+        assert set(db.execute("SELECT kind,value FROM records")) == {
+            ("passkey", "keep rp"),
+            ("credential", "keep public key"),
+        }
 
 
 def test_archive_path_and_link_traversal_rejected(tmp_path):
@@ -228,3 +272,10 @@ def test_source_image_identity_changes_for_dependencies_and_renames(tmp_path, mo
     (tmp_path / "secrets").mkdir()
     (tmp_path / "secrets/private").write_text("not part of image identity")
     assert unchanged == cli.image_config(args)
+
+
+def test_default_admin_mode_starts_private_passkey_authority(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    (tmp_path / ".env").write_text("DOT_PUBLIC_URL=https://unset.invalid\n")
+    assert "dot-control" in cli.services()
+    assert "dot-plugin" not in cli.services()

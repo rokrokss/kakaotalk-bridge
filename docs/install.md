@@ -1,6 +1,6 @@
 # Linux installation
 
-For the new installer, browser pairing, Aurora setup and full encrypted snapshots, see [Set up a personal bridge](onboarding.md). The commands below describe the existing manual deployment path.
+For the new installer, Kakao admin login, Aurora setup and full encrypted snapshots, see [Set up a personal bridge](onboarding.md). The commands below describe the existing manual deployment path.
 
 [README](../README.md) · [Mac installation](local-redroid.md)
 
@@ -41,7 +41,7 @@ This command copies APKs only. It does not change the phone's app data or login 
 ## 3. Build and start
 
 ```bash
-docker compose build api device-agent
+docker compose build api device-agent gateway
 docker compose up -d
 docker compose ps
 ```
@@ -50,15 +50,16 @@ Python, the JDK, and the Android SDK are prepared inside the images. Android bui
 
 ## 4. Open the admin console
 
-For a remote server, open a tunnel from your computer:
+Expose a stable, trusted HTTPS hostname using private Tailscale Serve or your reverse proxy, then register a [passkey](passkeys.md). If Tailscale is available, the managed CLI can configure both endpoints:
 
 ```bash
-ssh -N -L 18443:127.0.0.1:8443 user@linux-server
+./bridge expose
+./bridge passkey-login
 ```
 
-Open `https://localhost:18443/admin/` in your browser, or `https://localhost:8443/admin/` on the server itself. Verify the generated `secrets/tls_cert.pem` and configure your browser to trust it.
+Open the private `https://<node>.ts.net:8443/admin/` address and confirm with your passkey. Keep the same hostname for admin and public MCP so the credential works for both. A localhost SSH tunnel is useful for diagnostics, but a passkey registered at the server hostname will not work at localhost.
 
-On the server, run `./bridge admin --url https://localhost:18443` for the SSH tunnel above, or `./bridge admin` when browsing on the server itself. Open the printed one-time link to pair a browser, then follow **Set up your bridge**. Use Aurora or import an APK set, then choose **Set up collection components**. The admin recovery key remains available for older installations.
+Follow **Set up your bridge**, use Aurora or import an APK set, then choose **Set up collection components**.
 
 Follow the [first login procedure](web-ui.md#first-login). The new setup action preserves existing enrollment. The legacy CLI `bootstrap` still resets collection approval and is not a routine recovery step.
 

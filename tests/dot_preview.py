@@ -20,6 +20,7 @@ def create_preview():
         str(Path(directory.name) / "dot.db"),
         "preview-only-key-" + "0" * 32,
         Fernet.generate_key(),
+        approval_mode="key",
     )
     # No API URL, real credentials or message source is used by this fixture.
     app = create_app(config, collector=object(), worker=False)

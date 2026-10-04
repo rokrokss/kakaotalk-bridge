@@ -2,7 +2,7 @@
 source "$(dirname "$0")/common.sh"
 project="kakaocollector-smoke-$$"
 export DEVICE_SUBNET=172.29.88.0/24 DEVICE_IP_RANGE=172.29.88.128/25 GATEWAY_IP=172.29.88.3 HTTPS_PORT=18443
-export SMOKE_PROJECT="$project"
+export SMOKE_PROJECT="$project" ADMIN_AUTH_MODE=local
 cleanup() { docker compose -p "$project" down --volumes --remove-orphans >/dev/null 2>&1; }
 trap cleanup EXIT
 docker compose -p "$project" up -d --no-build api gateway

@@ -55,7 +55,7 @@ def pipeline(tmp_path, monkeypatch):
         collector = iris.Collector(api)
         monkeypatch.setattr(iris.cli, "connect", Mock())
         monkeypatch.setattr(iris, "check_enrollment", lambda: deepcopy(CONFIG))
-        monkeypatch.setattr(iris, "ensure_started", Mock())
+        monkeypatch.setattr(iris, "ensure_started", Mock(return_value="a" * 43))
         page = {
             "build": iris.BUILD,
             "enrollment_epoch": CONFIG["enrollment_epoch"],
@@ -63,7 +63,18 @@ def pipeline(tmp_path, monkeypatch):
             "high_water": "11",
             "rows": [row(), row(11)],
         }
-        monkeypatch.setattr(iris, "request", lambda url: deepcopy(page))
+
+        def response(url, payload=None, token=None):
+            assert token == "a" * 43
+            if payload is None:
+                return deepcopy(page)
+            assert url == "http://127.0.0.1:3000/collector/metadata"
+            assert 1 <= len(payload["targets"]) <= 50
+            return {
+                key: value for key, value in page.items() if key not in ("rows", "high_water")
+            } | {"items": []}
+
+        monkeypatch.setattr(iris, "request", response)
         yield collector, client, page
 
 
@@ -252,3 +263,95 @@ def test_runtime_gate_accepts_matching_iris_registration(monkeypatch):
         lambda adb: {"kakao_version": 123, "fingerprint": "test-build"},
     )
     assert iris.check_enrollment() == CONFIG
+
+
+def test_explicit_iris_upgrade_verifies_previous_and_staged_apk(monkeypatch):
+    calls = []
+    old = "1" * 64
+    new = hashlib.sha256(b"candidate apk").hexdigest()
+
+    def adb(*args, **kwargs):
+        calls.append(args)
+        if args[:2] == ("shell", "sha256sum"):
+            return (new if args[-1].endswith(".next") else old) + " file"
+        return ""
+
+    monkeypatch.setattr(iris.cli, "adb", adb)
+    monkeypatch.setattr(iris.cli, "connect", lambda: None)
+    monkeypatch.setattr(iris, "check_enrollment", lambda: CONFIG)
+    monkeypatch.setattr(iris.Path, "read_bytes", lambda self: b"candidate apk")
+    monkeypatch.setattr(iris, "stop", lambda: calls.append(("stop-iris-only",)))
+    monkeypatch.setattr(iris, "ensure_started", lambda: calls.append(("start-iris-only",)))
+    with pytest.raises(RuntimeError, match="previous_binary_mismatch"):
+        iris.upgrade_binary("2" * 64)
+    assert not any(c[0] == "stop-iris-only" for c in calls)
+    assert iris.upgrade_binary(old)["sha256"] == new
+    assert ("shell", "mv", iris.REMOTE_APK + ".next", iris.REMOTE_APK) in calls
+    assert not any("am" in c or "pm" in c for c in calls)
+
+
+def test_explicit_iris_upgrade_restores_previous_apk_on_start_failure(monkeypatch):
+    calls = []
+    old = "1" * 64
+    new = hashlib.sha256(b"candidate").hexdigest()
+    monkeypatch.setattr(iris.cli, "connect", lambda: None)
+    monkeypatch.setattr(iris, "check_enrollment", lambda: CONFIG)
+    monkeypatch.setattr(iris.Path, "read_bytes", lambda self: b"candidate")
+
+    def adb(*args, **kwargs):
+        calls.append(args)
+        return (
+            ((new if args[-1].endswith(".next") else old) + " file")
+            if args[:2] == ("shell", "sha256sum")
+            else ""
+        )
+
+    monkeypatch.setattr(iris.cli, "adb", adb)
+    monkeypatch.setattr(iris, "stop", lambda: None)
+    monkeypatch.setattr(iris, "ensure_started", Mock(side_effect=RuntimeError("start_failed")))
+    with pytest.raises(RuntimeError, match="start_failed"):
+        iris.upgrade_binary(old)
+    assert ("shell", "cp", iris.REMOTE_APK + ".backup-" + old, iris.REMOTE_APK) in calls
+
+
+def test_iris_credentials_are_private_and_rotate_with_enrollment(monkeypatch):
+    calls, pushed = [], []
+    remote = {"enrollment_epoch": "old", "token": "b" * 43}
+
+    def adb(*args, **kwargs):
+        calls.append(args)
+        if args == ("shell", "cat", iris.AUTH_FILE):
+            return json.dumps(remote)
+        if args[0] == "push":
+            source = iris.Path(args[1])
+            assert source.stat().st_mode & 0o777 == 0o600
+            pushed.append(json.loads(source.read_text()))
+        return ""
+
+    monkeypatch.setattr(iris.cli, "adb", adb)
+    monkeypatch.setattr(iris, "check_enrollment", lambda: CONFIG)
+    token = iris.ensure_auth(CONFIG)
+    assert token != remote["token"] and len(token) == 43
+    assert pushed == [{"enrollment_epoch": CONFIG["enrollment_epoch"], "token": token}]
+    assert ("shell", "chmod", "0700", iris.AUTH_DIR) in calls
+    assert ("shell", "chmod", "0600", iris.AUTH_FILE + ".next") in calls
+    assert all(token not in " ".join(args) for args in calls)
+    remote.update(pushed[0])
+    assert iris.ensure_auth(CONFIG) == token
+    assert len(pushed) == 1
+
+
+def test_iris_never_sends_bearer_to_an_impostor_listener(monkeypatch):
+    token = "a" * 43
+    monkeypatch.setattr(iris, "ensure_auth", lambda config: token)
+    monkeypatch.setattr(iris.Path, "read_bytes", lambda path: b"apk")
+    monkeypatch.setattr(iris.cli, "adb", lambda *a, **k: hashlib.sha256(b"apk").hexdigest())
+
+    def impostor(url, payload=None, token=None):
+        assert token is None
+        assert "/collector/health?challenge=" in url
+        return {"build": iris.BUILD, "proof": "0" * 64}
+
+    monkeypatch.setattr(iris, "request", impostor)
+    with pytest.raises(RuntimeError, match="unexpected_iris_server"):
+        iris.ensure_started(CONFIG)

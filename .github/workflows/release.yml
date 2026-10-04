@@ -66,19 +66,30 @@ jobs:
             bridge_key_password=/tmp/bridge-signing/password
           provenance: mode=max
           sbom: true
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        id: gateway
+        with:
+          context: .
+          file: docker/gateway.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository }}-gateway:${{ github.ref_name }}
+          provenance: mode=max
+          sbom: true
       - name: Write digest-pinned manifest
         env:
           VERSION: ${{ github.ref_name }}
           REPOSITORY: ${{ github.repository }}
           SERVER: ${{ steps.server.outputs.digest }}
           DEVICE: ${{ steps.device.outputs.digest }}
+          GATEWAY: ${{ steps.gateway.outputs.digest }}
         run: |
           python3 - <<'PY'
           import json, os
           from pathlib import Path
           data = {"schema": 1, "version": os.environ["VERSION"], "images": {
               kind: f'ghcr.io/{os.environ["REPOSITORY"]}-{kind}@{os.environ[kind.upper()]}'
-              for kind in ("server", "device")}}
+              for kind in ("server", "device", "gateway")}}
           Path("release.json").write_text(json.dumps(data, indent=2) + "\n")
           PY
       - uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2

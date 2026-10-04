@@ -18,47 +18,40 @@ For a published release, download its `release.json` from this repository's GitH
 ```bash
 gh attestation verify release.json --repo rokrokss/kakaotalk-bridge
 ./bridge install --manifest release.json
-./bridge admin
+./bridge expose
+./bridge passkey-login
 ```
 
-The manifest selects immutable image digests for Linux arm64 and amd64. Until a release has been published, build the checkout instead:
+The manifest selects immutable server, device and gateway image digests for Linux arm64 and amd64. The current installer requires all three; an older two-image manifest needs a new release. Until a release has been published, build the checkout instead:
 
 ```bash
 ./bridge install --source
-./bridge admin
+./bridge expose
+./bridge passkey-login
 ```
 
 Source builds compile the Android components and take longer. On a Mac these builds run inside Lima; Docker Desktop is not required. First boot downloads Ubuntu and container dependencies. The default VM is `kakaotalk-bridge`; it is separate from the older `kakaotalk-test` development VM. To avoid an existing local HTTPS port, use `./bridge install --source --admin-port 19443` on the first install.
 
 Running install again preserves existing keys and containers. Use `update` to change images. It does not import an existing deployment from a different VM or directory. Do not copy only Android data into a new installation: it must remain paired with the original enrollment, API data and keys.
 
-## Open admin without copying a permanent key
+## Register a passkey and open admin
 
-`./bridge admin` opens a one-time link. It expires after ten minutes and is consumed only when you submit the pairing form. A newly issued link invalidates the previous one. The secret stays in the URL fragment and is removed from the browser address immediately; it is not sent in HTTP URLs.
+After installation, sign in to Tailscale on the server and run `./bridge expose`, then `./bridge passkey-login`. The second command opens a private, one-use registration link. Choose **Create a passkey** and save it to your device or password manager. No developer account or admin password is required. See [passkey setup and recovery](passkeys.md) for other reverse proxies and existing deployments.
 
-On the first visit, choose an admin password of at least 12 characters. This is separate from your KakaoTalk password. Use **Keep me signed in** for seven days, or leave it unchecked for a 30-minute session. Sessions survive container restarts and can be revoked under **Admin browsers**.
+Bookmark the private admin address. Use **Keep me signed in** for seven days, or leave it unchecked for a 30-minute session. Sessions survive container restarts and can be revoked under **Admin browsers**. `./bridge admin` opens the same address as a convenience.
 
-For localhost HTTPS, trust the installation's `secrets/tls_cert.pem` after verifying it. On the automatic Mac installation this file is inside Lima at `/srv/kakaotalk-bridge/secrets/tls_cert.pem`; copy only that public certificate to the Mac for browser trust. For a remote Linux server, run `ssh -N -L 18443:127.0.0.1:8443 user@linux-server` on your computer, then run `./bridge admin --url https://localhost:18443` on the server; open the resulting link on the computer with the tunnel.
-
-For a trusted certificate and access from your other devices, sign in to Tailscale on the server and run:
-
-```bash
-./bridge expose
-./bridge admin
-```
-
-This configures two separate endpoints:
+The two endpoints share one stable hostname:
 
 | Address | Access |
 | --- | --- |
-| `https://<node>.ts.net:8443/admin/` | Private tailnet, with admin authentication |
-| `https://<node>.ts.net/mcp` | Public Funnel, with OAuth |
+| `https://<node>.ts.net:8443/admin/` | Private tailnet, with passkey authentication |
+| `https://<node>.ts.net/mcp` | Public Funnel, with MCP OAuth and passkey approval |
 
-The command preserves unrelated existing Tailscale routes by refusing to overwrite them. For an existing Tailscale setup, configure Serve on port 8443 to the local admin HTTPS port and Funnel on port 443 to the local MCP HTTP port yourself, then run `./bridge connect --url https://<node>.ts.net`. The automatic Mac installer forwards the MCP port to `127.0.0.1:18787`; the older development tunnel uses 18788. Never point Funnel at the admin/API gateway.
+Tailscale Serve supplies the trusted certificate. Use the configured hostname rather than localhost; passkeys are bound to that hostname. Tailscale identity headers do not replace passkey authentication. Never point Funnel at the admin/API gateway.
 
-Pairing/password authentication remains required; forwarded Tailscale identity headers do not bypass it. Passkeys and identity-based Tailscale sign-in are not implemented.
+`expose` refuses to overwrite unrelated Tailscale routes. For an existing setup, configure Serve on port 8443 to the local admin HTTPS port and Funnel on port 443 to the local MCP HTTP port yourself, then run `./bridge connect --url https://<node>.ts.net`. The automatic Mac installer forwards MCP to `127.0.0.1:18787`; the older development tunnel uses 18788.
 
-If you lose the password, run `./bridge reset-password`, followed by `./bridge admin`. Resetting revokes all admin browser sessions. The existing `secrets/admin_token` remains a recovery option. Neither action signs out of KakaoTalk.
+Add a backup passkey under **Passkeys and recovery**. If every key is lost, run `./bridge passkey-login --enroll` on the server. `./bridge admin --recovery` can also issue a one-time link for a 30-minute emergency session. Password/key login is available only with explicit `ADMIN_AUTH_MODE=local`.
 
 ## Install KakaoTalk and verify both sessions
 
@@ -82,11 +75,11 @@ The command copies APKs into the runtime; **Set up components** verifies and ins
 ## Connect ChatGPT
 
 1. Run `./bridge expose`, or supply a public HTTPS reverse proxy and run `./bridge connect --url https://your-host`.
-2. Add the `/mcp` address shown under **Connections** in ChatGPT, with OAuth authentication.
-3. The authorization page displays a one-time eight-character code. Open private admin **Connections**, check the client ID and callback, type that code, and approve. Client names are self-reported.
-4. The connecting page continues automatically after approval. The request expires after ten minutes. You can disconnect a client in admin at any time.
+2. Register your [passkey](passkeys.md) for the private admin and public MCP origins, then add the `/mcp` address in ChatGPT with OAuth authentication.
+3. Confirm with your passkey, then review the client, callback and requested permissions. Client names are self-reported.
+4. Choose **Allow connection** to return to ChatGPT, or **Cancel** to decline. The request expires after ten minutes. You can disconnect a client in admin **Connections** at any time.
 
-OAuth still requires the initiating browser cookie, exact Origin, redirect URI, resource and PKCE challenge. The approval listener has no host port and runs only on the internal backend network. Connecting does not create an event subscription.
+OAuth still requires the initiating browser cookie, exact Origin, redirect URI, resource and PKCE challenge. The approval listener has no host port; separate internal networks distinguish private administration from public passkey assertions. The public port belongs to dot-ingress, which filters private cookies. Connecting does not create an event subscription.
 
 ## Maintain and recover
 
@@ -96,7 +89,7 @@ OAuth still requires the initiating browser cookie, exact Origin, redirect URI, 
 ./bridge update --manifest release.json
 ```
 
-`doctor` prints service state and missing prerequisites without message bodies, tokens or raw logs. `backup` briefly stops the stack, encrypts an offline snapshot with AES-256-GCM, then starts the previously running services. The snapshot includes all six state volumes, `.env` and `secrets/`, preserving Android ownership, permissions, links and extended attributes. Unix sockets are recreated by their processes. Keep enough disk space for both the archive and restored data.
+`doctor` prints service state and missing prerequisites without message bodies, tokens or raw logs. `backup` briefly stops the stack, encrypts an offline snapshot with AES-256-GCM, then starts the previously running services. The snapshot includes all seven state volumes, `.env` and `secrets/`, preserving Android ownership, permissions, links and extended attributes. Unix sockets are recreated by their processes. Keep enough disk space for both the archive and restored data.
 
 Backups are written to `backups/*.kcs`; on a Mac they are copied out of Lima automatically. **Keep `secrets/backup_key` separately**: the copy inside the encrypted archive cannot unlock that archive. For the automatic Mac installation, export this one file privately:
 
@@ -114,7 +107,7 @@ To restore into an initialized installation using the same code release:
 ./bridge admin
 ```
 
-Authentication is verified before extraction. Restore writes new volumes and switches the configuration only after validation. The previous volumes and configuration remain available; nothing runs a `down -v`. Failed configuration activation is rolled back, including after a process interruption. Browser sessions, OAuth grants and event callbacks are cleared, while the admin password and profile identity are preserved. Reconnect ChatGPT, recreate explicitly requested event subscriptions and check both KakaoTalk sessions again. A saved Android session may still be rejected by Kakao's servers.
+Authentication is verified before extraction. Restore writes new volumes and switches the configuration only after validation. The previous volumes and configuration remain available; nothing runs a `down -v`. Failed configuration activation is rolled back, including after a process interruption. Browser sessions, OAuth grants and event callbacks are cleared, while passkey credentials and configuration, any local password and profile identity are preserved. Reconnect ChatGPT, recreate explicitly requested event subscriptions and check both KakaoTalk sessions again. A saved Android session may still be rejected by Kakao's servers.
 
 Update pulls/builds before stopping anything, makes an encrypted snapshot, then checks container health. A failed health check restores the previous image selection. It never reinstalls the signed-in KakaoTalk or Bridge app. If an image changes the bundled Iris APK, update stops before deployment: that requires a separate, tested component migration. Switching a personal Bridge signing key to a release signing key is not automated.
 
@@ -122,6 +115,6 @@ Update pulls/builds before stopping anything, makes an encrypted snapshot, then 
 
 The release workflow runs on `vMAJOR.MINOR.PATCH` tags, builds both architectures, publishes SBOM/provenance metadata and attaches `release.json` to a versioned release. Configure the protected GitHub `release` environment with a stable `BRIDGE_RELEASE_KEYSTORE_BASE64` and `BRIDGE_RELEASE_KEY_PASSWORD` before publishing. Keep that signing identity across releases. Do not rotate it in an ordinary update.
 
-Publish both GHCR image packages as public for installation without registry credentials. The installer does not log in to GHCR. Image names are `ghcr.io/rokrokss/kakaotalk-bridge-server` and `ghcr.io/rokrokss/kakaotalk-bridge-device`.
+Publish all three GHCR image packages as public for installation without registry credentials. The installer does not log in to GHCR. Image names are `ghcr.io/rokrokss/kakaotalk-bridge-server`, `ghcr.io/rokrokss/kakaotalk-bridge-device` and `ghcr.io/rokrokss/kakaotalk-bridge-gateway`.
 
 The workflow and installer are implemented; a release must actually be published before the prebuilt installation command can download those images. Local image builds and isolated tests do not establish a successful clean install on every supported host.

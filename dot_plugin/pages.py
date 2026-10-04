@@ -2,6 +2,20 @@
 
 from html import escape
 
+from fastapi.responses import HTMLResponse
+
+LINK_COOKIE = "__Host-kakao-link"
+
+
+def browser_page(body, redirect="", *, status_code=200):
+    response = HTMLResponse(body, status_code=status_code)
+    response.headers["Referrer-Policy"] = "same-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'none'; style-src 'self'; img-src 'self'; "
+        f"form-action 'self' {redirect}; frame-ancestors 'none'; base-uri 'none'"
+    )
+    return response
+
 
 def page(title, body):
     return f"""<!doctype html>

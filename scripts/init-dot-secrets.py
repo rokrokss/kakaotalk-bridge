@@ -11,6 +11,7 @@ root = Path(__file__).resolve().parents[1] / "secrets"
 root.mkdir(mode=0o700, exist_ok=True)
 for name, value in (
     ("mcp_approval_token", secrets.token_urlsafe(32)),
+    ("mcp_passkey_token", secrets.token_urlsafe(32)),
     ("mcp_link_key", secrets.token_urlsafe(32)),
     ("mcp_storage_key", Fernet.generate_key().decode()),
 ):

@@ -93,3 +93,31 @@ class DeviceStatus(StrictModel):
     android_version: str | None = Field(default=None, max_length=64)
     kakao_installed: bool = False
     bridge_installed: bool = False
+
+
+class DisplayIdentity(StrictModel):
+    name: Label | None = None
+    status: Literal["resolved", "not_found", "unavailable"]
+    reason: Annotated[str, Field(max_length=80)] | None = None
+    name_source: Annotated[str, Field(max_length=80)] | None = None
+
+    @model_validator(mode="after")
+    def resolved_name(self):
+        if (self.status == "resolved") != bool(self.name and self.name.strip()):
+            raise ValueError("name_status_mismatch")
+        return self
+
+
+class IdentityMetadata(StrictModel):
+    chat_id: Annotated[str, Field(pattern=r"^-?[0-9]{1,20}$")]
+    user_id: Annotated[str, Field(pattern=r"^-?[0-9]{1,20}$")]
+    kind: Annotated[str, Field(max_length=80)] | None = None
+    sender: DisplayIdentity
+    conversation: DisplayIdentity
+
+
+class MetadataBatch(StrictModel):
+    device_id: Annotated[str, Field(min_length=1, max_length=128)]
+    enrollment_epoch: UUID
+    database_id: Annotated[str, Field(min_length=1, max_length=128)]
+    items: list[IdentityMetadata] = Field(max_length=50)

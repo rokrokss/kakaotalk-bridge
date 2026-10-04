@@ -24,6 +24,7 @@ VOLUMES = {
     "iris-state",
     "admin-state",
     "dot-state",
+    "passkey-state",
 }
 
 
@@ -175,7 +176,7 @@ def extract_verified(plain, snapshot, project):
 
 
 def reset_external_state(snapshot, project):
-    for name in ("dot-state", "collector-data"):
+    for name in ("dot-state", "collector-data", "passkey-state"):
         if not any((snapshot / name).iterdir()):
             os.chown(snapshot / name, 10001, 10001)
     # Restoring old cursors must not silently skip or acknowledge messages in a new timeline.
@@ -192,12 +193,16 @@ def reset_external_state(snapshot, project):
             (datetime.now(UTC).isoformat(), None, "full_snapshot_restored"),
         )
     # Browser credentials, OAuth grants, and event callbacks are never revived by a backup.
-    for filename in ("admin-state/admin.db", "dot-state/dot.db"):
+    for filename in ("admin-state/admin.db", "dot-state/dot.db", "passkey-state/passkeys.db"):
         path = snapshot / filename
         if path.exists():
             with sqlite3.connect(path) as db:
                 if filename.startswith("admin"):
-                    db.execute("DELETE FROM records WHERE kind IN ('session','pair')")
+                    db.execute(
+                        "DELETE FROM records WHERE kind IN ('session','pair','kakao','kakao-flow','kakao-enroll','google','google-flow')"
+                    )
+                elif filename.startswith("passkey"):
+                    db.execute("DELETE FROM records WHERE kind NOT IN ('passkey','credential')")
                 else:
                     db.execute("DELETE FROM records WHERE kind != 'settings'")
 

@@ -20,6 +20,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+from webauthn.helpers.exceptions import WebAuthnException
 
 from server.app import BodyLimit
 from server.config import secret
@@ -27,7 +28,9 @@ from webui.auth import OwnerAuth, digest
 from webui.connections import Connections, RequestChanged
 from webui.device import Android
 
-COOKIE = "__Host-kakao-admin"
+COOKIE = "__Secure-kakao-admin-v2"
+LEGACY_COOKIE = "__Host-kakao-admin"
+COOKIE_PATH = "/admin"
 STATIC = Path(__file__).with_name("static")
 
 
@@ -123,7 +126,14 @@ def create_app(
     session_ttl=1800,
     auth_db=None,
     connections=None,
+    auth_mode=None,
+    passkeys=None,
 ):
+    auth_mode = auth_mode or os.getenv("ADMIN_AUTH_MODE", "passkey")
+    if auth_mode not in {"local", "passkey"}:
+        raise ValueError(
+            "ADMIN_AUTH_MODE must be passkey or local; use ./bridge passkey-login to migrate"
+        )
     token = admin_token or secret("ADMIN_TOKEN")
     if len(token) < 32:
         raise ValueError("Admin token must contain at least 32 characters")
@@ -138,6 +148,9 @@ def create_app(
         token,
     )
     connections = connections or Connections()
+    from server.passkey_client import PasskeyClient
+
+    passkeys = passkeys or PasskeyClient("admin")
     device = android or Android()
     status_provider = status_provider or collector_status
     lock = threading.Lock()
@@ -159,6 +172,7 @@ def create_app(
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.owner = owner
+    app.state.passkeys = passkeys
     app.state.sessions = sessions
     app.state.job = job
     app.add_middleware(BodyLimit, maximum=32768)
@@ -175,6 +189,10 @@ def create_app(
             if request.headers.get("origin") != expected:
                 return JSONResponse({"detail": "invalid_origin"}, status_code=403)
         response = await call_next(request)
+        if LEGACY_COOKIE in request.cookies:
+            response.delete_cookie(
+                LEGACY_COOKIE, secure=True, httponly=True, samesite="strict", path="/"
+            )
         response.headers.update(
             {
                 "Cache-Control": "no-store",
@@ -191,6 +209,11 @@ def create_app(
         key = request.cookies.get(COOKIE, "")
         with session_lock:
             stored = owner.session(key)
+            if stored and stored.get("cookie_scope") != "admin-v2":
+                stored = None
+            policy = current_policy()
+            if stored and stored.get("policy", "local") != policy:
+                stored = None
             session = sessions.get(key)
             if stored and session is None:
                 session = {
@@ -238,14 +261,20 @@ def create_app(
 
     @app.get("/admin/{asset}")
     def asset(asset: str):
+        if asset == "passkey.js":
+            return FileResponse(STATIC.parent.parent / "dot_plugin/static/passkey.js")
         if asset == "logo.svg":
-            return FileResponse(STATIC.parent.parent / "assets" / "logo.svg")
+            return FileResponse(STATIC.parent.parent / "assets" / asset)
         if asset not in {"app.js", "style.css"}:
             raise HTTPException(404)
         return FileResponse(STATIC / asset)
 
     @app.post("/admin/api/login")
     def login(body: Login, response: Response):
+        if auth_mode != "local":
+            raise HTTPException(
+                403, "Use passkey sign-in. Server recovery requires ./bridge admin --recovery."
+            )
         with session_lock:
             now = time.monotonic()
             while failures and failures[0] <= now - 60:
@@ -257,23 +286,159 @@ def create_app(
                 raise HTTPException(401, "The admin key is incorrect.")
         return issue_session(response, session_ttl, "Recovery key", exclusive=True)
 
-    def issue_session(response, ttl, label, exclusive=False):
-        key, record = owner.create_session(ttl, label, exclusive=exclusive)
+    def issue_session(response, ttl, label, exclusive=False, policy="local"):
+        key, record = owner.create_session(ttl, label, exclusive=exclusive, policy=policy)
         with session_lock:
             if exclusive:
                 sessions.clear()
             sessions[key] = {**record, "expires": time.monotonic() + ttl, "frames": {}}
         response.set_cookie(
-            COOKIE, key, max_age=ttl, secure=True, httponly=True, samesite="strict", path="/"
+            COOKIE,
+            key,
+            max_age=ttl,
+            secure=True,
+            httponly=True,
+            samesite="strict",
+            path=COOKIE_PATH,
         )
         return {"csrf": record["csrf"], "expires_in": ttl}
 
+    def passkey_call(operation, data=None):
+        try:
+            return passkeys.call("admin", operation, data)
+        except (ValueError, TypeError, KeyError, WebAuthnException):
+            raise HTTPException(
+                400, "Passkey verification failed. Try again or open a fresh setup link."
+            ) from None
+        except (OSError, RuntimeError):
+            raise HTTPException(503, "Passkey service unavailable. Try again shortly.") from None
+
+    def current_policy():
+        if auth_mode == "passkey":
+            return passkey_call("info")["policy"]
+        return "local"
+
+    def passkey_origin(request):
+        info = passkey_call("info")
+        origin = "https://" + request.headers.get("host", "")
+        if auth_mode != "passkey" or not info["configured"] or origin != info["admin_origin"]:
+            raise HTTPException(403, "Open the private admin address configured for passkeys.")
+        return origin
+
+    @app.post("/admin/api/passkeys/{operation}")
+    def passkey_route(operation: str, body: dict, request: Request, response: Response):
+        origin = passkey_origin(request)
+        if operation not in {
+            "register-options",
+            "register-verify",
+            "login-options",
+            "login-verify",
+            "credentials",
+            "remove",
+        }:
+            raise HTTPException(404)
+        browser = request.cookies.get("__Host-passkey-admin-flow", "")
+        if not browser and operation.endswith("options"):
+            browser = secrets.token_urlsafe(32)
+        response.set_cookie(
+            "__Host-passkey-admin-flow",
+            browser,
+            max_age=600,
+            secure=True,
+            httponly=True,
+            samesite="strict",
+            path="/",
+        )
+        data = {"origin": origin, "browser": browser}
+        if (
+            operation in {"credentials", "remove"}
+            or body.get("purpose") == "manage"
+            or body.get("proof")
+        ):
+            authenticated(request)
+        if operation == "credentials":
+            return passkey_call("credentials")
+        if operation == "remove":
+            return passkey_call(
+                "remove",
+                {
+                    "browser": browser,
+                    "proof": body.get("proof", ""),
+                    "identity": body.get("identity", ""),
+                },
+            )
+        if operation == "register-options":
+            return passkey_call(
+                "register_options",
+                {
+                    **data,
+                    "enrollment": body.get("enrollment", ""),
+                    "proof": body.get("proof", ""),
+                    "label": body.get("label", "Passkey"),
+                },
+            )
+        if operation == "register-verify":
+            result = passkey_call(
+                "register_verify",
+                {**data, "flow": body.get("flow", ""), "credential": body.get("credential", {})},
+            )
+            return issue_session(
+                response,
+                session_ttl,
+                "Passkey · " + request.headers.get("user-agent", "Browser"),
+                policy=result["policy"],
+            )
+        purpose = body.get("purpose", "login")
+        if purpose not in {"login", "manage"}:
+            raise HTTPException(400, "invalid_request")
+        if operation == "login-options":
+            # Remember preference is carried in the signed-by-server ceremony context.
+            context = "remember" if body.get("remember") is True else ""
+            result = passkey_call(
+                "authenticate_options", {**data, "purpose": purpose, "context": context}
+            )
+            return {**result, "context": context}
+        context = body.get("context", "")
+        result = passkey_call(
+            "authenticate_verify",
+            {
+                **data,
+                "flow": body.get("flow", ""),
+                "credential": body.get("credential", {}),
+                "purpose": purpose,
+                "context": context,
+            },
+        )
+        if purpose == "manage":
+            return result
+        return issue_session(
+            response,
+            7 * 86400 if context == "remember" else session_ttl,
+            "Passkey · " + request.headers.get("user-agent", "Browser"),
+            policy=result["policy"],
+        )
+
     @app.get("/admin/api/auth-info")
     def auth_info():
-        return {"configured": owner.configured()}
+        if auth_mode == "passkey":
+            info = passkey_call("info")
+            return {
+                "mode": auth_mode,
+                "configured": info["configured"],
+                "owner_registered": info["registered"],
+                "origin": info["admin_origin"],
+            }
+        return {
+            "mode": auth_mode,
+            "configured": owner.configured(),
+            "owner_registered": owner.configured(),
+        }
 
     @app.post("/admin/api/owner-login")
     def owner_login(body: OwnerLogin, request: Request, response: Response):
+        policy = current_policy()
+        if auth_mode != "local" and not body.pair:
+            raise HTTPException(403, "Use the configured sign-in method.")
         with session_lock:
             now = time.monotonic()
             while failures and failures[0] <= now - 60:
@@ -283,7 +448,7 @@ def create_app(
             # Count before password hashing to bound concurrent authentication work.
             failures.append(now)
             valid = (
-                owner.check_pair(body.pair, body.password)
+                owner.check_pair(body.pair, body.password, policy=policy)
                 if body.pair
                 else owner.check_password(body.password)
             )
@@ -292,8 +457,9 @@ def create_app(
             failures.pop()
         return issue_session(
             response,
-            7 * 86400 if body.remember else session_ttl,
+            7 * 86400 if body.remember and auth_mode == "local" else session_ttl,
             request.headers.get("user-agent", "Browser"),
+            policy=policy,
         )
 
     @app.get("/admin/api/browsers")
@@ -345,7 +511,9 @@ def create_app(
         with session_lock:
             owner.revoke(digest(request.cookies.get(COOKIE, "")))
             sessions.pop(request.cookies.get(COOKIE), None)
-        response.delete_cookie(COOKIE, secure=True, httponly=True, samesite="strict", path="/")
+        response.delete_cookie(
+            COOKIE, secure=True, httponly=True, samesite="strict", path=COOKIE_PATH
+        )
         return {"ok": True}
 
     @app.get("/admin/api/state")

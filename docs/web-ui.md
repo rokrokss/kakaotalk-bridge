@@ -6,9 +6,13 @@ Use the admin console to control the tablet and check login and collection statu
 
 ## Access
 
-For a remote server, forward the HTTPS port over SSH and open `https://localhost:18443/admin/`. The Mac Lima setup uses the same address. See [Installation](install.md#4-open-the-admin-console) for certificate setup.
+Use your configured private HTTPS address, such as `https://<node>.ts.net:8443/admin/`. Register a [passkey](passkeys.md) once, then select **Sign in with a passkey**. Use the same hostname where it was registered; changing to localhost will not work. No admin password or routine terminal command is required. `./bridge admin` opens the configured address.
 
-With the installer, run `./bridge admin` to pair a browser and choose your admin password. For the older manual Lima deployment, use the [pairing command in its guide](local-redroid.md#3-start-and-sign-in); the installer does not adopt that VM automatically. Sessions last 30 minutes, or seven days with **Keep me signed in**, and survive container restarts. Revoke them under **Admin browsers**. `secrets/admin_token` is a recovery option. **Lock** ends only the admin session. See the [setup guide](onboarding.md) for private Tailscale HTTPS and recovery.
+With Tailscale Serve, open this address from a device connected to your tailnet. The public MCP address does not serve admin. Bookmark the private address for everyday use.
+
+Sessions last 30 minutes, or seven days with **Keep me signed in**, and survive container restarts. Revoke them under **Admin browsers**. **Lock** ends only the bridge's admin session; it does not sign out the tablet's KakaoTalk app. Add a backup under **Passkeys and recovery**. If every key is lost, run `./bridge passkey-login --enroll` on the server. Missing passkey configuration keeps controls locked.
+
+After the security update, sign in once again with your existing passkey. It replaces older admin browser sessions; your passkeys and MCP connections remain registered. Tablet setup, login confirmation and collection controls follow the same steps below.
 
 ## First login
 
@@ -61,4 +65,4 @@ If your phone has been signed out, select **Signed out · Stop collection**. Thi
 | Registration app opens after installation | Select Open KakaoTalk; Iris mode does not need notification access |
 | Collection is approved but no messages arrive | [Check Iris status and logs](operations.md#check-status) |
 
-Canceling the installation dialog leaves the setup unchanged. Use **Connections** to approve matching OAuth requests and disconnect clients. **Collection test and maintenance** checks reception without displaying message content.
+Canceling the installation dialog leaves the setup unchanged. Use **Connections** to copy the MCP address and disconnect clients. New connections use passkey confirmation and consent in the connecting browser; matching-code approvals appear here only in explicit admin approval mode. **Collection test and maintenance** checks reception without displaying message content.

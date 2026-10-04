@@ -1,6 +1,6 @@
 # Running on an Apple Silicon Mac
 
-For the new installer, browser pairing, Aurora setup and full encrypted snapshots, see [Set up a personal bridge](onboarding.md). The commands below describe the existing manual deployment path.
+For the new installer, Kakao admin login, Aurora setup and full encrypted snapshots, see [Set up a personal bridge](onboarding.md). The commands below describe the existing manual deployment path.
 
 [README](../README.md) · [Admin console](web-ui.md) · [Connect ChatGPT](dot-plugin.md)
 
@@ -13,7 +13,7 @@ Install Lima through Homebrew and install Docker Desktop. Run from the repositor
 ```bash
 cp .env.example .env
 ./scripts/init-secrets.sh
-docker compose build api device-agent
+docker compose build api device-agent gateway
 ```
 
 If networks overlap, adjust `.env` before generating keys. The requirements match [Linux installation](install.md#1-prepare-configuration-and-keys). Place KakaoTalk APKs in `inputs/kakao/` or [import them from a connected Android phone](install.md#2-prepare-the-kakaotalk-apk).
@@ -40,7 +40,7 @@ Mac and VM UIDs differ, so `--no-same-owner` makes the copied files owned by roo
 Transfer the images as well. These are the default tags; use your configured names if you changed them in `.env`.
 
 ```bash
-docker save kakaotalk-collector/device:0.1.0 kakaotalk-collector/server:0.1.0 |
+docker save kakaotalk-collector/device:0.1.0 kakaotalk-collector/server:0.1.0 kakaotalk-collector/gateway:2.11.7 |
   gzip -1 | limactl shell --workdir=/ kakaotalk-test sudo docker load
 ```
 
@@ -52,13 +52,9 @@ docker save kakaotalk-collector/device:0.1.0 kakaotalk-collector/server:0.1.0 |
 ./scripts/lima-compose.sh exec -T admin python -m device.cli probe
 ```
 
-Trust the verified public certificate `secrets/tls_cert.pem` copied to the VM earlier. For a one-time browser pairing code on this manual deployment, run:
+Configure private HTTPS at your stable server hostname and register a [passkey inside the existing VM](passkeys.md#existing-deployments). Open the configured private admin address and select **Sign in with a passkey**. Follow the [KakaoTalk login procedure](web-ui.md#first-login) after administrator sign-in.
 
-```bash
-./scripts/lima-compose.sh exec -T admin python -m webui.auth pair
-```
-
-Open `https://localhost:18443/admin/#pair=<code>` with the printed code, set an admin password on the first visit, and follow the [login procedure](web-ui.md#first-login). The code expires after ten minutes; do not share it. The admin recovery key remains an alternative. `./bridge admin` on the Mac targets the new installer's managed VM, so use the command above for `kakaotalk-test`.
+The new installer does not adopt `kakaotalk-test` automatically. Its Mac-side `./bridge` command manages a separate VM; use the manual deployment commands for this installation.
 
 `lima-compose.sh` runs Compose in `/srv/kakaotalk-collector` inside the VM. Running plain `docker ps` on the Mac shows Docker Desktop's state instead.
 

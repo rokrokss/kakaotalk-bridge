@@ -13,6 +13,9 @@ import time
 from collections import defaultdict, deque
 from urllib.parse import parse_qs, urlencode, urlsplit
 
+from cryptography.fernet import InvalidToken
+from webauthn.helpers.exceptions import WebAuthnException
+
 from dot_plugin import network
 from dot_plugin.config import SCOPES
 from dot_plugin.pages import page as render_page
@@ -47,8 +50,14 @@ def redirect_origin(uri):
 
 
 class OAuth:
-    def __init__(self, config, state):
+    def __init__(self, config, state, passkeys=None):
         self.config, self.state = config, state
+        from server.auth_migration import retire_social_login
+
+        retire_social_login(state)
+        from server.passkey_client import PasskeyClient
+
+        self.passkeys = passkeys or PasskeyClient("public")
         self.rate_lock = threading.Lock()
         self.rates = defaultdict(deque)
         with state.transaction() as db:
@@ -56,6 +65,21 @@ class OAuth:
             if not self.profile:
                 self.profile = "prf_" + secrets.token_hex(16)
                 state.put("settings", "profile", self.profile, db=db)
+
+    def passkey_call(self, operation, data=None):
+        try:
+            return self.passkeys.call("public", operation, data)
+        except (ValueError, TypeError, KeyError, WebAuthnException):
+            raise AuthError("passkey_verification_failed", 400) from None
+        except (OSError, RuntimeError):
+            raise AuthError("passkey_unavailable", 503) from None
+
+    def policy(self):
+        return (
+            self.passkey_call("info")["policy"]
+            if self.config.approval_mode == "passkey"
+            else "legacy:" + self.config.approval_mode
+        )
 
     def rate(self, operation, count, period=60):
         with self.rate_lock:
@@ -92,7 +116,6 @@ class OAuth:
         }
 
     def register(self, meta):
-        self.rate("register", 20)
         redirects = meta.get("redirect_uris")
         method = meta.get("token_endpoint_auth_method", "none")
         if method not in ("none", "client_secret_post", "client_secret_basic"):
@@ -103,10 +126,7 @@ class OAuth:
             if not isinstance(raw, str) or len(raw) > 2048:
                 raise AuthError("invalid_redirect_uri")
             redirect_origin(raw)
-        if len(self.state.all("client")) >= 100:
-            raise AuthError("registration_limit", 429)
         client = {
-            "client_id": "client_" + secrets.token_urlsafe(24),
             "redirect_uris": redirects,
             "token_endpoint_auth_method": method,
             "client_name": str(meta.get("client_name", "MCP client"))[:100],
@@ -120,15 +140,33 @@ class OAuth:
             secret = secrets.token_urlsafe(32)
             client["secret_hash"] = digest(secret)
             public.update(client_secret=secret, client_secret_expires_at=0)
-        self.state.put("client", client["client_id"], client)
+        # Anonymous registration must not consume a shared persistent quota.
+        # Seal metadata into an opaque client ID; only owner-approved clients persist.
+        encoded = json.dumps(client, separators=(",", ":")).encode()
+        if len(encoded) > 4096:
+            raise AuthError("invalid_client_metadata")
+        public["client_id"] = "reg_" + self.state.crypto.encrypt(b"dcr-v1:" + encoded).decode()
         return public
 
+    def registration(self, client_id):
+        try:
+            if len(client_id) > 6000 or not client_id.startswith("reg_"):
+                raise ValueError
+            raw = self.state.crypto.decrypt(client_id[4:].encode(), ttl=600)
+            if not raw.startswith(b"dcr-v1:"):
+                raise ValueError
+            return {**json.loads(raw[7:]), "client_id": client_id}
+        except (ValueError, TypeError, InvalidToken):
+            raise AuthError("invalid_client", 401) from None
+
     def client(self, client_id):
-        if not isinstance(client_id, str):
+        if not isinstance(client_id, str) or len(client_id) > 6000:
             raise AuthError("invalid_client", 401)
         client = self.state.get("client", client_id)
         if client and client.get("metadata_expires", time.time() + 1) > time.time():
             return client
+        if client_id.startswith("reg_"):
+            return self.registration(client_id)
         # Only OpenAI's documented CIMD endpoint is accepted; failed fetches never
         # grant wildcard redirect access. DCR remains available as a fallback.
         if client_id == "https://chatgpt.com/oauth/client.json":
@@ -171,8 +209,40 @@ class OAuth:
             return client
         raise AuthError("invalid_client", 401)
 
+    @staticmethod
+    def permissions(scope):
+        permissions = []
+        if "kakao.read" in scope.split():
+            permissions.append(
+                "<li>Read and search stored messages and check collection status</li>"
+            )
+        if "kakao.events" in scope.split():
+            permissions.append(
+                "<li>Subscribe to requested new-message events and record processing progress</li>"
+            )
+        return (
+            "<ul>" + "".join(permissions) + "</ul>"
+            "<p>Retrieved messages are shared with the connected client. These permissions do not "
+            "allow sending KakaoTalk messages or controlling the device.</p>"
+        )
+
+    def approval(self, ticket, cookie, *, db=None):
+        record = self.state.get("approval", digest(ticket), db=db)
+        if (
+            not record
+            or record["expires"] <= time.time()
+            or record.get("mode", self.config.approval_mode) != self.config.approval_mode
+            or not hmac.compare_digest(record["cookie"], digest(cookie or ""))
+        ):
+            raise AuthError("invalid_approval", 403)
+        return record
+
     def authorize(self, query):
         self.rate("authorize_get", 30)
+        if self.config.approval_mode == "passkey":
+            info = self.passkey_call("info")
+            if not info["registered"] or info["public_origin"] != self.config.public_url:
+                raise AuthError("passkey_not_configured", 503)
         client = self.client(query.get("client_id"))
         if (
             query.get("redirect_uri") not in client["redirect_uris"]
@@ -191,23 +261,54 @@ class OAuth:
         if len(query.get("state", "")) > 4096:
             raise AuthError()
         ticket, cookie = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
-        self.state.put(
-            "approval",
-            digest(ticket),
-            {
-                "query": {
-                    k: query.get(k, "")
-                    for k in ("client_id", "redirect_uri", "code_challenge", "state", "resource")
+        with self.state.transaction() as db:
+            db.execute("BEGIN IMMEDIATE")
+            for key, row in self.state.all("approval", db=db):
+                if row["expires"] <= time.time():
+                    self.state.delete("approval", key, db=db)
+                    self.state.delete("consent", row["cookie"], db=db)
+            if len(self.state.all("approval", db=db)) >= 100:
+                raise AuthError("slow_down", 429)
+            self.state.put(
+                "approval",
+                digest(ticket),
+                {
+                    "query": {
+                        k: query.get(k, "")
+                        for k in (
+                            "client_id",
+                            "redirect_uri",
+                            "code_challenge",
+                            "state",
+                            "resource",
+                        )
+                    },
+                    "scope": scope,
+                    "client_name": client["client_name"],
+                    "display_code": secrets.token_hex(4).upper(),
+                    "status": "pending",
+                    "mode": self.config.approval_mode,
+                    "cookie": digest(cookie),
+                    "expires": time.time() + 600,
                 },
-                "scope": scope,
-                "client_name": client["client_name"],
-                "display_code": secrets.token_hex(4).upper(),
-                "status": "pending",
-                "cookie": digest(cookie),
-                "expires": time.time() + 600,
-            },
-        )
+                db=db,
+            )
         esc = html.escape
+        if self.config.approval_mode == "passkey":
+            return (
+                render_page(
+                    "Connect KakaoTalk Bridge",
+                    f'''<h1>Connect KakaoTalk Bridge</h1>
+<p>Confirm it's you, then review access for <strong>{esc(client["client_name"])}</strong>.</p>
+<form id="passkey-mcp"><input type="hidden" name="ticket" value="{esc(ticket)}">
+<button type="submit">Continue with a passkey</button></form>
+<p id="passkey-status" role="status"></p>
+<p class="hint">Use your device, phone or security key. If this browser cannot use passkeys, restart the connection in your system browser.</p>
+<script src="/assets/passkey.js" defer></script><script src="/assets/passkey-login.js" defer></script>''',
+                ),
+                cookie,
+                redirect_origin(query["redirect_uri"]),
+            )
         permissions = []
         if "kakao.read" in scope.split():
             permissions.append(
@@ -258,29 +359,42 @@ class OAuth:
         if origin != self.config.public_url:
             raise AuthError("invalid_origin", 403)
         ticket = form.get("ticket", "")
-        record = self.state.get("approval", digest(ticket))
-        if (
-            not record
-            or record["expires"] <= time.time()
-            or not hmac.compare_digest(record["cookie"], digest(cookie or ""))
-        ):
-            raise AuthError("invalid_approval", 403)
+        self.approval(ticket, cookie)
         if self.config.approval_mode == "key" and not hmac.compare_digest(
             form.get("link_key", "").encode(), self.config.link_key.encode()
         ):
             raise AuthError("invalid_link_key", 401)
         with self.state.transaction() as db:
             db.execute("BEGIN IMMEDIATE")
-            record = self.state.get("approval", digest(ticket), db=db)
-            if not record or record["expires"] <= time.time():
-                raise AuthError("invalid_approval", 403)
+            record = self.approval(ticket, cookie, db=db)
             if self.config.approval_mode == "admin" and record.get("status") != "approved":
                 raise AuthError("approval_required", 403)
+            if self.config.approval_mode == "passkey":
+                if record.get("status") != "authenticated" or record.get("policy") != self.policy():
+                    raise AuthError("passkey_login_required", 403)
+                if form.get("decision") not in {"allow", "deny"}:
+                    raise AuthError("consent_required", 403)
             self.state.delete("approval", digest(ticket), db=db)
-        code = secrets.token_urlsafe(32)
-        grant = {**record["query"], "scope": record["scope"], "expires": time.time() + 120}
-        self.state.put("code", digest(code), grant)
-        query = urlencode({"code": code, "state": grant["state"], "iss": self.config.public_url})
+            self.state.delete("consent", digest(cookie or ""), db=db)
+            grant = {
+                **record["query"],
+                "scope": record["scope"],
+                "expires": time.time() + 120,
+                "policy": record.get("policy"),
+            }
+            if self.config.approval_mode == "passkey" and form.get("decision") == "deny":
+                result = {"error": "access_denied"}
+            else:
+                client_id = grant["client_id"]
+                if client_id.startswith("reg_") and not self.state.get("client", client_id, db=db):
+                    client = self.registration(client_id)
+                    if len(self.state.all("client", db=db)) >= 100:
+                        raise AuthError("registration_limit", 429)
+                    self.state.put("client", client_id, client, db=db)
+                code = secrets.token_urlsafe(32)
+                self.state.put("code", digest(code), grant, db=db)
+                result = {"code": code}
+        query = urlencode({**result, "state": grant["state"], "iss": self.config.public_url})
         return grant["redirect_uri"] + ("&" if "?" in grant["redirect_uri"] else "?") + query
 
     def approval_status(self, form, cookie, origin):
@@ -369,6 +483,7 @@ class OAuth:
                 or record["client_id"] != client["client_id"]
                 or form.get("redirect_uri") != record["redirect_uri"]
                 or record["resource"] != form["resource"]
+                or (record.get("policy") and record["policy"] != self.policy())
             ):
                 raise AuthError("invalid_grant")
             if not re.fullmatch(r"[A-Za-z0-9._~-]{43,128}", verifier) or not hmac.compare_digest(
@@ -381,6 +496,7 @@ class OAuth:
                 "resource": record["resource"],
                 "scope": record["scope"],
                 "owner": digest(self.profile + ":" + client["client_id"]),
+                "policy": record.get("policy"),
                 "revoked": False,
                 "expires": time.time() + 30 * 86400,
             }
@@ -399,6 +515,7 @@ class OAuth:
                     or grant["revoked"]
                     or grant["expires"] <= time.time()
                     or grant["resource"] != form["resource"]
+                    or (grant.get("policy") and grant["policy"] != self.policy())
                 ):
                     raise AuthError("invalid_grant")
                 grant_id = record["grant_id"]
@@ -433,6 +550,7 @@ class OAuth:
             and not grant["revoked"]
             and grant["expires"] > time.time()
             and grant["resource"] == self.config.resource
+            and (not grant.get("policy") or grant["policy"] == self.policy())
             else None
         )
 
