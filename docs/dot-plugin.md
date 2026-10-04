@@ -1,12 +1,18 @@
 # KakaoTalk Dot — MCP Events 플러그인
 
-redroid → Iris → 수집 API에 저장된 메시지를 ChatGPT에서 읽고, 새 수집 행을 `message.created` 이벤트로 전달하는 개인용 원격 MCP 서버입니다. MCP 2.0 (`2026-07-28`)의 `server/discover`, `events/list`, `events/subscribe`, `events/unsubscribe`를 지원합니다. 기존 stdio MCP와 별도로 실행합니다.
+redroid → Iris → 수집 API에 저장된 메시지를 ChatGPT에서 읽는 개인용 원격 MCP 서버입니다. MCP 2.0 (`2026-07-28`)의 조회 도구와 선택 기능인 `message.created` 이벤트를 제공합니다. 기존 stdio MCP와 별도로 실행합니다.
+
+## 현재 요구사항과 완료 조건
+
+- 필수 범위: OAuth로 ChatGPT 플러그인을 연결하고, 요청 시 메시지 조회·검색·수집 상태 확인을 수행합니다.
+- **자동 이벤트 구독은 요구사항에서 제외합니다.** 플러그인 연결이나 서버 시작을 계기로 구독·Dot 작업을 자동 생성하지 않습니다. 자동 구독 생성·갱신 및 Dot 자동 실행 검증은 현재 완료 조건에 포함하지 않습니다.
+- 이미 구현된 `events/list`, `events/subscribe`, `events/unsubscribe`와 웹훅은 별도 요청으로 사용하는 선택 기능으로 유지합니다. 구독이 0건이어도 플러그인 연결과 일반 조회의 완료를 막지 않습니다.
 
 ```text
 redroid → Iris → API / SQLite
                   ↑ 읽기 전용 토큰
              dot-plugin / SQLite
-               ↑             ↓ 서명된 HTTPS webhook
+               ↑             ↓ 서명된 HTTPS webhook (선택 구독 시)
          OAuth + MCP       ChatGPT Dot
                └── 미처리 메시지 조회 / 처리 완료 커서 ──┘
 ```
@@ -17,8 +23,7 @@ redroid → Iris → API / SQLite
 
 1. ChatGPT의 **플러그인 → 추가 → 맞춤형 MCP 서버 만들기**에서 이름 `KakaoTalk Dot`, 서버 URL `https://<서버주소>/mcp`, 인증 `OAuth`를 입력합니다. 이 기능이 보이지 않으면 설정의 보안 및 로그인에서 개발자 모드 제공 여부를 확인합니다.
 2. 표시되는 자체 서버 승인 페이지에 `secrets/mcp_link_key`를 입력합니다. 카카오 비밀번호나 admin 키가 아닙니다. 고급 설정의 클라이언트 등록은 자동 감지/CIMD 또는 DCR을 지원합니다. 권한은 `kakao.read kakao.events`입니다.
-3. 도구 7개와 `message.created` 이벤트가 검색되는지 확인합니다. 플러그인 연결과 이벤트 구독은 별도 단계입니다.
-4. Dot에 아래 예시처럼 이벤트 구독과 처리 방법을 요청합니다. `events/subscribe` 성공 전에는 구독 완료로 판단하지 않습니다.
+3. 도구 7개가 검색되는지 확인하고 최근 메시지 조회·검색·수집 상태 확인을 테스트합니다. 일반 조회에는 이벤트 구독이 필요하지 않습니다.
 
 MCP URL 형식 (`DOT_PUBLIC_URL`의 실제 호스트로 변경):
 
@@ -31,6 +36,10 @@ Mac에서 연결 키를 터미널에 출력하지 않고 복사:
 ```bash
 pbcopy < secrets/mcp_link_key
 ```
+
+## 선택 기능: 별도 요청에 따른 이벤트 구독
+
+아래 절차는 현재 필수 범위에 포함하지 않습니다. 이벤트 수신이 필요할 때 Dot에 구독과 처리 방법을 명시적으로 요청합니다. `events/subscribe` 성공 전에는 구독 완료로 판단하지 않습니다.
 
 Dot에 직접 보낼 예시 요청:
 
@@ -46,7 +55,7 @@ acknowledge_messages를 호출하고, has_more이면 다음 페이지도 처리�
 카카오톡 상대에게 답장을 보내거나 다른 곳으로 전달하지 마.
 ```
 
-이 문서는 예시 요청을 제공하며 자동으로 Dot 작업을 생성하지 않습니다. 실제 알림 기준·대상 방은 사용자가 선택합니다. 별도 Dot/작업에는 다른 `consumer_id`를 사용합니다. 방 필터는 `list_conversations`가 반환한 정확한 `conversation_ref`를 사용하며, 필터를 바꿀 때도 새 consumer를 선택합니다.
+이 예시는 선택 기능의 사용법이며 현재 수행할 작업이 아닙니다. 실제 알림 기준·대상 방은 사용자가 선택합니다. 별도 Dot/작업에는 다른 `consumer_id`를 사용합니다. 방 필터는 `list_conversations`가 반환한 정확한 `conversation_ref`를 사용하며, 필터를 바꿀 때도 새 consumer를 선택합니다.
 
 ## 왜 이벤트와 조회를 분리했나
 
@@ -148,7 +157,7 @@ PASS real collector read: rows=1, cursor=1130, source=iris_db; text not printed
 PASS smoke-test grant revoked; no active subscription created
 ```
 
-별도로 공개 DNS의 Funnel IP를 지정한 HTTPS `/health/live` 요청도 `{"status":"alive"}`를 반환했습니다. 단위 테스트는 서명·콜백 실패·재시도·만료·철회·키 회전·서버 재생성 후 미처리 복구·필터·보관 경계 등을 검증합니다. 실제 Dot 이벤트 실행의 완료 여부는 ChatGPT 계정에서 구독하고 새 메시지를 수신한 뒤 별도로 확인해야 합니다.
+별도로 공개 DNS의 Funnel IP를 지정한 HTTPS `/health/live` 요청도 `{"status":"alive"}`를 반환했습니다. 단위 테스트는 서명·콜백 실패·재시도·만료·철회·키 회전·서버 재생성 후 미처리 복구·필터·보관 경계 등을 검증합니다. 선택 기능인 Dot 이벤트 실행을 향후 요청하면 실제 계정에서 구독하고 새 메시지를 수신한 뒤 검증합니다. 이 검증은 현재 완료 조건에서 제외합니다.
 
 초기 ChatGPT 웹 검사에서는 `KakaoTalk Dot`의 사용자 지정 MCP 생성 흐름을 진행해 자체 OAuth 승인 페이지까지 도달했고, CIMD와 권한 범위가 인식되었습니다. 승인 폼을 제출할 때 Chrome에서 `ERR_BLOCKED_BY_CLIENT`가 발생해 당시에는 계정 연결 완료를 확인하지 못했습니다.
 

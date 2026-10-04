@@ -103,9 +103,11 @@ Iris 메시지는 `source=iris_db`, `database_ref`에 DB 메시지·방·발신�
 
 ## ChatGPT Dot / MCP Events
 
-`dot-plugin` Docker 서비스가 OAuth로 보호된 HTTPS MCP 2.0과 `message.created` 웹훅을 제공합니다. Dot은 이벤트로 깨어난 뒤 미처리 메시지 도구로 본문을 읽고, 처리 완료 커서를 기록합니다. 이벤트 본문이 Dot 실행에 전달되지 않는 경우에도 같은 조회 경로를 사용합니다.
+`dot-plugin` Docker 서비스가 OAuth로 보호된 HTTPS MCP 2.0을 제공합니다. 현재 필수 범위는 ChatGPT 플러그인 연결과 요청 시 메시지 조회·검색·수집 상태 확인입니다. **자동 이벤트 구독은 요구사항과 완료 조건에서 제외합니다.** 플러그인 연결이나 서버 시작 시 Dot 작업·구독을 자동 생성하지 않습니다.
 
-원격 플러그인에는 읽기/검색/상태/처리 커서 도구 7개가 있으며, 카카오톡 전송이나 기기 조작 기능은 없습니다. `docker compose --profile dot up -d dot-plugin`으로 실행하기 전에 공개 HTTPS origin과 전용 secret을 준비해야 합니다. [연결·배포·Dot 요청 예시와 검증 기록](docs/dot-plugin.md)을 참고하세요.
+구현된 `message.created` 웹훅은 별도 요청으로 구독할 수 있는 선택 기능입니다. 해당 기능을 사용할 때 Dot은 이벤트로 깨어난 뒤 미처리 메시지 도구로 본문을 읽고 처리 완료 커서를 기록합니다. 이벤트 본문이 Dot 실행에 전달되지 않는 경우에도 같은 조회 경로를 사용합니다.
+
+원격 플러그인에는 읽기/검색/상태/처리 커서 도구 7개가 있으며, 카카오톡 전송이나 기기 조작 기능은 없습니다. `docker compose --profile dot up -d dot-plugin`으로 실행하기 전에 공개 HTTPS origin과 전용 secret을 준비해야 합니다. [연결·배포·선택적 구독과 검증 기록](docs/dot-plugin.md)을 참고하세요.
 
 ## MCP 연결 (기존 stdio)
 
