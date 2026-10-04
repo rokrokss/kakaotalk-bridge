@@ -5,8 +5,8 @@ Requires=docker.service
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/kakaotalk-mcp
-ExecStart=/usr/bin/python3 /opt/kakaotalk-mcp/deploy/supervisor.py
+WorkingDirectory=/opt/kakaotalk-bridge
+ExecStart=/usr/bin/python3 /opt/kakaotalk-bridge/deploy/supervisor.py
 Restart=on-failure
 RestartSec=30
 UMask=0077

@@ -35,7 +35,7 @@ Iris 행의 `source`는 `iris_db`입니다. `database_ref`에는 DB 메시지·�
   "mcpServers": {
     "kakaotalk": {
       "command": "docker",
-      "args": ["compose", "--project-directory", "/absolute/path/kakaotalk-mcp-events", "--profile", "mcp", "run", "--rm", "--no-deps", "-T", "mcp"]
+      "args": ["compose", "--project-directory", "/absolute/path/kakaotalk-bridge", "--profile", "mcp", "run", "--rm", "--no-deps", "-T", "mcp"]
     }
   }
 }

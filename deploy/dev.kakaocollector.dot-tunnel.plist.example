@@ -8,7 +8,7 @@
 	<string>dev.kakaocollector.dot-tunnel</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/absolute/path/kakaotalk-mcp-events/scripts/dot-tunnel.sh</string>
+		<string>/absolute/path/kakaotalk-bridge/scripts/dot-tunnel.sh</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>

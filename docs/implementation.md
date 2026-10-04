@@ -12,7 +12,7 @@
 - 핸드폰 로그인 유지: 사용자가 폰에서 직접 확인. 서버의 자동 검사 결과가 아님.
 - 승인 후 Iris DB 행 저장과 나에게 보낸 새 메시지 수집.
 - 컨테이너·VM 재시작 후 상태 볼륨 유지.
-- 공개 HTTPS의 OAuth 흐름과 ChatGPT의 `KakaoTalk Dot` 연결 완료.
+- 공개 HTTPS의 OAuth 흐름과 ChatGPT의 `KakaoTalk Bridge` 연결 완료.
 
 ## 자동 검사 범위
 

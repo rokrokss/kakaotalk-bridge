@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="772" viewBox="0 0 1120 772" role="img" aria-labelledby="title desc">
-  <title id="title">KakaoTalk MCP Events 시스템 구성</title>
+  <title id="title">KakaoTalk Bridge 시스템 구성</title>
   <desc id="desc">관리자 브라우저는 사설 HTTPS로 gateway와 admin을 통해 redroid를 조작한다. redroid 안의 Iris에서 나온 메시지를 iris-collector가 API와 SQLite에 저장한다. ChatGPT는 공개 HTTPS와 OAuth로 dot-plugin에 접속하고 플러그인은 read 토큰으로 API를 조회한다. 핸드폰 세션은 직접 확인하며 이벤트는 별도 구독 시에만 동작한다. 보조 상태 서비스 device-agent는 API에 기기 상태를 보고한다.</desc>
   <defs>
     <marker id="request" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#77766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>

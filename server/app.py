@@ -63,7 +63,7 @@ def create_app(settings: Settings | None = None):
             await task
 
     app = FastAPI(
-        title="Personal KakaoTalk collector",
+        title="KakaoTalk Bridge",
         lifespan=lifespan,
         docs_url=None,
         redoc_url=None,

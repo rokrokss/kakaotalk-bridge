@@ -1,6 +1,8 @@
-<h1><img src="docs/assets/wordmark.svg" width="540" height="96" alt="KakaoTalk MCP Events"></h1>
+<h1><img src="docs/assets/wordmark.svg" width="450" height="96" alt="KakaoTalk Bridge"></h1>
 
-내 카카오톡 메시지를 내 서버에 모으고, ChatGPT에서 조회합니다.
+내 카카오톡 메시지를 AI 에이전트에 연결하세요.
+
+KakaoTalk Bridge는 카카오톡 메시지를 내 서버에 수집하고, ChatGPT를 비롯한 MCP 지원 AI 에이전트에서 조회·검색할 수 있게 연결하는 개인 서버입니다.
 
 redroid를 보조 태블릿으로 실행하고 Iris로 메시지를 읽습니다. 별도 태블릿 없이 Docker Compose로 운영하며, 설치와 카카오톡 로그인은 웹 관리 화면에서 진행합니다.
 

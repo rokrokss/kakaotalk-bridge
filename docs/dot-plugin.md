@@ -8,9 +8,9 @@
 
 먼저 아래 배포 절차로 공개 HTTPS 주소를 준비합니다.
 
-1. ChatGPT에서 맞춤형 MCP 서버를 추가합니다. 이름은 `KakaoTalk Dot`, URL은 `https://<서버주소>/mcp`, 인증은 OAuth로 설정합니다.
+1. ChatGPT에서 맞춤형 MCP 서버를 추가합니다. 이름은 `KakaoTalk Bridge`, URL은 `https://<서버주소>/mcp`, 인증은 OAuth로 설정합니다.
 2. 서버의 승인 화면에서 `secrets/mcp_link_key`를 입력합니다. 카카오 비밀번호나 관리자 키가 아닙니다.
-3. 연결 후 최근 메시지 조회나 검색을 요청합니다. 예: “KakaoTalk Dot에서 최근 메시지를 확인해줘.”
+3. 연결 후 최근 메시지 조회나 검색을 요청합니다. 예: “KakaoTalk Bridge에서 최근 메시지를 확인해줘.”
 
 Mac에서는 키를 출력하지 않고 복사할 수 있습니다.
 

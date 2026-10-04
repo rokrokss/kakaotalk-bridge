@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <queries><package android:name="com.kakao.talk" /></queries>
-    <application android:label="Kakao Notification Bridge" android:allowBackup="false"
+    <application android:label="KakaoTalk Bridge" android:allowBackup="false"
         android:usesCleartextTraffic="false" android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".SetupActivity" android:exported="true">
             <intent-filter>
@@ -17,7 +17,7 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
-        <service android:name=".WebInputMethod" android:label="Kakao Web Input"
+        <service android:name=".WebInputMethod" android:label="KakaoTalk Bridge 입력기"
             android:exported="true" android:permission="android.permission.BIND_INPUT_METHOD">
             <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
             <meta-data android:name="android.view.im" android:resource="@xml/web_input_method" />

@@ -38,6 +38,8 @@ redroid는 반복 장애를 피하려고 자동 재시작을 끈 상태입니다
 
 ## 저장 위치
 
+KakaoTalk Bridge의 배포 식별자는 기존 설치와의 호환성을 위해 유지합니다. Compose 프로젝트·이미지의 `kakaotalk-collector`, Android 패키지 `dev.kakaocollector.bridge`, Lima 경로 `/srv/kakaotalk-collector`가 이에 해당합니다. 이름 변경을 적용할 때도 기존 `.env`의 `COMPOSE_PROJECT_NAME`을 유지해야 같은 로그인 상태와 메시지 볼륨을 사용합니다.
+
 | 볼륨 | 내용 |
 | --- | --- |
 | `android-data` | 카카오톡 세션·로컬 DB, 등록 앱 데이터 |

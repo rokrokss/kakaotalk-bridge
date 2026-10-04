@@ -308,7 +308,7 @@ wheels = [
 ]
 
 [[package]]
-name = "kakaotalk-collector"
+name = "kakaotalk-bridge"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
