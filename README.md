@@ -1,6 +1,8 @@
 <div align="center">
 
-<h1><img src="docs/assets/wordmark.svg?v=6b1a99c" width="450" height="96" alt="KakaoTalk Bridge"></h1>
+<img src="assets/logo.svg" width="120" height="120" alt="KakaoTalk Bridge logo">
+
+<h1>KakaoTalk Bridge</h1>
 
 **Connect your KakaoTalk messages to AI agents.**
 
