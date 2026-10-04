@@ -1,12 +1,16 @@
+<div align="center">
+
 <h1><img src="docs/assets/wordmark.svg?v=6b1a99c" width="450" height="96" alt="KakaoTalk Bridge"></h1>
 
-Connect your KakaoTalk messages to AI agents.
+**Connect your KakaoTalk messages to AI agents.**
 
-KakaoTalk Bridge runs KakaoTalk headlessly on your server using redroid as a virtual Android tablet. It collects messages from this secondary device and makes them available to AI agents through MCP.
-
-Iris reads the tablet's local message database and stores the collected messages on your server. Run the stack with Docker Compose, use the web admin console to install and sign in, then connect your AI client.
+KakaoTalk Bridge runs KakaoTalk headlessly on your server using redroid as a virtual Android tablet.<br>It collects messages from this secondary device and makes them available to AI agents through MCP.
 
 [Get started](#getting-started) · [Connect your AI](#connect-your-ai) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md)
+
+</div>
+
+Iris reads the tablet's local message database and stores the collected messages on your server. Run the stack with Docker Compose, use the web admin console to install and sign in, then connect your AI client.
 
 ## See it in action
 
@@ -32,7 +36,9 @@ The AI client searches through MCP and writes the summary from the retrieved mes
 
 ## Where does it run?
 
-![Iris reads messages on a secondary tablet on your server and stores them locally. Your AI retrieves them through OAuth and MCP.](docs/assets/message-flow.svg)
+<p align="center">
+  <img src="docs/assets/message-flow.svg" width="960" alt="Iris reads messages on a secondary tablet on your server and stores them locally. Your AI retrieves them through OAuth and MCP.">
+</p>
 
 Messages and the KakaoTalk session are stored in server volumes. Retrieved content is sent to your connected AI client. Admin access stays on private HTTPS; the remote MCP endpoint uses public HTTPS with OAuth. See [Architecture](docs/design.md) and [Security](docs/security.md).
 
