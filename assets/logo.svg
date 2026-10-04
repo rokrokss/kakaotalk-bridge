@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
   <title id="title">KakaoTalk Bridge</title>
-  <desc id="desc">노란 바탕의 말풍선 안에 다리를 담은 KakaoTalk Bridge 로고.</desc>
+  <desc id="desc">노란 바탕에 검게 채워진 말풍선 형태의 KakaoTalk Bridge 로고.</desc>
   <rect width="128" height="128" rx="28" fill="#f6df80"/>
   <path d="M39 27h50a13 13 0 0 1 13 13v35a13 13 0 0 1-13 13H62l-22 17V88h-1a13 13 0 0 1-13-13V40a13 13 0 0 1 13-13Z" fill="#242320"/>
-  <path d="M44 70V62a20 20 0 0 1 40 0v8M40 70h48M54 45v25M74 45v25" fill="none" stroke="#f6df80" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
