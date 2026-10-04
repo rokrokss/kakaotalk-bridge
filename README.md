@@ -4,54 +4,85 @@ Connect your KakaoTalk messages to AI agents.
 
 KakaoTalk Bridge runs KakaoTalk headlessly on your server using redroid as a virtual Android tablet. It collects messages from this secondary device and makes them available to AI agents through MCP.
 
-Iris reads the tablet's local message database and stores the collected messages on your server for browsing and search by ChatGPT and other MCP-compatible agents. No physical tablet is required. Run the stack with Docker Compose and use the web admin console for installation and KakaoTalk login.
+Iris reads the tablet's local message database and stores the collected messages on your server. Run the stack with Docker Compose, use the web admin console to install and sign in, then connect your AI client.
 
-[Installation](docs/install.md) · [Admin console](docs/web-ui.md) · [Connect ChatGPT](docs/dot-plugin.md) · [Operations and backups](docs/operations.md) · [Development](docs/development.md)
+[Get started](#getting-started) · [Connect your AI](#connect-your-ai) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md)
 
-## Getting started
+## See it in action
 
-1. **Prepare a server.** Run the containers on Linux or in a Linux VM on an Apple Silicon Mac.
-2. **Sign in to KakaoTalk.** Check the secondary-device option in the admin console, then sign in. Confirm on your phone that its existing session remains active before starting collection.
-3. **Connect ChatGPT.** Connect the MCP server using OAuth, then request recent messages, search results, or collection status.
+An illustrative conversation using synthetic messages:
 
-Connecting the plugin does not create event subscriptions or automated tasks. MCP Events are an [optional feature that requires a separate subscription](docs/events.md).
+```text
+Collected messages
+  “Friday meetup is at 7 PM.”
+  “Friday meetup moved to 7:30 PM.”
+
+You
+  Find my collected messages mentioning "Friday" and summarize the plan.
+
+Your AI
+  Friday's meetup is now at 7:30 PM, updated from 7 PM.
+```
+
+The AI client searches through MCP and writes the summary from the retrieved messages. The bridge supplies the data. You can also ask it to retrieve recent collected messages or check collection status.
+
+- **No physical tablet.** redroid runs the secondary Android device on your server.
+- **Storage you control.** Messages are stored on your infrastructure, with a default 30-day retention period.
+- **Read-only KakaoTalk access through MCP.** Agents can retrieve and search messages; no message-sending or tablet-control tools are exposed.
 
 ## Where does it run?
 
 ![Iris reads messages on a secondary tablet on your server and stores them locally. Your AI retrieves them through OAuth and MCP.](docs/assets/message-flow.svg)
 
-| Component | Purpose | Access |
+Messages and the KakaoTalk session are stored in server volumes. Retrieved content is sent to your connected AI client. Admin access stays on private HTTPS; the remote MCP endpoint uses public HTTPS with OAuth. See [Architecture](docs/design.md) and [Security](docs/security.md).
+
+## Getting started
+
+1. **Set up your server.** Follow the [Linux installation](docs/install.md) or [Apple Silicon Mac guide](docs/local-redroid.md), including preparing your own official KakaoTalk APK.
+2. **Sign in through the admin console.** Follow the [first login procedure](docs/web-ui.md#first-login). Select the secondary-device option and manually confirm that your phone's existing session remains active before starting collection.
+3. **Connect your AI client.** Choose an [MCP connection method](#connect-your-ai) below.
+4. **Try your first query.** Send yourself the two sample messages above from your phone, then ask your connected agent to find messages mentioning `Friday`. Confirm that both messages appear before asking for a summary.
+
+> **Before signing in:** the login check currently recognizes the Korean KakaoTalk UI. Do not proceed if “Use with other devices” (“다른 기기와 함께 사용”) is missing or KakaoTalk asks to transfer the primary device. Phone sessions are not monitored automatically.
+
+## Connect your AI
+
+| Connection | Setup | Validation |
 | --- | --- | --- |
-| redroid + Iris | Run the secondary tablet and read its local message database | Internal server network |
-| Collection API | Store, browse, and search messages; retain them for 30 days by default | Authenticated private HTTPS |
-| Admin console | Control the tablet and confirm login status | Admin key + private HTTPS |
-| MCP plugin | Provide message retrieval tools to your AI | Public HTTPS + OAuth |
+| Remote MCP over HTTPS with OAuth | [Server deployment and ChatGPT connection](docs/dot-plugin.md) | Verified with ChatGPT; other clients need their own compatibility check |
+| stdio MCP launched by your client | [Configuration example](docs/api.md#stdio-mcp) | Automated protocol tests; verify compatibility with your client |
 
-Messages and the KakaoTalk login session are stored in server volumes. Content retrieved through MCP tools is sent to your connected AI client. See [Security](docs/security.md) for storage locations, keys, and access controls.
+[MCP Events](docs/events.md) are optional and require a separate subscription. Connecting a client does not create subscriptions or automated tasks.
 
-## Supported environments
+## Requirements and validation
 
-| Environment | Requirements |
-| --- | --- |
-| Linux amd64 / arm64 | Docker Engine, Compose v2, and a kernel with Android binder support. [Linux installation](docs/install.md) |
-| Apple Silicon Mac | Run inside a Lima Ubuntu VM. [Mac installation](docs/local-redroid.md) |
+| Environment | Requirements | Validation |
+| --- | --- | --- |
+| Apple Silicon Mac | Lima Ubuntu VM; Docker Desktop for builds | Secondary login and Iris collection verified end to end |
+| Linux amd64 | Docker Engine, Compose v2, Android binder kernel support | Image builds and API startup verified; KakaoTalk/redroid flow unverified |
+| Other Linux arm64 hosts | Docker Engine, Compose v2, Android binder kernel support | Not verified outside the Apple Silicon Lima setup |
 
-You must supply the KakaoTalk APK. Secondary login and Iris collection have been verified in an Ubuntu VM on Apple Silicon, with the user manually confirming that the phone session stayed active. Validation on amd64 covers image builds and API startup. See [Validation scope](docs/implementation.md).
+The Linux guide suggests starting with 4 vCPUs and 8 GB RAM; these are not measured minimums. The supplied Lima VM uses 6 CPUs and 8 GiB RAM. See [Validation scope](docs/implementation.md) for the tested environment and remaining checks.
 
 ## Collection scope
 
 - Reads message bodies, types, and conversation/sender IDs still present in the tablet database. Resumes from the last stored position after an interruption.
 - Does not restore the phone's entire chat history, retrieve original attachments or display names, or synchronize edits and deletions.
-- Does not automatically monitor the phone session. **Do not sign in if the “Use with other devices” option (“다른 기기와 함께 사용” in the Korean KakaoTalk UI) is missing.** The login check currently recognizes the Korean KakaoTalk UI.
-- MCP exposes no message-sending or tablet-control tools. Opening a conversation manually in the web console may change its read status.
+- Opening a conversation manually in the web admin console may change its KakaoTalk read status.
 
 ## Documentation
 
 | Task | Documentation |
 | --- | --- |
 | Install and sign in | [Linux](docs/install.md), [Mac](docs/local-redroid.md), [Admin console](docs/web-ui.md) |
-| Connect ChatGPT or another client | [OAuth MCP](docs/dot-plugin.md), [HTTP API and stdio MCP](docs/api.md), [Events](docs/events.md) |
+| Connect an AI client or use the API | [OAuth MCP](docs/dot-plugin.md), [HTTP API and stdio MCP](docs/api.md), [Events](docs/events.md) |
 | Check status, restart, and back up | [Operations](docs/operations.md), [Security](docs/security.md) |
 | Understand, change, and verify the implementation | [Architecture](docs/design.md), [Iris](docs/iris.md), [Development](docs/development.md), [Validation scope](docs/implementation.md) |
 
-See [NOTICE](iris/NOTICE.md) for the modified Iris build's license and corresponding source distribution. This project is not an official Kakao service.
+## Contributing
+
+Bug reports, documentation improvements, and compatibility results are welcome. See [Contributing](CONTRIBUTING.md) for reporting guidelines and [Development](docs/development.md) for local checks and previews.
+
+## License and attribution
+
+A project-wide license has not yet been specified. The modified Iris build has its own licensing and source-distribution requirements; see [NOTICE](iris/NOTICE.md). This project is not an official Kakao service.
