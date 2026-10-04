@@ -1,4 +1,4 @@
-<h1><img src="docs/assets/wordmark.svg" width="420" height="96" alt="KakaoTalk MCP"></h1>
+<h1><img src="docs/assets/wordmark.svg" width="540" height="96" alt="KakaoTalk MCP Events"></h1>
 
 내 카카오톡 메시지를 내 서버에 모으고, ChatGPT에서 조회합니다.
 
