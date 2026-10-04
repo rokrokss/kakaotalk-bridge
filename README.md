@@ -18,16 +18,16 @@ Connecting the plugin does not create event subscriptions or automated tasks. MC
 
 ## Where does it run?
 
-![Iris reads messages on a secondary tablet on your server and stores them locally. ChatGPT retrieves them through OAuth and MCP.](docs/assets/message-flow.svg)
+![Iris reads messages on a secondary tablet on your server and stores them locally. Your AI retrieves them through OAuth and MCP.](docs/assets/message-flow.svg)
 
 | Component | Purpose | Access |
 | --- | --- | --- |
 | redroid + Iris | Run the secondary tablet and read its local message database | Internal server network |
 | Collection API | Store, browse, and search messages; retain them for 30 days by default | Authenticated private HTTPS |
 | Admin console | Control the tablet and confirm login status | Admin key + private HTTPS |
-| MCP plugin | Provide message retrieval tools to ChatGPT | Public HTTPS + OAuth |
+| MCP plugin | Provide message retrieval tools to your AI | Public HTTPS + OAuth |
 
-Messages and the KakaoTalk login session are stored in server volumes. Content retrieved through ChatGPT tools is sent to ChatGPT. See [Security](docs/security.md) for storage locations, keys, and access controls.
+Messages and the KakaoTalk login session are stored in server volumes. Content retrieved through MCP tools is sent to your connected AI client. See [Security](docs/security.md) for storage locations, keys, and access controls.
 
 ## Supported environments
 

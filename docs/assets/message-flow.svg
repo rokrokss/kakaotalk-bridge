@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="336" viewBox="0 0 960 336" role="img" aria-labelledby="title desc">
-  <title id="title">From KakaoTalk to ChatGPT</title>
-  <desc id="desc">Iris reads KakaoTalk messages inside a secondary redroid tablet on your server and stores them through the collection API in SQLite. ChatGPT retrieves stored messages through MCP over public HTTPS with OAuth. Administration uses private HTTPS. Event subscriptions are not created automatically.</desc>
+  <title id="title">From KakaoTalk to Your AI</title>
+  <desc id="desc">Iris reads KakaoTalk messages inside a secondary redroid tablet on your server and stores them through the collection API in SQLite. Your AI retrieves stored messages through MCP over public HTTPS with OAuth. Administration uses private HTTPS. Event subscriptions are not created automatically.</desc>
   <defs>
     <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="m1 1 5 3-5 3" fill="none" stroke="#807b6c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>
   </defs>
   <rect width="960" height="336" rx="16" fill="#faf9f6"/>
   <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" fill="#242320">
-    <text x="32" y="43" font-size="21" font-weight="650">From KakaoTalk to ChatGPT</text>
+    <text x="32" y="43" font-size="21" font-weight="650">From KakaoTalk to Your AI</text>
     <rect x="24" y="68" width="614" height="194" rx="12" fill="#f1efe7" stroke="#dedad0"/>
     <text x="44" y="97" fill="#717069" font-size="13">Your server</text>
     <rect x="44" y="116" width="242" height="122" rx="8" fill="#fff" stroke="#dedad0"/>
@@ -22,7 +22,7 @@
     <text x="380" y="210" font-size="14" fill="#717069">Collection API · SQLite</text>
     <path d="M624 177h83" stroke="#807b6c" stroke-width="1.8" marker-end="url(#arrow)"/>
     <text x="677" y="158" text-anchor="middle" font-size="12" fill="#717069">Read on request</text>
-    <text x="738" y="162" font-size="21" font-weight="600">ChatGPT</text>
+    <text x="738" y="162" font-size="21" font-weight="600">Your AI</text>
     <text x="738" y="210" font-size="14" fill="#717069">OAuth · MCP</text>
     <text x="44" y="292" font-size="13" fill="#717069">Admin: Private HTTPS</text>
     <text x="718" y="292" font-size="13" fill="#717069">MCP: Public HTTPS + OAuth</text>

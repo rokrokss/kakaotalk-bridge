@@ -4,7 +4,7 @@
 
 The stack runs one account and one redroid instance. Iris is the default collection path. The original notification-based design and implementation history remain in Git.
 
-![Administrators control the tablet over private HTTPS. ChatGPT connects to MCP over public HTTPS with OAuth. Iris runs inside redroid, and the collector stores messages through the API in SQLite.](assets/architecture.svg)
+![Administrators control the tablet over private HTTPS. Your AI connects to MCP over public HTTPS with OAuth. Iris runs inside redroid, and the collector stores messages through the API in SQLite.](assets/architecture.svg)
 
 [Architecture diagram source](assets/architecture.svg) · [Simplified message flow](assets/message-flow.svg)
 

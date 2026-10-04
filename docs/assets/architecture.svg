@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="772" viewBox="0 0 1120 772" role="img" aria-labelledby="title desc">
   <title id="title">KakaoTalk Bridge architecture</title>
-  <desc id="desc">An administrator controls redroid through gateway and admin over private HTTPS. iris-collector stores messages from Iris inside redroid through the API in SQLite. ChatGPT connects to dot-plugin over public HTTPS with OAuth, and the plugin queries the API with the read token. Phone sessions are confirmed manually; events require a separate subscription. device-agent reports device status to the API.</desc>
+  <desc id="desc">An administrator controls redroid through gateway and admin over private HTTPS. iris-collector stores messages from Iris inside redroid through the API in SQLite. Your AI connects to dot-plugin over public HTTPS with OAuth, and the plugin queries the API with the read token. Phone sessions are confirmed manually; events require a separate subscription. device-agent reports device status to the API.</desc>
   <defs>
     <marker id="request" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#77766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
     <marker id="data" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#a1832e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
@@ -17,7 +17,7 @@
     <text x="72" y="130" font-size="22" font-weight="600">Admin browser</text>
     <text x="72" y="159" font-size="15" fill="#717069">Screen control · Login checks</text>
     <rect x="790" y="92" width="282" height="94" rx="10" fill="#fff" stroke="#dedad0"/>
-    <text x="814" y="130" font-size="22" font-weight="600">ChatGPT</text>
+    <text x="814" y="130" font-size="22" font-weight="600">Your AI</text>
     <text x="814" y="159" font-size="15" fill="#717069">Read messages · Search</text>
 
     <rect x="24" y="254" width="1072" height="464" rx="12" fill="#f1efe7" stroke="#dedad0"/>
