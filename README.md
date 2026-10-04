@@ -2,9 +2,9 @@
 
 Connect your KakaoTalk messages to AI agents.
 
-KakaoTalk Bridge is a personal server that collects your KakaoTalk messages on your own infrastructure and makes them available for browsing and search in ChatGPT and other MCP-compatible AI agents.
+KakaoTalk Bridge runs KakaoTalk headlessly on your server using redroid as a virtual Android tablet. It collects messages from this secondary device and makes them available to AI agents through MCP.
 
-It runs redroid as a secondary tablet and reads messages through Iris. No separate tablet is required: run the stack with Docker Compose, then install and sign in to KakaoTalk through the web admin console.
+Iris reads the tablet's local message database and stores the collected messages on your server for browsing and search by ChatGPT and other MCP-compatible agents. No physical tablet is required. Run the stack with Docker Compose and use the web admin console for installation and KakaoTalk login.
 
 [Installation](docs/install.md) · [Admin console](docs/web-ui.md) · [Connect ChatGPT](docs/dot-plugin.md) · [Operations and backups](docs/operations.md) · [Development](docs/development.md)
 
