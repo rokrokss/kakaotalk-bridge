@@ -9,14 +9,10 @@
 First, prepare a public HTTPS address using the deployment instructions below.
 
 1. Add a custom MCP server in ChatGPT. Set its name to `KakaoTalk Bridge`, its URL to `https://<your-host>/mcp`, and authentication to OAuth.
-2. On the server's approval screen, enter `secrets/mcp_link_key`. This is separate from your Kakao password and admin key.
+2. Match the authorization screen's code under private admin **Connections**. Check the client ID and callback, enter the eight-character code, then approve.
 3. Once connected, request recent messages or a search. For example: “Show my recent messages from KakaoTalk Bridge.”
 
-On a Mac, copy the key without printing it:
-
-```bash
-pbcopy < secrets/mcp_link_key
-```
+Use [the installer](onboarding.md) to configure private Tailscale Serve and public Funnel, or follow the manual deployment below. Normal connections no longer need a permanent linking key.
 
 Connecting the plugin does not create event subscriptions or automated tasks. Subscribe to [Events](events.md) separately when needed.
 
@@ -42,8 +38,10 @@ On a server already running the API and Iris, set `DOT_PUBLIC_URL` in `.env` to 
 uv run python scripts/init-dot-secrets.py
 sudo chown 10001:10001 secrets/mcp_link_key secrets/mcp_storage_key
 sudo chmod 400 secrets/mcp_link_key secrets/mcp_storage_key
+sudo chmod 444 secrets/mcp_approval_token
 docker compose --profile dot build dot-plugin
-docker compose --profile dot up -d --no-deps dot-plugin
+docker compose --profile dot up -d --no-deps dot-plugin dot-control
+# Rebuild/recreate admin as well when upgrading to the new approval UI.
 ```
 
 The public HTTPS proxy targets `127.0.0.1:18787` by default. **Expose only this port** and keep the API gateway and admin console private. dot-plugin uses only the API read token and receives neither Android volumes nor the admin token.
@@ -73,13 +71,14 @@ tailscale funnel status
 uv run python scripts/smoke-dot.py https://your-host.example
 ```
 
-On Linux, use `docker compose` instead of `scripts/lima-compose.sh`. The smoke test uses a temporary OAuth grant to verify TLS, authentication, tool discovery, and retrieval of actual recent rows, then revokes the grant. It prints neither message bodies nor keys and creates no event subscriptions.
+On Linux, use `docker compose` instead of `scripts/lima-compose.sh`. The legacy smoke script requires explicit `DOT_APPROVAL_MODE=key`; use the admin approval flow for a normal installation. In key mode the smoke test uses a temporary OAuth grant to verify TLS, authentication, tool discovery, and retrieval of actual recent rows, then revokes the grant. It prints neither message bodies nor keys and creates no event subscriptions.
 
 | Error | What to check |
 | --- | --- |
 | `invalid_origin` | The scheme, host, and port in `DOT_PUBLIC_URL` must match the browser address; the approval HTML's Referrer-Policy must be `same-origin` |
 | `invalid_approval` | The approval screen is over 10 minutes old or its cookie is missing; restart the connection from ChatGPT |
-| `invalid_link_key` | Verify that you used `mcp_link_key` |
+| `approval_required` | Approve the matching code in private admin Connections |
+| Code is incorrect or request expired | Check the initiating browser and restart a request older than ten minutes |
 | Tool errors after connecting | Collection API health, read token, and collection approval |
 
 Keep the approval form's Origin/cookie checks and PKCE validation. After changing form policies, verify approval and the return to ChatGPT in a real browser.

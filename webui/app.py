@@ -2,8 +2,10 @@
 
 import hmac
 import json
+import os
 import secrets
 import subprocess
+import tempfile
 import threading
 import time
 from collections import deque
@@ -21,6 +23,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from server.app import BodyLimit
 from server.config import secret
+from webui.auth import OwnerAuth, digest
+from webui.connections import Connections, RequestChanged
 from webui.device import Android
 
 COOKIE = "__Host-kakao-admin"
@@ -33,6 +37,20 @@ class Strict(BaseModel):
 
 class Login(Strict):
     token: Annotated[str, Field(min_length=32, max_length=256)]
+
+
+class OwnerLogin(Strict):
+    password: Annotated[str, Field(max_length=256)] = ""
+    pair: Annotated[str, Field(max_length=128)] = ""
+    remember: bool = Field(default=False, strict=True)
+
+
+class Decision(Strict):
+    code: Annotated[str, Field(pattern=r"^[A-F0-9]{8}$")]
+    approve: bool = Field(strict=True)
+
+
+Identity = Annotated[str, Field(pattern=r"^[a-f0-9]{48,64}$")]
 
 
 class Point(Strict):
@@ -55,6 +73,10 @@ class Key(Strict):
 class Action(Strict):
     name: Literal[
         "bootstrap",
+        "prepare",
+        "configure",
+        "open-store",
+        "setup-check",
         "open-kakao",
         "keyboard",
         "login-check",
@@ -77,10 +99,15 @@ def collector_status():
     with urlopen(request, timeout=3) as response:
         data = json.load(response)
         # Status only: this service does not proxy arbitrary API paths or messages.
-        return {k: data[k] for k in ("state", "warnings", "coverage")}
+        return {
+            k: data[k] for k in ("state", "warnings", "coverage", "last_observation_received_at")
+        }
 
 
 ERRORS = {
+    "kakao_signature_unverified": "KakaoTalk publisher signature could not be verified. Use the official app; see the installation guide for supported signatures.",
+    "aurora_artifact_unverified": "Aurora download did not match the pinned release. Retry or use APK import.",
+    "android_not_ready": "Android is still starting. Wait, then refresh setup.",
     "screen_unavailable": "Could not retrieve the screen. Check that redroid has booted.",
     "keyboard_unavailable": "Select “Connect keyboard”, then focus a KakaoTalk input field. If needed, install the components under Installation first.",
     "focus_kakao_input": "Click an input field in KakaoTalk first.",
@@ -89,10 +116,28 @@ ERRORS = {
 }
 
 
-def create_app(admin_token=None, android=None, status_provider=None, session_ttl=1800):
+def create_app(
+    admin_token=None,
+    android=None,
+    status_provider=None,
+    session_ttl=1800,
+    auth_db=None,
+    connections=None,
+):
     token = admin_token or secret("ADMIN_TOKEN")
     if len(token) < 32:
         raise ValueError("Admin token must contain at least 32 characters")
+    temporary = tempfile.TemporaryDirectory() if admin_token and not auth_db else None
+    owner = OwnerAuth(
+        auth_db
+        or (
+            temporary.name + "/admin.db"
+            if temporary
+            else os.getenv("ADMIN_AUTH_DB", "/auth/admin.db")
+        ),
+        token,
+    )
+    connections = connections or Connections()
     device = android or Android()
     status_provider = status_provider or collector_status
     lock = threading.Lock()
@@ -101,6 +146,7 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
     failures = deque()
     pool = ThreadPoolExecutor(max_workers=1)
     job = {"state": "idle", "action": None, "message": ""}
+    setup_snapshot = None
     session_snapshot = None
     snapshot_invalidated = True
 
@@ -108,8 +154,11 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
     async def lifespan(app):
         yield
         pool.shutdown(wait=True, cancel_futures=True)
+        if temporary:
+            temporary.cleanup()
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app.state.owner = owner
     app.state.sessions = sessions
     app.state.job = job
     app.add_middleware(BodyLimit, maximum=32768)
@@ -141,8 +190,16 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
     def authenticated(request: Request):
         key = request.cookies.get(COOKIE, "")
         with session_lock:
+            stored = owner.session(key)
             session = sessions.get(key)
-            if session is None or session["expires"] <= time.monotonic():
+            if stored and session is None:
+                session = {
+                    **stored,
+                    "expires": time.monotonic() + stored["expires"] - time.time(),
+                    "frames": {},
+                }
+                sessions[key] = session
+            if not stored or session is None or session["expires"] <= time.monotonic():
                 sessions.pop(key, None)
                 raise HTTPException(401, "session_required")
         if request.method != "GET" and not hmac.compare_digest(
@@ -159,7 +216,10 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
         except (OSError, RuntimeError, ValueError, IndexError, subprocess.TimeoutExpired) as exc:
             raise HTTPException(
                 503,
-                ERRORS.get(str(exc), "The device operation failed. Check the connection and installation status."),
+                ERRORS.get(
+                    str(exc),
+                    "The device operation failed. Check the connection and installation status.",
+                ),
             ) from None
         finally:
             lock.release()
@@ -195,20 +255,81 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
             if not hmac.compare_digest(body.token.encode(), token.encode()):
                 failures.append(now)
                 raise HTTPException(401, "The admin key is incorrect.")
-            key, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
-            # Only one administrator session controls the tablet at a time.
-            sessions.clear()
-            sessions[key] = {"csrf": csrf, "expires": now + session_ttl, "frames": {}}
+        return issue_session(response, session_ttl, "Recovery key", exclusive=True)
+
+    def issue_session(response, ttl, label, exclusive=False):
+        key, record = owner.create_session(ttl, label, exclusive=exclusive)
+        with session_lock:
+            if exclusive:
+                sessions.clear()
+            sessions[key] = {**record, "expires": time.monotonic() + ttl, "frames": {}}
         response.set_cookie(
-            COOKIE,
-            key,
-            max_age=session_ttl,
-            secure=True,
-            httponly=True,
-            samesite="strict",
-            path="/",
+            COOKIE, key, max_age=ttl, secure=True, httponly=True, samesite="strict", path="/"
         )
-        return {"csrf": csrf, "expires_in": session_ttl}
+        return {"csrf": record["csrf"], "expires_in": ttl}
+
+    @app.get("/admin/api/auth-info")
+    def auth_info():
+        return {"configured": owner.configured()}
+
+    @app.post("/admin/api/owner-login")
+    def owner_login(body: OwnerLogin, request: Request, response: Response):
+        with session_lock:
+            now = time.monotonic()
+            while failures and failures[0] <= now - 60:
+                failures.popleft()
+            if len(failures) >= 5:
+                raise HTTPException(429, "Try again shortly.")
+            # Count before password hashing to bound concurrent authentication work.
+            failures.append(now)
+            valid = (
+                owner.check_pair(body.pair, body.password)
+                if body.pair
+                else owner.check_password(body.password)
+            )
+            if not valid:
+                raise HTTPException(401, "Password or pairing link is invalid or expired.")
+            failures.pop()
+        return issue_session(
+            response,
+            7 * 86400 if body.remember else session_ttl,
+            request.headers.get("user-agent", "Browser"),
+        )
+
+    @app.get("/admin/api/browsers")
+    def browsers(request: Request, current: Annotated[dict, Depends(authenticated)]):
+        return {"items": owner.sessions(request.cookies.get(COOKIE, ""))}
+
+    @app.post("/admin/api/browsers/{identity}/revoke")
+    def revoke_browser(identity: Identity, current: Annotated[dict, Depends(authenticated)]):
+        owner.revoke(identity)
+        return {"ok": True}
+
+    def connection_call(method, path, data=None):
+        try:
+            return connections.call(method, path, data)
+        except RequestChanged:
+            raise HTTPException(
+                409, "Code is incorrect or the request expired. Refresh Connections."
+            ) from None
+        except (OSError, ValueError):
+            raise HTTPException(
+                503, "Connection service unavailable. Start the dot profile."
+            ) from None
+
+    @app.get("/admin/api/connections")
+    def connection_list(current: Annotated[dict, Depends(authenticated)]):
+        return connection_call("GET", "/connections")
+
+    @app.post("/admin/api/connections/{identity}/decide")
+    def decide(
+        identity: Identity, body: Decision, current: Annotated[dict, Depends(authenticated)]
+    ):
+        return connection_call("POST", "/approvals/" + identity, body.model_dump())
+
+    @app.post("/admin/api/connections/{identity}/revoke")
+    def revoke_connection(identity: Identity, current: Annotated[dict, Depends(authenticated)]):
+        return connection_call("POST", "/grants/" + identity + "/revoke", {})
 
     @app.get("/admin/api/session")
     def session(current: Annotated[dict, Depends(authenticated)]):
@@ -222,6 +343,7 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
         request: Request, response: Response, current: Annotated[dict, Depends(authenticated)]
     ):
         with session_lock:
+            owner.revoke(digest(request.cookies.get(COOKIE, "")))
             sessions.pop(request.cookies.get(COOKIE), None)
         response.delete_cookie(COOKIE, secure=True, httponly=True, samesite="strict", path="/")
         return {"ok": True}
@@ -233,7 +355,9 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
         except (OSError, ValueError, KeyError):
             status = {"state": "unavailable", "warnings": ["collector_unavailable"]}
         return {
+            "checked_at": time.time(),
             "job": dict(job),
+            "setup": setup_snapshot,
             "collector": status,
             "sessions": session_snapshot,
             "sessions_stale": snapshot_invalidated
@@ -267,7 +391,9 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
         with session_lock:
             frame = current["frames"].get(body.frame)
         if not frame or time.monotonic() - frame[2] > 10:
-            raise HTTPException(409, "The screen is outdated. Wait for a new frame before trying again.")
+            raise HTTPException(
+                409, "The screen is outdated. Wait for a new frame before trying again."
+            )
         if (body.end_x is None) != (body.end_y is None):
             raise HTTPException(422, "invalid_swipe")
         points = [(body.x, body.y)]
@@ -295,11 +421,18 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
         return {"ok": True}
 
     def run_action(body):
-        nonlocal session_snapshot, snapshot_invalidated
+        nonlocal session_snapshot, snapshot_invalidated, setup_snapshot
         try:
             already_approved = False
+            changed = True
             with lock:
-                if body.name == "bootstrap":
+                if body.name == "prepare":
+                    changed = device.prepare()
+                elif body.name == "configure":
+                    changed = device.configure()
+                elif body.name == "open-store":
+                    device.open_store()
+                elif body.name == "bootstrap":
                     device.bootstrap()
                 elif body.name == "open-kakao":
                     device.open_kakao()
@@ -311,7 +444,10 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
                     device.confirm(body.phone_active, body.tablet_active)
                 elif body.name in ("phone-active", "phone-lost"):
                     device.record_phone(body.name == "phone-active")
+                if body.name in ("setup-check", "prepare", "configure", "bootstrap"):
+                    setup_snapshot = device.setup_status()
                 if body.name in (
+                    "setup-check",
                     "session-check",
                     "login-check",
                     "confirm-secondary",
@@ -321,6 +457,14 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
                     session_snapshot = device.session_status()
                     snapshot_invalidated = False
             message = {
+                "prepare": "Aurora is ready. Choose anonymous sign-in and install KakaoTalk."
+                if changed
+                else "Existing installation preserved. Continue with the next setup step.",
+                "configure": "Components installed. Open KakaoTalk and check login options."
+                if changed
+                else "Existing enrollment and collection approval preserved.",
+                "open-store": "Aurora opened. Search for KakaoTalk by Kakao Corp.",
+                "setup-check": "Setup status refreshed.",
                 "bootstrap": "Installation complete. Open KakaoTalk and check login options.",
                 "open-kakao": "KakaoTalk opened.",
                 "keyboard": "Keyboard connected. Select an input field on the tablet.",
@@ -335,7 +479,7 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
                 "phone-lost": "Phone sign-out recorded. Iris collection approval revoked.",
             }[body.name]
             job.update(state="done", message=message)
-        except Exception:  # noqa: BLE001 — isolate background jobs without leaking credentials
+        except Exception as exc:  # noqa: BLE001 — isolate background jobs without leaking credentials
             # Login UI dumps, input strings, filesystem paths and exception bodies stay private.
             message = (
                 "Could not verify login options. Select “Use with other devices” on the Korean KakaoTalk login screen before signing in. Existing collection approval is unchanged."
@@ -346,7 +490,7 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
                 if body.name == "phone-lost"
                 else "The operation failed. Check the redroid connection, APK files, and installation status."
             )
-            job.update(state="failed", message=message)
+            job.update(state="failed", message=ERRORS.get(str(exc), message))
 
     @app.post("/admin/api/action", status_code=202)
     def action(body: Action, current: Annotated[dict, Depends(authenticated)]):

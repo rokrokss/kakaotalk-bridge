@@ -1,12 +1,16 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
+let pairing = new URLSearchParams(location.hash.slice(1)).get('pair') || '';
+if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+let collectionBaseline = null, lastObservation = null, mcpConnected = false;
+let setupState = null, latestState = null;
 let csrf = '', active = false, paused = false, fetching = false, rendering = false;
 let frame = null, pointer = null, blobURL = null, busy = false, generation = 0;
 let setupInitialized = false, precheckValid = false, collectionApproved = false;
 let loginAlreadyApproved = false;
 const messages = {
-  session_required: 'Your admin session has expired. Enter the key again.',
+  session_required: 'Your admin session has expired. Sign in again.',
   device_busy: 'A device operation is in progress. Try again shortly.',
   invalid_request: 'Check your input.',
   invalid_csrf: 'Reopen the admin console.',
@@ -69,11 +73,14 @@ function unlocked(session) {
   $('login-panel').hidden = true;
   $('console').hidden = false;
   $('logout').hidden = false;
-  $('connection').textContent = `Admin · Expires within ${Math.ceil(session.expires_in / 60)} min`;
+  $('connection').textContent = session.expires_in > 86400
+    ? `Admin · ${Math.ceil(session.expires_in / 86400)} days remaining`
+    : `Admin · ${Math.ceil(session.expires_in / 60)} min remaining`;
   $('pause').textContent = 'Pause';
   $('pause').setAttribute('aria-pressed', 'false');
   $('screen-placeholder').hidden = false;
-  updateState();
+  action('setup-check');
+  refreshConnections();
   refresh();
 }
 
@@ -191,6 +198,14 @@ async function updateState() {
   try {
     const state = await api('state');
     if (!active || requestedGeneration !== generation) return;
+    latestState = state;
+    setupState = state.setup;
+    lastObservation = state.collector.last_observation_received_at || null;
+    renderSetup();
+    if (collectionBaseline !== null && lastObservation && Date.parse(lastObservation) > collectionBaseline) {
+      $('test-result').textContent = 'A new message row reached the collector. Check it in ChatGPT to confirm the content.';
+      collectionBaseline = null;
+    }
     busy = state.job.state === 'running';
     $('job').hidden = !state.job.message;
     $('job').textContent = state.job.message;
@@ -247,7 +262,7 @@ $('install').addEventListener('click', () => {
   if (active && !busy) { $('install-dialog').returnValue = ''; $('install-dialog').showModal(); }
 });
 $('install-dialog').addEventListener('close', () => {
-  if ($('install-dialog').returnValue === 'install') action('bootstrap');
+  if ($('install-dialog').returnValue === 'install') action('configure');
 });
 ['phone-active', 'tablet-active', 'phone-rechecked'].forEach(id => $(id).addEventListener('change', updateControls));
 $('confirm').addEventListener('click', () => {
@@ -317,4 +332,143 @@ document.addEventListener('visibilitychange', () => {
 });
 setInterval(() => refresh(), 1200);
 setInterval(updateState, 3000);
-api('session').then(unlocked).catch(() => locked());
+setInterval(() => { if (active && !document.hidden) refreshConnections(); }, 15000);
+initLogin();
+
+
+async function initLogin() {
+  try {
+    const info = await api('auth-info');
+    if (pairing) {
+      $('pair-help').textContent = info.configured ? 'Pair this browser with your server. This link works once and expires after 10 minutes.' : 'Choose an admin password (at least 12 characters). This is separate from your KakaoTalk password.';
+      $('owner-submit').textContent = info.configured ? 'Pair this browser' : 'Create password and continue';
+      $('owner-password').hidden = $('password-label').hidden = info.configured;
+      $('owner-password').required = !info.configured;
+      $('owner-password').minLength = info.configured ? 0 : 12;
+      $('owner-password').autocomplete = info.configured ? 'current-password' : 'new-password';
+      locked();
+    } else {
+      if (!info.configured) $('owner-form').hidden = true;
+      try { unlocked(await api('session')); } catch { locked(); }
+    }
+  } catch (error) { feedback(error.message); }
+}
+$('owner-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const password = $('owner-password').value;
+  $('owner-password').value = '';
+  try {
+    const session = await api('owner-login', { password, pair: pairing, remember: $('remember').checked });
+    pairing = '';
+    $('owner-form').hidden = false;
+    $('owner-password').hidden = $('password-label').hidden = false;
+    $('owner-password').required = true;
+    $('owner-password').autocomplete = 'current-password';
+    $('owner-submit').textContent = 'Sign in';
+    $('pair-help').textContent = 'Use your admin password or run ./bridge admin to pair a browser.';
+    unlocked(session);
+  } catch (error) { feedback(error.message); }
+});
+
+function renderSetup() {
+  const s = setupState;
+  const session = latestState?.sessions;
+  const ready = !!s && !['offline', 'booting'].includes(s.state);
+  const enrolled = !!s?.enrolled;
+  const approved = session?.collection_approval === 'approved';
+  const collecting = latestState?.collector.state === 'collecting_partial';
+  const steps = [ready, !!s?.kakao_installed, enrolled, approved, collecting, mcpConnected];
+  const labels = ['Server', 'KakaoTalk', 'Components', 'Both sessions', 'Collection', 'ChatGPT'];
+  $('setup-progress').replaceChildren(...labels.map((label, i) => {
+    const item = document.createElement('li'); item.textContent = label;
+    item.dataset.complete = String(steps[i]); return item;
+  }));
+  let next = ['Server readiness is being checked.', '', ''];
+  if (s && !ready) next = ['Waiting for Android. If it stays here, run ./bridge doctor.', '', ''];
+  else if (ready && !s.kakao_installed) next = s.aurora_installed
+    ? ['Open Aurora, choose anonymous sign-in and install KakaoTalk. Then refresh setup.', 'open-store', 'Open Aurora']
+    : ['Prepare a Korean tablet and Aurora. Existing app data is preserved.', 'prepare', 'Prepare tablet'];
+  else if (ready && !enrolled) next = ['KakaoTalk is installed. Verify its signature and set up collection components.', 'configure', 'Set up components'];
+  else if (enrolled && !approved) next = ['Open KakaoTalk. Check “Use with other devices” before login, then confirm both phone and tablet sessions below.', 'open-kakao', 'Open KakaoTalk'];
+  else if (approved && !collecting) next = ['Both sessions were confirmed. Waiting for the collector; refresh status if needed.', 'session-check', 'Check status'];
+  else if (collecting && !mcpConnected) next = ['Collection is running. Send a test message, then connect ChatGPT under Connections.', '', ''];
+  else if (collecting && mcpConnected) next = ['Setup complete. Phone session health still requires your manual confirmation.', '', ''];
+  $('setup-next').textContent = next[0];
+  $('setup-next-button').hidden = !next[1];
+  $('setup-next-button').textContent = next[2];
+  $('setup-next-button').onclick = () => action(next[1]);
+  $('setup-next-button').disabled = latestState?.job.state === 'running';
+}
+
+function paragraph(text) { const p = document.createElement('p'); p.textContent = text; return p; }
+function button(text, fn) {
+  const b = document.createElement('button'); b.textContent = text;
+  b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { await fn(); } catch (error) { feedback(error.message); }
+    finally { b.disabled = false; }
+  }); return b;
+}
+let connectionsLoading = false, connectionSignature = '';
+async function refreshConnections() {
+  if (!active || connectionsLoading) return;
+  connectionsLoading = true;
+  try {
+    const data = await api('connections');
+    if (!active) return;
+    mcpConnected = data.grants.length > 0;
+    $('mcp-address').textContent = data.resource;
+    $('pending-count').textContent = data.pending.length ? `(${data.pending.length} pending)` : '';
+    renderSetup();
+    const signature = JSON.stringify(data);
+    if (signature === connectionSignature) return;
+    connectionSignature = signature;
+    const nodes = data.pending.map(row => {
+      const card = document.createElement('div'); card.className = 'connection-card';
+      card.append(paragraph(`${row.client_name} · ${row.client_id}`), paragraph(`Callback: ${row.redirect_origin}`), paragraph(`Permissions: ${row.scope}`));
+      const label = document.createElement('label'); label.textContent = 'Enter the 8-character code shown in the connecting browser';
+      const input = document.createElement('input'); input.maxLength = 8; input.autocomplete = 'off'; input.spellcheck = false;
+      label.append(input); card.append(label);
+      card.append(button('Approve connection', async () => {
+        const code = input.value.trim().toUpperCase();
+        if (!/^[A-F0-9]{8}$/.test(code)) throw new Error('Enter the code from the connecting browser.');
+        await api(`connections/${row.id}/decide`, {code, approve: true}); await refreshConnections();
+      }), button('Decline', async () => {
+        await api(`connections/${row.id}/decide`, {code: row.code, approve: false}); await refreshConnections();
+      }));
+      card.append(paragraph('Client names are self-reported. Check the callback and code before approving.'));
+      return card;
+    });
+    for (const row of data.grants) {
+      const card = document.createElement('div'); card.className = 'connection-card';
+      card.append(paragraph(row.client_id), paragraph(`${row.scope} · Expires ${localTime(row.expires)}`), button('Disconnect', async () => {
+        await api(`connections/${row.id}/revoke`, {}); await refreshConnections();
+      })); nodes.push(card);
+    }
+    $('connections-list').replaceChildren(...(nodes.length ? nodes : [paragraph('No pending or connected clients.')]));
+  } catch { if (active) $('mcp-address').textContent = 'Connection service unavailable. Run ./bridge connect --url https://your-address.'; }
+  finally { connectionsLoading = false; }
+}
+$('refresh-connections').addEventListener('click', refreshConnections);
+$('connections-panel').addEventListener('toggle', () => { if ($('connections-panel').open) refreshConnections(); });
+$('browsers-panel').addEventListener('toggle', refreshBrowsers);
+async function refreshBrowsers() {
+  if (!active || !$('browsers-panel').open) return;
+  try {
+    const data = await api('browsers');
+    $('browsers-list').replaceChildren(...data.items.map(row => {
+      const card = document.createElement('div'); card.className = 'connection-card';
+      card.append(paragraph(row.current ? 'This browser' : row.label), paragraph(`Expires ${localTime(row.expires)}`), button('Sign out', async () => {
+        await api(`browsers/${row.id}/revoke`, {});
+        if (row.current) locked(); else await refreshBrowsers();
+      })); return card;
+    }));
+  } catch (error) { feedback(error.message); }
+}
+$('test-collection').addEventListener('click', async () => {
+  try {
+    await updateState();
+    collectionBaseline = Math.max((latestState?.checked_at || Date.now() / 1000) * 1000, lastObservation ? Date.parse(lastObservation) : 0);
+    $('test-result').textContent = 'Now send yourself a message from your phone. Waiting for a new collected row…';
+  } catch (error) { feedback(error.message); }
+});

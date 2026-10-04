@@ -1,5 +1,7 @@
 # Linux installation
 
+For the new installer, browser pairing, Aurora setup and full encrypted snapshots, see [Set up a personal bridge](onboarding.md). The commands below describe the existing manual deployment path.
+
 [README](../README.md) · [Mac installation](local-redroid.md)
 
 This Docker Compose stack supports one account on Linux amd64/arm64. It requires Docker Engine, Compose v2, Bash, OpenSSL, and Android binder/binderfs. Start with 4 vCPUs and 8 GB RAM; these are suggested starting resources, not measured minimum requirements.
@@ -56,9 +58,9 @@ ssh -N -L 18443:127.0.0.1:8443 user@linux-server
 
 Open `https://localhost:18443/admin/` in your browser, or `https://localhost:8443/admin/` on the server itself. Verify the generated `secrets/tls_cert.pem` and configure your browser to trust it.
 
-Authenticate with `secrets/admin_token`, then select **Installation → Prepare installation… → Install**. This deploys the KakaoTalk APK, registration app, keyboard, and Iris. Iris does not open as a separate app on the Android screen.
+On the server, run `./bridge admin --url https://localhost:18443` for the SSH tunnel above, or `./bridge admin` when browsing on the server itself. Open the printed one-time link to pair a browser, then follow **Set up your bridge**. Use Aurora or import an APK set, then choose **Set up collection components**. The admin recovery key remains available for older installations.
 
-Follow the [first login procedure](web-ui.md#first-login). Reinstalling resets collection approval, so do not use it as a routine recovery step on a server that is already collecting messages.
+Follow the [first login procedure](web-ui.md#first-login). The new setup action preserves existing enrollment. The legacy CLI `bootstrap` still resets collection approval and is not a routine recovery step.
 
 ## 5. Verify collection and connect
 

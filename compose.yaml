@@ -131,16 +131,24 @@ services:
       DEVICE_ID: ${DEVICE_ID:-personal-tablet}
       API_URL: http://api:8000
       BRIDGE_URL: https://${GATEWAY_IP:-172.29.87.3}:8443
+      ADMIN_AUTH_DB: /auth/admin.db
+      DOT_CONTROL_URL: http://dot-control:8788
     volumes:
       - device-state:/state
+      - admin-state:/auth
       - ./inputs/kakao:/inputs/kakao:ro
-    secrets: [admin_token, read_token, ingest_token, tls_cert]
+    secrets: [admin_token, read_token, ingest_token, tls_cert, mcp_approval_token]
     networks: [device-net, backend-net]
     depends_on:
       redroid:
         condition: service_started
       api:
         condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
 
   bootstrap:
     <<: *device
@@ -179,6 +187,7 @@ services:
       API_URL: http://api:8000
       DOT_PUBLIC_URL: ${DOT_PUBLIC_URL:-https://kakao.example.invalid}
       DOT_DB_PATH: /data/dot.db
+      DOT_APPROVAL_MODE: ${DOT_APPROVAL_MODE:-admin}
     secrets: [read_token, mcp_link_key, mcp_storage_key]
     volumes: [dot-state:/data]
     ports: ["127.0.0.1:${DOT_HTTP_PORT:-18787}:8787"]
@@ -192,12 +201,27 @@ services:
       timeout: 5s
       retries: 3
 
+  dot-control:
+    <<: *server
+    image: ${DOT_IMAGE:-kakaotalk-collector/dot:0.1.0}
+    profiles: [dot]
+    restart: unless-stopped
+    command: [uvicorn, dot_plugin.control:create_app, --factory, --host, 0.0.0.0, --port, "8788", --no-access-log]
+    environment:
+      DOT_PUBLIC_URL: ${DOT_PUBLIC_URL:-https://kakao.example.invalid}
+      DOT_DB_PATH: /data/dot.db
+      DOT_APPROVAL_MODE: admin
+    secrets: [mcp_storage_key, mcp_approval_token]
+    volumes: [dot-state:/data]
+    networks: [backend-net]
+
 volumes:
   android-data:
   collector-data:
   device-state:
   iris-state:
   dot-state:
+  admin-state:
 
 networks:
   device-net:
@@ -233,3 +257,5 @@ secrets:
     file: ./secrets/mcp_link_key
   mcp_storage_key:
     file: ./secrets/mcp_storage_key
+  mcp_approval_token:
+    file: ./secrets/mcp_approval_token

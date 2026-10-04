@@ -16,8 +16,11 @@ class Config:
     storage_key: bytes
     api_url: str = "http://api:8000"
     read_token: str = ""
+    approval_mode: str = "key"
 
     def __post_init__(self):
+        if self.approval_mode not in {"key", "admin"}:
+            raise ValueError("Invalid approval mode")
         u = urlsplit(self.public_url)
         if (
             u.scheme != "https"
@@ -31,7 +34,7 @@ class Config:
             raise ValueError(
                 "DOT_PUBLIC_URL must be a canonical HTTPS origin without a trailing slash"
             )
-        if len(self.link_key) < 32:
+        if self.approval_mode == "key" and len(self.link_key) < 32:
             raise ValueError("Dot linking key must contain at least 32 characters")
 
     @property
@@ -39,7 +42,7 @@ class Config:
         return self.public_url + "/mcp"
 
     @classmethod
-    def from_env(cls):
+    def from_env(cls, *, control=False):
         def secret(name):
             return (
                 Path(os.getenv(name + "_FILE", "/run/secrets/" + name.lower())).read_text().strip()
@@ -48,8 +51,9 @@ class Config:
         return cls(
             os.environ["DOT_PUBLIC_URL"].rstrip("/"),
             os.getenv("DOT_DB_PATH", "/data/dot.db"),
-            secret("MCP_LINK_KEY"),
+            secret("MCP_LINK_KEY") if os.getenv("DOT_APPROVAL_MODE", "admin") == "key" else "",
             secret("MCP_STORAGE_KEY").encode(),
             os.getenv("API_URL", "http://api:8000"),
-            secret("READ_TOKEN"),
+            "" if control else secret("READ_TOKEN"),
+            os.getenv("DOT_APPROVAL_MODE", "admin"),
         )

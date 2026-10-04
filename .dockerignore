@@ -23,3 +23,6 @@ backups
 deploy/*.local.plist
 android/.gradle
 android/**/build
+
+.bridge
+**/*.kcs

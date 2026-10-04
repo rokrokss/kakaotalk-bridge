@@ -8,11 +8,11 @@ Use the admin console to control the tablet and check login and collection statu
 
 For a remote server, forward the HTTPS port over SSH and open `https://localhost:18443/admin/`. The Mac Lima setup uses the same address. See [Installation](install.md#4-open-the-admin-console) for certificate setup.
 
-The admin key is stored in `secrets/admin_token`. It is separate from your Kakao password and MCP connection key. **Lock** ends the admin console session only; it does not sign out of KakaoTalk. Admin sessions expire after 30 minutes.
+With the installer, run `./bridge admin` to pair a browser and choose your admin password. For the older manual Lima deployment, use the [pairing command in its guide](local-redroid.md#3-start-and-sign-in); the installer does not adopt that VM automatically. Sessions last 30 minutes, or seven days with **Keep me signed in**, and survive container restarts. Revoke them under **Admin browsers**. `secrets/admin_token` is a recovery option. **Lock** ends only the admin session. See the [setup guide](onboarding.md) for private Tailscale HTTPS and recovery.
 
 ## First login
 
-1. Select **Installation → Prepare installation… → Install** to deploy the apps and collection components. Skip this if already installed.
+1. Prepare a Korean tablet and Aurora from the setup guide. Install KakaoTalk in Aurora, then select **Set up collection components**. Alternatively import a complete official APK set.
 2. Select **Open KakaoTalk**. To enter text, select **Connect keyboard**, focus an input field on the tablet, then send a value through **Text input**.
 3. In KakaoTalk, select **“Use with other devices” (“다른 기기와 함께 사용” in the Korean UI)**. In the console, select **KakaoTalk login → Check login options**. The check currently recognizes the Korean KakaoTalk UI. Stop if the option is missing or KakaoTalk asks to transfer the primary device.
 4. After the check passes, finish signing in on the tablet. Manually verify that KakaoTalk still opens with the existing session on your phone.
@@ -24,9 +24,9 @@ Use **Check login options** only on the screen before signing in. Once collectio
 
 ## Installation
 
-During initial setup, place the official KakaoTalk APK in the server's `inputs/kakao/` directory (the complete set for split APKs), then select **Prepare installation… → Install**. This deploys KakaoTalk, the registration app, the web keyboard, and Iris. Sign in on the tablet screen after installation.
+Use **Prepare tablet and Aurora** on a fresh tablet, install KakaoTalk through the screen, then choose **Set up collection components**. APK import is also available through `./bridge import-apks /path/to/folder`.
 
-There is no need to reinstall a working setup. Installation stops Iris and resets existing collection approval, so resuming collection requires a new check before login. It does not delete KakaoTalk data or sign out. Canceling **Prepare installation…** performs no action.
+KakaoTalk signatures are checked before first enrollment. An already enrolled tablet is left unchanged. These setup actions do not reset an existing collection approval. The legacy CLI `bootstrap` remains a maintenance action that does reset approval; it is not used by the setup wizard.
 
 ## Everyday use
 
@@ -61,4 +61,4 @@ If your phone has been signed out, select **Signed out · Stop collection**. Thi
 | Registration app opens after installation | Select Open KakaoTalk; Iris mode does not need notification access |
 | Collection is approved but no messages arrive | [Check Iris status and logs](operations.md#check-status) |
 
-Reinstallation resets existing collection approval. Canceling the installation dialog leaves the setup unchanged.
+Canceling the installation dialog leaves the setup unchanged. Use **Connections** to approve matching OAuth requests and disconnect clients. **Collection test and maintenance** checks reception without displaying message content.

@@ -112,3 +112,16 @@ dialog p { margin: 12px 0 24px; font-size: 13px; }
 @media (prefers-color-scheme: dark) {
   :root { --background: #1c1c1a; --surface: #252522; --stage: #141413; --ink: #edece6; --muted: #aaa89e; --line: #3c3c36; --hover: #33332d; --accent: #e7cf76; --danger: #ef9b8f; --focus: #d3ba65; }
 }
+
+/* Setup and access management use the same compact controls as the tablet. */
+.setup-guide { border: 1px solid var(--border, #ddd); border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; }
+.setup-progress { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0; font-size: .85rem; color: #777; }
+.setup-progress li::before { content: '○ '; }
+.setup-progress li[data-complete="true"] { color: #216b49; }
+.setup-progress li[data-complete="true"]::before { content: '✓ '; }
+.connection-card { padding: 12px 0; border-bottom: 1px solid #e5e5e5; overflow-wrap: anywhere; }
+.connection-card button { margin: 6px 8px 0 0; }
+.endpoint { display: block; overflow-wrap: anywhere; margin: 12px 0; font-size: .85rem; }
+.recovery { margin-top: 24px; }
+#owner-form .check { margin: 16px 0; }
+#pair-help { overflow-wrap: anywhere; }

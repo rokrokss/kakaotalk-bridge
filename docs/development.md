@@ -9,6 +9,7 @@ uv sync --frozen --python 3.12
 uv run pytest -q
 uv run ruff check .
 node --check webui/static/app.js
+node --check dot_plugin/static/approval.js
 docker compose --profile dot config --quiet
 ```
 
@@ -28,6 +29,7 @@ uv export --frozen --no-dev --no-emit-project --output-file requirements.lock
 | `server/` | Storage, API, stdio MCP, and backups |
 | `webui/` | Admin authentication, device control, and static web console |
 | `dot_plugin/` | OAuth, remote MCP, and optional Events |
+| `ops/`, `bridge` | Host CLI, isolated Lima installation, image updates and encrypted full snapshots |
 | `tests/` | Synthetic-data tests and fake devices for browser previews |
 | `deploy/`, `scripts/` | Lima, supervisor, installation, diagnostics, and backup tools |
 
@@ -42,7 +44,7 @@ uv run uvicorn tests.webui_preview:create_preview --factory \
   --no-access-log
 ```
 
-Open `https://localhost:19443/admin/`. The key is `preview-only-key-` followed by 32 zeroes. `/test/calls` shows only the names of actions sent to the fake device. Use this environment to test installation, login checks, confirmation of both sessions, and phone reports. Do not validate the UI by installing or resetting approval on a production instance.
+Open `https://localhost:19443/admin/` and use the recovery-key form with `preview-only-key-` followed by 32 zeroes. `/test/calls` shows only the names of actions sent to the fake device. This fixture supports screen controls, login checks, confirmation of both sessions and phone reports. It does not implement Aurora preparation or the private approval service; test those in an isolated stack. Do not validate the UI by installing or resetting approval on a production instance.
 
 ## Container checks
 

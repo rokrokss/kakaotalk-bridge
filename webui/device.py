@@ -121,6 +121,27 @@ class Android:
             finally:
                 cli.adb("shell", "rm", "-f", remote, pending, receipt, check=False)
 
+    def setup_status(self):
+        from device.setup import status
+
+        return status()
+
+    def prepare(self):
+        from device.setup import prepare
+
+        return prepare()
+
+    def open_store(self):
+        from device.setup import open_store
+
+        open_store()
+
+    def configure(self):
+        changed = cli.bootstrap(preserve=True)
+        if changed:
+            self.enable_keyboard()
+        return changed
+
     def bootstrap(self):
         cli.bootstrap()
         self.enable_keyboard()

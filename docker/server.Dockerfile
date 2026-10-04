@@ -6,7 +6,7 @@ RUN python -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir --requi
 
 FROM python:3.12-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3
 ARG VCS_REF=development
-LABEL org.opencontainers.image.source="https://github.com/rokrokss/kakaotalk-mcp-events" \
+LABEL org.opencontainers.image.source="https://github.com/rokrokss/kakaotalk-bridge" \
       org.opencontainers.image.revision="${VCS_REF}"
 ENV PATH="/opt/venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN useradd --uid 10001 --create-home collector && mkdir /data && chown collector:collector /data
@@ -14,6 +14,7 @@ COPY --from=dependencies /opt/venv /opt/venv
 WORKDIR /app
 COPY server/ server/
 COPY dot_plugin/ dot_plugin/
+COPY ops/ ops/
 COPY assets/logo.svg assets/logo.svg
 USER collector
 EXPOSE 8000

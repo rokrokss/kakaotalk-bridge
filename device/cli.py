@@ -78,7 +78,7 @@ def report(payload):
             raise RuntimeError("Device status not committed")
 
 
-def bootstrap(rotate_epoch=False):
+def bootstrap(rotate_epoch=False, *, preserve=False):
     print("Waiting for Android boot (up to 180 seconds).", flush=True)
     deadline = time.monotonic() + 180
     while sample()["state"] in ("offline", "booting"):
@@ -106,6 +106,26 @@ def bootstrap(rotate_epoch=False):
         raise RuntimeError(
             "Device has enrollment but host state is missing; restore device-state first"
         )
+    if preserve and has_config:
+        remote = json.loads(adb("shell", "cat", REMOTE_CONFIG))
+        identity = json.loads(state.read_text())
+        if identity.get("enrollment_epoch") != remote.get("enrollment_epoch") or identity.get(
+            "device_id"
+        ) != os.getenv("DEVICE_ID", "personal-tablet"):
+            raise RuntimeError("Enrollment mismatch; restore matching state")
+        return False
+    if preserve:
+        from device.setup import verify_installed_kakao, verify_kakao
+
+        if not is_installed("com.kakao.talk"):
+            supplied = sorted(Path("/inputs/kakao").glob("*.apk"))
+            if not supplied:
+                raise RuntimeError(
+                    "Install KakaoTalk in Aurora or import the official APK set first"
+                )
+            verify_kakao(supplied)
+            adb("install-multiple", *map(str, supplied), timeout=180)
+        verify_installed_kakao()
     if not state.exists():
         state.parent.mkdir(parents=True, exist_ok=True)
         state.write_text(
@@ -127,7 +147,7 @@ def bootstrap(rotate_epoch=False):
         # A preinstalled but never enrolled Bridge is permitted. Its empty outbox has no epoch.
         print("Existing Bridge will be enrolled; existing app data is retained.")
     apks = sorted(Path("/inputs/kakao").glob("*.apk"))
-    if apks:
+    if apks and not preserve:
         print("Installing supplied KakaoTalk APK set (no login actions).")
         for apk in apks:
             with apk.open("rb") as source:
@@ -158,6 +178,7 @@ def bootstrap(rotate_epoch=False):
     print(
         "Never continue a primary-device transfer login. No KakaoTalk login action was performed."
     )
+    return True
 
 
 def bridge_uid():
@@ -203,7 +224,10 @@ def login_check():
     connect()
     config = json.loads(adb("shell", "cat", REMOTE_CONFIG))
     signature = login_guard.device_signature(adb)
-    if session_status.enrollment_evidence(config, {}, signature)["collection_approval"] == "approved":
+    if (
+        session_status.enrollment_evidence(config, {}, signature)["collection_approval"]
+        == "approved"
+    ):
         print("Collection is already approved. Use session-check to inspect its status.")
         return False
     # A failed inspection must leave the existing approval and proof untouched.
@@ -255,6 +279,8 @@ def main():
             "iris-watch",
             "web-ui",
             "bootstrap",
+            "prepare",
+            "configure",
             "probe",
             "login-check",
             "confirm-secondary",
@@ -286,6 +312,12 @@ def main():
         watch()
     elif command == "probe":
         print(json.dumps(sample()))
+    elif command == "prepare":
+        from device.setup import prepare
+
+        print(json.dumps({"prepared": prepare()}))
+    elif command == "configure":
+        bootstrap(preserve=True)
     elif command == "bootstrap":
         bootstrap(args.rotate_epoch)
     elif command == "login-check":

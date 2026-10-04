@@ -1,0 +1,93 @@
+name: Release images
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate version
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: '[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]'
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - run: uv sync --frozen --python 3.12
+      - run: uv run pytest -q
+      - run: uv run ruff check .
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare stable Bridge signing identity
+        env:
+          KEYSTORE: ${{ secrets.BRIDGE_RELEASE_KEYSTORE_BASE64 }}
+          PASSWORD: ${{ secrets.BRIDGE_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$KEYSTORE" && test -n "$PASSWORD"
+          mkdir -p /tmp/bridge-signing
+          printf '%s' "$KEYSTORE" | base64 -d > /tmp/bridge-signing/bridge.jks
+          printf '%s' "$PASSWORD" > /tmp/bridge-signing/password
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        id: server
+        with:
+          context: .
+          file: docker/server.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository }}-server:${{ github.ref_name }}
+          build-args: VCS_REF=${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        id: device
+        with:
+          context: .
+          file: docker/device.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository }}-device:${{ github.ref_name }}
+          build-args: VCS_REF=${{ github.sha }}
+          secret-files: |
+            bridge_keystore=/tmp/bridge-signing/bridge.jks
+            bridge_key_password=/tmp/bridge-signing/password
+          provenance: mode=max
+          sbom: true
+      - name: Write digest-pinned manifest
+        env:
+          VERSION: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER: ${{ steps.server.outputs.digest }}
+          DEVICE: ${{ steps.device.outputs.digest }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = {"schema": 1, "version": os.environ["VERSION"], "images": {
+              kind: f'ghcr.io/{os.environ["REPOSITORY"]}-{kind}@{os.environ[kind.upper()]}'
+              for kind in ("server", "device")}}
+          Path("release.json").write_text(json.dumps(data, indent=2) + "\n")
+          PY
+      - uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-path: release.json
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" release.json --verify-tag --generate-notes
+      - name: Remove signing material
+        if: always()
+        run: rm -rf /tmp/bridge-signing

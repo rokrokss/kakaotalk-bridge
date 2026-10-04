@@ -246,6 +246,10 @@ def create_app(config=None, collector=None, state=None, verifier=None, sender=No
     def stylesheet():
         return FileResponse(Path(__file__).with_name("static") / "style.css")
 
+    @app.get("/assets/approval.js")
+    def approval_script():
+        return FileResponse(Path(__file__).with_name("static") / "approval.js")
+
     @app.get("/assets/logo.svg")
     def logo():
         return FileResponse(Path(__file__).parent.parent / "assets" / "logo.svg")
@@ -259,8 +263,8 @@ def create_app(config=None, collector=None, state=None, verifier=None, sender=No
 <p>Read your collected KakaoTalk messages in ChatGPT.</p>
 <p>When adding the MCP server, use the address below and select OAuth authentication.</p>
 <code class="endpoint">{escape(config.resource)}</code>
-<p>On the approval screen, use <code>secrets/mcp_link_key</code> from your server.</p>
-<p class="hint"><a href="https://github.com/rokrokss/kakaotalk-mcp-events/blob/main/docs/dot-plugin.md">Connection guide</a></p>""",
+<p>Confirm the connection request in your private admin console.</p>
+<p class="hint"><a href="https://github.com/rokrokss/kakaotalk-bridge/blob/main/docs/dot-plugin.md">Connection guide</a></p>""",
             )
         )
         response.headers["Content-Security-Policy"] = (
@@ -311,7 +315,7 @@ def create_app(config=None, collector=None, state=None, verifier=None, sender=No
         # Chromium also applies form-action to the POST's 303 redirect. Permit
         # only this approved client's origin, keeping the key POST same-origin.
         response.headers["Content-Security-Policy"] = (
-            f"default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self' {redirect}; "
+            f"default-src 'none'; style-src 'self'; img-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self' {redirect}; "
             "frame-ancestors 'none'; base-uri 'none'"
         )
         response.set_cookie(
@@ -324,6 +328,14 @@ def create_app(config=None, collector=None, state=None, verifier=None, sender=No
             path="/",
         )
         return response
+
+    @app.post("/authorize/status")
+    async def approval_status(request: Request):
+        return auth.approval_status(
+            parse_form(await request.body()),
+            request.cookies.get("__Host-kakao-link"),
+            request.headers.get("origin"),
+        )
 
     @app.post("/authorize")
     async def authorize_post(request: Request):

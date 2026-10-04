@@ -44,7 +44,7 @@ Messages and the KakaoTalk session are stored in server volumes. Retrieved conte
 
 ## Getting started
 
-1. **Set up your server.** Follow the [Linux installation](docs/install.md) or [Apple Silicon Mac guide](docs/local-redroid.md), including preparing your own official KakaoTalk APK.
+1. **Set up your server.** Use the [installer](docs/onboarding.md) on Mac or Linux, then run `./bridge admin` to open a one-time pairing link. The setup guide supports Aurora installation without a USB-connected phone.
 2. **Sign in through the admin console.** Follow the [first login procedure](docs/web-ui.md#first-login). Select the secondary-device option and manually confirm that your phone's existing session remains active before starting collection.
 3. **Connect your AI client.** Choose an [MCP connection method](#connect-your-ai) below.
 4. **Try your first query.** Send yourself the two sample messages above from your phone, then ask your connected agent to find messages mentioning `Friday`. Confirm that both messages appear before asking for a summary.
@@ -64,11 +64,13 @@ Messages and the KakaoTalk session are stored in server volumes. Retrieved conte
 
 | Environment | Requirements | Validation |
 | --- | --- | --- |
-| Apple Silicon Mac | Lima Ubuntu VM; Docker Desktop for builds | Secondary login and Iris collection verified end to end |
+| Apple Silicon Mac | Lima Ubuntu VM; Docker Engine inside the VM | Secondary login and Iris collection verified end to end |
 | Linux amd64 | Docker Engine, Compose v2, Android binder kernel support | Image builds and API startup verified; KakaoTalk/redroid flow unverified |
 | Other Linux arm64 hosts | Docker Engine, Compose v2, Android binder kernel support | Not verified outside the Apple Silicon Lima setup |
 
 The Linux guide suggests starting with 4 vCPUs and 8 GB RAM; these are not measured minimums. The supplied Lima VM uses 6 CPUs and 8 GiB RAM. See [Validation scope](docs/implementation.md) for the tested environment and remaining checks.
+
+The new installer and admin approval flow have separate isolated tests. A fresh installation through the CLI and the release publishing workflow still need end-to-end validation; use `--source` until prebuilt releases are available.
 
 ## Collection scope
 
@@ -80,7 +82,7 @@ The Linux guide suggests starting with 4 vCPUs and 8 GB RAM; these are not measu
 
 | Task | Documentation |
 | --- | --- |
-| Install and sign in | [Linux](docs/install.md), [Mac](docs/local-redroid.md), [Admin console](docs/web-ui.md) |
+| Install and sign in | [Installer and setup guide](docs/onboarding.md), [Linux](docs/install.md), [Mac](docs/local-redroid.md), [Admin console](docs/web-ui.md) |
 | Connect an AI client or use the API | [OAuth MCP](docs/dot-plugin.md), [HTTP API and stdio MCP](docs/api.md), [Events](docs/events.md) |
 | Check status, restart, and back up | [Operations](docs/operations.md), [Security](docs/security.md) |
 | Understand, change, and verify the implementation | [Architecture](docs/design.md), [Iris](docs/iris.md), [Development](docs/development.md), [Validation scope](docs/implementation.md) |

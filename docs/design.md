@@ -17,7 +17,8 @@ The stack runs one account and one redroid instance. Iris is the default collect
 | `api` | Authentication, deduplication, atomic message/cursor storage, queries, and retention cleanup |
 | `device-agent` | Check ADB state and registration information |
 | `gateway` | Private HTTPS and API/admin routing |
-| `admin` | Admin sessions, restricted screen/input commands, and login confirmation |
+| `admin` | Persistent owner sessions, setup guide, restricted screen/input commands, and login confirmation |
+| `dot-control` | Backend-only approval and revocation of OAuth connections |
 | `dot-plugin` | OAuth, remote MCP, and optional event delivery |
 | `bootstrap`, `mcp` | One-time installation and the client-launched stdio adapter, respectively |
 
@@ -25,7 +26,7 @@ Iris runs as an `app_process` inside redroid, not as a separate Compose service.
 
 ## Login and collection approval
 
-1. Bootstrap deploys the apps and registration data, then locks collection.
+1. On a fresh tablet, setup prepares Korean and Aurora. After KakaoTalk installation, component setup verifies its signature, deploys Bridge and Iris, creates registration data and leaves collection locked. Repeating setup preserves existing enrollment and approval; the legacy CLI bootstrap remains a separate maintenance action.
 2. `login-check` reads tablet settings and the selected “Use with other devices” option (“다른 기기와 함께 사용”) on the Korean KakaoTalk screen. It does not press the login button.
 3. The operator signs in and manually checks both the phone and tablet sessions.
 4. `confirm-secondary` checks that the precheck is less than 30 minutes old, the app version and device match, and both confirmations are present, then saves the approval record.

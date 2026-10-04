@@ -1,5 +1,7 @@
 # Operations and recovery
 
+For the new installer, browser pairing, Aurora setup and full encrypted snapshots, see [Set up a personal bridge](onboarding.md). The commands below describe the existing manual deployment path.
+
 [README](../README.md) · [Security](security.md)
 
 The commands below run on a Linux host. On a Mac, the containers run inside Lima, so use `./scripts/lima-compose.sh` instead of `docker compose`.
@@ -21,7 +23,7 @@ docker compose logs --tail 30 iris-collector
 | Collection stops after an app update | A changed versionCode requires new login confirmation |
 | Decryption or JSON error | Iris logs; collection stops rather than skipping invalid rows |
 | Database replaced or IDs move backwards | Android restore or database recreation; investigate before registering a new epoch |
-| ChatGPT connection fails | dot-plugin status, public HTTPS, and the OAuth connection key. See [Connection setup](dot-plugin.md) |
+| ChatGPT connection fails | dot-plugin and dot-control status, public HTTPS, and the matching approval code in admin Connections. See [Connection setup](dot-plugin.md) |
 
 By default, Iris reads up to 50 rows every 3 seconds and continues fetching while a backlog remains. Delivery latency depends on the KakaoTalk and redroid connection state.
 
@@ -38,7 +40,7 @@ Automatic restarts are disabled for redroid to avoid repeated failures. Start it
 
 ## Storage locations
 
-KakaoTalk Bridge retains existing deployment identifiers for compatibility: `kakaotalk-collector` in Compose project and image names, the Android package `dev.kakaocollector.bridge`, and the Lima path `/srv/kakaotalk-collector`. Keep `COMPOSE_PROJECT_NAME` in your existing `.env` when applying the rename so that the same login and message volumes are used.
+KakaoTalk Bridge retains existing deployment identifiers for compatibility: `kakaotalk-collector` in Compose project and local image names, the Android package `dev.kakaocollector.bridge`, and the manual Lima path `/srv/kakaotalk-collector`. The new installer's VM path is `/srv/kakaotalk-bridge`; release images use `ghcr.io/rokrokss/kakaotalk-bridge-*`. Keep `COMPOSE_PROJECT_NAME` in your existing `.env` when applying the rename so that the same login and message volumes are used.
 
 | Volume | Contents |
 | --- | --- |
@@ -46,6 +48,7 @@ KakaoTalk Bridge retains existing deployment identifiers for compatibility: `kak
 | `collector-data` | Collected messages and server cursors |
 | `device-state` | Registration epoch and ADB keys |
 | `iris-state` | Iris collector ADB keys |
+| `admin-state` | Encrypted owner password record and revocable browser sessions |
 | `dot-state` | OAuth, subscriptions, acknowledged cursors, and webhook queue |
 
 The server prunes observations older than 30 days every hour. Adjust this period with `RETENTION_DAYS`. Retransmission deduplication also applies within this retention window. The Android database, legacy notification quarantine, and backup files are excluded from this cleanup. Container logs are limited to three 10 MB files each.
@@ -85,7 +88,7 @@ docker compose --profile setup run --rm bootstrap bootstrap --rotate-epoch
 
 This requires secondary-login confirmation again. Iris rereads remaining database rows under the new epoch, which may duplicate previously stored records.
 
-`dot-state` is not included in the collection database backup. Stop dot-plugin and copy its volume, or use SQLite's online backup API. Store `secrets/mcp_storage_key` separately as well. Copying only the database file while it is running may omit data in the WAL.
+`admin-state` and `dot-state` are not included in the collection database backup. Stop admin before copying `admin-state`; stop both dot-plugin and dot-control before copying `dot-state`, or use SQLite's online backup API. Preserve the matching `secrets/admin_token` and `secrets/mcp_storage_key`. Copying only a database file while it is running may omit data in the WAL. Prefer the [full snapshot command](onboarding.md#maintain-and-recover) for installations managed by `./bridge`.
 
 ## Renew certificates
 

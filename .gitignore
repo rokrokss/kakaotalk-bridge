@@ -24,3 +24,6 @@ deploy/*.local.plist
 android/.gradle/
 android/**/build/
 .DS_Store
+
+.bridge/
+*.kcs

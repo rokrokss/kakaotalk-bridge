@@ -200,6 +200,9 @@ class OAuth:
                     for k in ("client_id", "redirect_uri", "code_challenge", "state", "resource")
                 },
                 "scope": scope,
+                "client_name": client["client_name"],
+                "display_code": secrets.token_hex(4).upper(),
+                "status": "pending",
                 "cookie": digest(cookie),
                 "expires": time.time() + 600,
             },
@@ -207,9 +210,13 @@ class OAuth:
         esc = html.escape
         permissions = []
         if "kakao.read" in scope.split():
-            permissions.append("<li>Read and search stored messages and check collection status</li>")
+            permissions.append(
+                "<li>Read and search stored messages and check collection status</li>"
+            )
         if "kakao.events" in scope.split():
-            permissions.append("<li>Subscribe to requested new-message events and record processing progress</li>")
+            permissions.append(
+                "<li>Subscribe to requested new-message events and record processing progress</li>"
+            )
         page = render_page(
             "Approve connection",
             f'''<h1>Approve connection</h1>
@@ -225,6 +232,25 @@ class OAuth:
 </form>
 <p class="hint">Connecting does not create event subscriptions or automated tasks.</p>''',
         )
+        if self.config.approval_mode == "admin":
+            record = self.state.get("approval", digest(ticket))
+            page = render_page(
+                "Connect ChatGPT",
+                f'''<h1>Confirm in your admin console</h1>
+<p>Open the private admin console, then choose <strong>Connections</strong>.</p>
+<p>Match this code and the client before approving:</p>
+<code class="endpoint">{record["display_code"]}</code>
+<p><strong>{esc(client["client_name"])}</strong> · {esc(query["client_id"])}</p>
+<p>Callback: {esc(redirect_origin(query["redirect_uri"]))}</p>
+<ul>{"".join(permissions)}</ul>
+<p>Messages retrieved by this client are shared with it. Device controls are not included.</p>
+<form id="approval" method="post" action="/authorize">
+<input type="hidden" name="ticket" value="{esc(ticket)}">
+<button type="submit">Continue after approval</button>
+</form><p id="status" role="status">Waiting for approval. Expires in 10 minutes.</p>
+<p class="hint">Connecting does not create event subscriptions or automated tasks.</p>
+<script src="/assets/approval.js" defer></script>''',
+            )
         return page, cookie, redirect_origin(query["redirect_uri"])
 
     def approve(self, form, cookie, origin):
@@ -239,18 +265,36 @@ class OAuth:
             or not hmac.compare_digest(record["cookie"], digest(cookie or ""))
         ):
             raise AuthError("invalid_approval", 403)
-        if not hmac.compare_digest(
+        if self.config.approval_mode == "key" and not hmac.compare_digest(
             form.get("link_key", "").encode(), self.config.link_key.encode()
         ):
             raise AuthError("invalid_link_key", 401)
-        record = self.state.take("approval", digest(ticket))
-        if not record:
-            raise AuthError("invalid_approval", 403)
+        with self.state.transaction() as db:
+            db.execute("BEGIN IMMEDIATE")
+            record = self.state.get("approval", digest(ticket), db=db)
+            if not record or record["expires"] <= time.time():
+                raise AuthError("invalid_approval", 403)
+            if self.config.approval_mode == "admin" and record.get("status") != "approved":
+                raise AuthError("approval_required", 403)
+            self.state.delete("approval", digest(ticket), db=db)
         code = secrets.token_urlsafe(32)
         grant = {**record["query"], "scope": record["scope"], "expires": time.time() + 120}
         self.state.put("code", digest(code), grant)
         query = urlencode({"code": code, "state": grant["state"], "iss": self.config.public_url})
         return grant["redirect_uri"] + ("&" if "?" in grant["redirect_uri"] else "?") + query
+
+    def approval_status(self, form, cookie, origin):
+        self.rate("approval_status", 180)
+        if origin != self.config.public_url:
+            raise AuthError("invalid_origin", 403)
+        record = self.state.get("approval", digest(form.get("ticket", "")))
+        if (
+            not record
+            or record["expires"] <= time.time()
+            or not hmac.compare_digest(record["cookie"], digest(cookie or ""))
+        ):
+            raise AuthError("invalid_approval", 403)
+        return {"status": record.get("status", "pending")}
 
     def authenticate_client(self, form, authorization):
         client_id, secret, method = form.get("client_id"), form.get("client_secret"), "none"

@@ -20,18 +20,34 @@
     <section id="login-panel" class="login-panel" aria-labelledby="login-title">
       <h1 id="login-title">Open admin console</h1>
       <p>View the tablet screen and message collection status.</p>
-      <form id="login-form">
-        <label for="admin-token">Admin key</label>
-        <input id="admin-token" type="password" autocomplete="off" required aria-describedby="key-help">
-        <p id="key-help" class="hint">Use the key stored in <code>secrets/admin_token</code> on the server.</p>
-        <button type="submit" class="primary wide">Open</button>
+      <p id="pair-help">First visit? Run <code>./bridge admin</code> on the server to open a one-time pairing link.</p>
+      <form id="owner-form">
+        <label id="password-label" for="owner-password">Admin password</label>
+        <input id="owner-password" type="password" autocomplete="current-password" maxlength="256" required>
+        <label class="check"><input id="remember" type="checkbox">Keep me signed in for 7 days on this device</label>
+        <button id="owner-submit" type="submit" class="primary wide">Sign in</button>
       </form>
+      <details class="recovery"><summary>Use a recovery key</summary>
+        <form id="login-form">
+          <label for="admin-token">Admin recovery key</label>
+          <input id="admin-token" type="password" autocomplete="off" required>
+          <p class="hint">Stored in <code>secrets/admin_token</code>. Using it signs out other admin browsers.</p>
+          <button type="submit" class="wide">Recover access</button>
+        </form>
+      </details>
     </section>
     <section id="console" hidden aria-labelledby="console-title">
       <div class="page-heading">
         <h1 id="console-title">Tablet</h1>
         <span id="collector-status" class="collector-state" role="status">Checking collection status</span>
       </div>
+      <section class="setup-guide" aria-labelledby="guide-title">
+        <div class="section-heading"><h2 id="guide-title">Set up your bridge</h2><button data-action="setup-check" class="quiet">Refresh setup</button></div>
+        <ol id="setup-progress" class="setup-progress" aria-label="Setup progress"></ol>
+        <p id="setup-next">Checking the server and tablet…</p>
+        <button id="setup-next-button" class="primary" hidden>Continue</button>
+        <p class="hint">The phone session is confirmed by you. Tablet settings alone do not guarantee it stays signed in.</p>
+      </section>
       <div class="workspace">
         <section class="device-panel" aria-label="Remote tablet screen">
           <div class="screen-toolbar">
@@ -124,9 +140,35 @@
           <details class="settings-section">
             <summary>Installation</summary>
             <div class="section-body">
-              <p>Install the KakaoTalk APK from <code>inputs/kakao/</code> on the server and the collection components.</p>
-              <p class="hint">A working setup does not need to be reinstalled.</p>
-              <button id="install" class="wide">Prepare installation…</button>
+              <p>Prepare a Korean tablet, then install KakaoTalk through Aurora using anonymous sign-in.</p>
+              <button data-action="prepare" class="wide">Prepare tablet and Aurora</button>
+              <button data-action="open-store" class="wide">Open Aurora</button>
+              <p class="hint">In Aurora, search for KakaoTalk by Kakao Corp. Allow app installation when Android asks. Keep “Use with other devices” selected before signing in.</p>
+              <button id="install" class="wide">Set up collection components…</button>
+              <details><summary>Install from APK files instead</summary><p>Run <code>./bridge import-apks /path/to/apk-folder</code> on the server, then set up collection components. Include the base APK and all matching splits. Publisher signatures are verified.</p></details>
+              <p class="hint">Existing enrollment and collection approval are preserved. These actions do not sign in for you.</p>
+            </div>
+          </details>
+          <details class="settings-section" id="connections-panel">
+            <summary>Connections <span id="pending-count"></span></summary>
+            <div class="section-body">
+              <p>Add the MCP address below in ChatGPT and choose OAuth. Approve only the request whose code matches that browser.</p>
+              <code id="mcp-address" class="endpoint">Start the dot profile to connect.</code>
+              <button id="refresh-connections" class="quiet">Refresh connections</button>
+              <div id="connections-list" aria-live="polite"></div>
+              <p class="hint">Connecting does not subscribe to events automatically.</p>
+            </div>
+          </details>
+          <details class="settings-section" id="browsers-panel">
+            <summary>Admin browsers</summary><div id="browsers-list" class="section-body"></div>
+          </details>
+          <details class="settings-section">
+            <summary>Collection test and maintenance</summary>
+            <div class="section-body">
+              <button id="test-collection" class="wide">Start a collection test</button>
+              <p id="test-result" role="status">Start the test, then send yourself a message from your phone.</p>
+              <p>Server commands:</p><code>./bridge doctor<br>./bridge backup<br>./bridge update --manifest release.json</code>
+              <p class="hint">Backups include Android login data and keys. Store them privately. Diagnostics omit messages and credentials.</p>
             </div>
           </details>
           <div id="job" class="job" role="status" hidden></div>
@@ -137,11 +179,11 @@
   </main>
   <dialog id="install-dialog" aria-labelledby="install-title" aria-describedby="install-description">
     <form method="dialog">
-      <h2 id="install-title">Install components?</h2>
-      <p id="install-description">This installs the components and resets existing collection approval. Confirm both login sessions again to resume collection for an existing account.</p>
+      <h2 id="install-title">Set up collection components?</h2>
+      <p id="install-description">Install the registration app, keyboard and Iris after KakaoTalk is installed. An already enrolled tablet is left unchanged.</p>
       <div class="dialog-actions">
         <button value="cancel" autofocus>Cancel</button>
-        <button value="install" class="primary">Install</button>
+        <button value="install" class="primary">Set up</button>
       </div>
     </form>
   </dialog>

@@ -37,15 +37,17 @@ RUN python -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir --requi
 
 FROM python:3.12-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3
 ARG VCS_REF=development
-LABEL org.opencontainers.image.source="https://github.com/rokrokss/kakaotalk-mcp-events" \
+LABEL org.opencontainers.image.source="https://github.com/rokrokss/kakaotalk-bridge" \
       org.opencontainers.image.revision="${VCS_REF}"
-RUN apt-get update && apt-get install -y --no-install-recommends adb ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends adb ca-certificates openjdk-17-jre-headless && rm -rf /var/lib/apt/lists/*
 COPY --from=web-dependencies /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HOME=/state
 WORKDIR /app
 COPY device/ device/
 COPY server/ server/
 COPY webui/ webui/
+COPY dot_plugin/ dot_plugin/
+COPY --from=android-build /opt/android-sdk/build-tools/35.0.0/lib/apksigner.jar /opt/apksigner.jar
 COPY assets/logo.svg assets/logo.svg
 COPY --from=bridge-build /src/bridge/build/outputs/apk/release/bridge-release.apk /opt/bridge.apk
 COPY --from=iris-build /iris/app/build/outputs/apk/release/app-release-unsigned.apk /opt/iris.apk

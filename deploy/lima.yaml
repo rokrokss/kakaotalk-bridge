@@ -26,7 +26,7 @@ provision:
       set -euo pipefail
       export DEBIAN_FRONTEND=noninteractive
       apt-get update
-      apt-get install -y docker.io docker-compose-v2 "linux-modules-extra-$(uname -r)"
+      apt-get install -y docker.io docker-compose-v2 openssl qemu-user-static binfmt-support "linux-modules-extra-$(uname -r)"
       modprobe binder_linux devices=binder,hwbinder,vndbinder
       printf '%s\n' binder_linux > /etc/modules-load.d/kakaocollector.conf
       printf '%s\n' 'options binder_linux devices=binder,hwbinder,vndbinder' > /etc/modprobe.d/kakaocollector.conf

@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Host entry point; no Python packages are required outside Docker."""
+from ops.cli import main
+
+if __name__ == "__main__":
+    main()

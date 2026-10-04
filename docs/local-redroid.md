@@ -1,5 +1,7 @@
 # Running on an Apple Silicon Mac
 
+For the new installer, browser pairing, Aurora setup and full encrypted snapshots, see [Set up a personal bridge](onboarding.md). The commands below describe the existing manual deployment path.
+
 [README](../README.md) · [Admin console](web-ui.md) · [Connect ChatGPT](dot-plugin.md)
 
 Docker containers run inside a Lima Ubuntu 24.04 arm64 VM. Docker Desktop is used for image builds. The supplied configuration allocates 6 CPUs, 8 GiB RAM, and a 40 GiB virtual disk. It does not mount the Mac home directory into the VM.
@@ -50,7 +52,13 @@ docker save kakaotalk-collector/device:0.1.0 kakaotalk-collector/server:0.1.0 |
 ./scripts/lima-compose.sh exec -T admin python -m device.cli probe
 ```
 
-Follow the [login procedure](web-ui.md#first-login) at `https://localhost:18443/admin/`. Use the certificate and admin key from the `secrets/` directory copied to the VM earlier.
+Trust the verified public certificate `secrets/tls_cert.pem` copied to the VM earlier. For a one-time browser pairing code on this manual deployment, run:
+
+```bash
+./scripts/lima-compose.sh exec -T admin python -m webui.auth pair
+```
+
+Open `https://localhost:18443/admin/#pair=<code>` with the printed code, set an admin password on the first visit, and follow the [login procedure](web-ui.md#first-login). The code expires after ten minutes; do not share it. The admin recovery key remains an alternative. `./bridge admin` on the Mac targets the new installer's managed VM, so use the command above for `kakaotalk-test`.
 
 `lima-compose.sh` runs Compose in `/srv/kakaotalk-collector` inside the VM. Running plain `docker ps` on the Mac shows Docker Desktop's state instead.
 
