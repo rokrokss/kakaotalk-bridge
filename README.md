@@ -1,4 +1,4 @@
-<h1><img src="docs/assets/wordmark.svg" width="450" height="96" alt="KakaoTalk Bridge"></h1>
+<h1><img src="docs/assets/wordmark.svg?v=6b1a99c" width="450" height="96" alt="KakaoTalk Bridge"></h1>
 
 내 카카오톡 메시지를 AI 에이전트에 연결하세요.
 

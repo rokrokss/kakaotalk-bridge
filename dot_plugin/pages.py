@@ -10,11 +10,11 @@ def page(title, body):
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{escape(title)} · KakaoTalk Bridge</title>
-  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+  <link rel="icon" type="image/svg+xml" href="/assets/logo.svg?v=cc464e4">
   <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
-  <header><img src="/assets/logo.svg" width="28" height="28" alt="">KakaoTalk Bridge</header>
+  <header><img src="/assets/logo.svg?v=cc464e4" width="28" height="28" alt="">KakaoTalk Bridge</header>
   <main>{body}</main>
 </body>
 </html>"""
