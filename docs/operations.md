@@ -1,10 +1,10 @@
-# 운영과 복구
+# Operations and recovery
 
-[README](../README.md) · [보안](security.md)
+[README](../README.md) · [Security](security.md)
 
-아래는 Linux 호스트 명령입니다. Mac의 실제 컨테이너는 Lima 안에 있으므로 `docker compose` 대신 `./scripts/lima-compose.sh`를 사용합니다.
+The commands below run on a Linux host. On a Mac, the containers run inside Lima, so use `./scripts/lima-compose.sh` instead of `docker compose`.
 
-## 상태 확인
+## Check status
 
 ```bash
 docker compose --profile dot ps
@@ -12,53 +12,53 @@ docker compose --profile dot ps
 docker compose logs --tail 30 iris-collector
 ```
 
-`collecting_partial`은 최근 Iris DB 접근과 보조 로그인 승인이 유효하다는 뜻입니다. 전체 대화의 누락 여부나 핸드폰 세션을 자동으로 확인한 결과는 아닙니다.
+`collecting_partial` means recent Iris database access and secondary-login approval are valid. It does not mean the system has checked for missing chat history or verified the phone session automatically.
 
-| 증상 | 확인할 곳 |
+| Symptom | What to check |
 | --- | --- |
-| Android 화면 연결 안 됨 | redroid 부팅 상태, 호스트 binder 장치 |
-| 수집 승인 잠김 | 관리 화면의 로그인 검사와 양쪽 확인 |
-| 앱 업데이트 후 수집 멈춤 | versionCode 변경. 새 로그인 확인 필요 |
-| 복호화·JSON 오류 | Iris 로그. 잘못된 행을 건너뛰지 않고 중단함 |
-| DB 교체·ID 역행 | Android 복원 또는 DB 재생성 여부. 원인 확인 후 새 epoch 등록 |
-| ChatGPT 연결 실패 | dot-plugin 상태, 공개 HTTPS, OAuth 연결 키. [연결 안내](dot-plugin.md) |
+| Android screen is unavailable | redroid boot status and host binder devices |
+| Collection approval is locked | Login precheck and confirmation of both sessions in the admin console |
+| Collection stops after an app update | A changed versionCode requires new login confirmation |
+| Decryption or JSON error | Iris logs; collection stops rather than skipping invalid rows |
+| Database replaced or IDs move backwards | Android restore or database recreation; investigate before registering a new epoch |
+| ChatGPT connection fails | dot-plugin status, public HTTPS, and the OAuth connection key. See [Connection setup](dot-plugin.md) |
 
-Iris는 기본 3초마다 최대 50행씩 읽고, 밀린 행이 있으면 계속 조회합니다. 최근 수신 지연은 카카오톡과 redroid의 연결 상태에 따라 달라집니다.
+By default, Iris reads up to 50 rows every 3 seconds and continues fetching while a backlog remains. Delivery latency depends on the KakaoTalk and redroid connection state.
 
-## 종료와 재시작
+## Stop and restart
 
 ```bash
 docker compose down
 docker compose up -d --no-build
 ```
 
-`down`은 볼륨을 보존합니다. **`down -v`는 로그인 상태와 DB를 삭제합니다.** 일상적인 종료에 사용하지 마세요.
+`down` preserves volumes. **`down -v` deletes the login state and database.** Do not use it for routine shutdown.
 
-redroid는 반복 장애를 피하려고 자동 재시작을 끈 상태입니다. 필요하면 `docker compose start redroid`로 시작합니다. 나머지 상시 서비스는 `unless-stopped` 정책을 사용합니다. Linux에서 자동 복구가 필요하면 `deploy/kakaocollector-supervisor.service.example`의 경로를 맞춰 설치합니다. supervisor는 redroid 재시작을 30분 안에 3회로 제한합니다.
+Automatic restarts are disabled for redroid to avoid repeated failures. Start it with `docker compose start redroid` when needed. Other long-running services use `unless-stopped`. For automatic recovery on Linux, adjust the paths in `deploy/kakaocollector-supervisor.service.example` and install it. The supervisor limits redroid restarts to three within 30 minutes.
 
-## 저장 위치
+## Storage locations
 
-KakaoTalk Bridge의 배포 식별자는 기존 설치와의 호환성을 위해 유지합니다. Compose 프로젝트·이미지의 `kakaotalk-collector`, Android 패키지 `dev.kakaocollector.bridge`, Lima 경로 `/srv/kakaotalk-collector`가 이에 해당합니다. 이름 변경을 적용할 때도 기존 `.env`의 `COMPOSE_PROJECT_NAME`을 유지해야 같은 로그인 상태와 메시지 볼륨을 사용합니다.
+KakaoTalk Bridge retains existing deployment identifiers for compatibility: `kakaotalk-collector` in Compose project and image names, the Android package `dev.kakaocollector.bridge`, and the Lima path `/srv/kakaotalk-collector`. Keep `COMPOSE_PROJECT_NAME` in your existing `.env` when applying the rename so that the same login and message volumes are used.
 
-| 볼륨 | 내용 |
+| Volume | Contents |
 | --- | --- |
-| `android-data` | 카카오톡 세션·로컬 DB, 등록 앱 데이터 |
-| `collector-data` | 수집 메시지, 서버 커서 |
-| `device-state` | 등록 epoch, ADB 키 |
-| `iris-state` | Iris 수집기의 ADB 키 |
-| `dot-state` | OAuth, 구독, 처리 완료 커서, 웹훅 대기열 |
+| `android-data` | KakaoTalk session and local database; registration app data |
+| `collector-data` | Collected messages and server cursors |
+| `device-state` | Registration epoch and ADB keys |
+| `iris-state` | Iris collector ADB keys |
+| `dot-state` | OAuth, subscriptions, acknowledged cursors, and webhook queue |
 
-서버는 매시간 30일 초과 관찰 기록을 정리합니다. 기간은 `RETENTION_DAYS`로 바꿉니다. 재전송 중복 제거도 이 보관 범위에 적용됩니다. Android 자체 DB, 이전 알림 quarantine, 백업 파일은 이 정리 대상이 아닙니다. 컨테이너 로그는 각 10MB × 3개로 제한합니다.
+The server prunes observations older than 30 days every hour. Adjust this period with `RETENTION_DAYS`. Retransmission deduplication also applies within this retention window. The Android database, legacy notification quarantine, and backup files are excluded from this cleanup. Container logs are limited to three 10 MB files each.
 
-## 수집 DB 백업
+## Back up the collection database
 
 ```bash
 ./scripts/backup.sh
 ```
 
-SQLite 온라인 backup API로 일관된 사본을 만들고 AES-256-GCM으로 암호화합니다. `secrets/backup_key`는 백업 파일과 별도로 보관하세요. 키를 잃으면 복원할 수 없습니다. 백업 자동 삭제와 원격 복제는 직접 구성해야 합니다.
+The script creates a consistent copy using SQLite's online backup API and encrypts it with AES-256-GCM. Store `secrets/backup_key` separately from the backup files. Losing the key makes recovery impossible. Configure automatic backup deletion and remote replication yourself.
 
-복원할 때는 API를 멈춥니다.
+Stop the API before restoring:
 
 ```bash
 docker compose stop api
@@ -67,26 +67,26 @@ docker compose start api
 ./scripts/status.sh
 ```
 
-복원은 인증 태그·DB 무결성·schema를 검사합니다. `cursor_epoch`가 바뀌므로 API 소비자는 기존 페이지 커서를 초기화해야 합니다. Iris는 복원된 서버 커서부터 다시 읽습니다.
+Restore checks the authentication tag, database integrity, and schema. Because `cursor_epoch` changes, API consumers must reset their pagination cursors. Iris resumes from the restored server cursor.
 
-백업 스크립트는 실행한 호스트의 Docker Engine을 사용합니다. Lima 배포에서는 VM의 `/srv/kakaotalk-collector` 안에서 실행합니다.
+The backup script uses the Docker Engine on the host where it runs. For Lima deployments, run it inside the VM at `/srv/kakaotalk-collector`:
 
 ```bash
 limactl shell --workdir=/srv/kakaotalk-collector kakaotalk-test sudo ./scripts/backup.sh
 ```
 
-## Android와 MCP 상태 백업
+## Back up Android and MCP state
 
-Android는 redroid를 정지한 뒤 `android-data`와 `device-state`를 함께 암호화된 호스트 스냅샷으로 보관합니다. 원본과 복원본을 같은 계정으로 동시에 켜지 않습니다. 복원 후 새 등록 epoch를 만듭니다.
+Stop redroid, then save `android-data` and `device-state` together in an encrypted host snapshot. Do not run the original and restored instances simultaneously with the same account. Create a new registration epoch after restoring:
 
 ```bash
 docker compose --profile setup run --rm bootstrap bootstrap --rotate-epoch
 ```
 
-이 작업 후에는 보조 로그인 재확인이 필요합니다. Iris가 새 epoch에서 남아 있는 DB 행을 다시 읽으므로 이전 기록과 중복될 수 있습니다.
+This requires secondary-login confirmation again. Iris rereads remaining database rows under the new epoch, which may duplicate previously stored records.
 
-`dot-state`는 수집 DB 백업에 포함되지 않습니다. dot-plugin을 정지하고 볼륨을 복사하거나 SQLite 온라인 백업을 사용합니다. `secrets/mcp_storage_key`도 별도로 보관하세요. 실행 중인 DB 파일 하나만 복사하면 WAL의 데이터가 빠질 수 있습니다.
+`dot-state` is not included in the collection database backup. Stop dot-plugin and copy its volume, or use SQLite's online backup API. Store `secrets/mcp_storage_key` separately as well. Copying only the database file while it is running may omit data in the WAL.
 
-## 인증서 갱신
+## Renew certificates
 
-기본 TLS 인증서는 365일입니다. 갱신할 때 같은 gateway IP를 SAN에 포함하고 gateway를 재시작합니다. 등록 앱의 신뢰 인증서도 bootstrap으로 갱신해야 하므로 로그인 재확인 시간을 잡아 진행하세요. Bridge 서명 키를 바꾸면 앱 업데이트가 실패합니다.
+The default TLS certificate lasts 365 days. Include the same gateway IP in the SAN when renewing it, then restart the gateway. The registration app's trusted certificate must also be updated through bootstrap, so schedule time to reconfirm the login sessions. Changing the Bridge signing key prevents app updates.

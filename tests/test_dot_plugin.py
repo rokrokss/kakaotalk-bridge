@@ -262,8 +262,8 @@ def test_approval_displays_requested_permissions_and_escapes_client_name(plugin,
     assert response.status_code == 200
     assert "<img src=x" not in response.text
     assert "<strong>&lt;img src=x onerror=&quot;alert(1)&quot;&gt;</strong>" in response.text
-    assert ("<li>저장된 메시지" in response.text) == ("kakao.read" in scope.split())
-    assert ("<li>요청한 새 메시지" in response.text) == ("kakao.events" in scope.split())
+    assert ("<li>Read and search stored messages" in response.text) == ("kakao.read" in scope.split())
+    assert ("<li>Subscribe to requested new-message events" in response.text) == ("kakao.events" in scope.split())
     policy = response.headers["content-security-policy"]
     assert "default-src 'none'; style-src 'self';" in policy
     assert "img-src 'self';" in policy

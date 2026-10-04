@@ -254,13 +254,13 @@ def create_app(config=None, collector=None, state=None, verifier=None, sender=No
     def index():
         response = HTMLResponse(
             page(
-                "ChatGPT 연결",
-                f"""<h1>ChatGPT 연결</h1>
-<p>수집한 카카오톡 메시지를 ChatGPT에서 조회합니다.</p>
-<p>MCP 서버를 추가할 때 아래 주소와 OAuth 인증을 선택하세요.</p>
+                "Connect ChatGPT",
+                f"""<h1>Connect ChatGPT</h1>
+<p>Read your collected KakaoTalk messages in ChatGPT.</p>
+<p>When adding the MCP server, use the address below and select OAuth authentication.</p>
 <code class="endpoint">{escape(config.resource)}</code>
-<p>승인 화면에서는 서버의 <code>secrets/mcp_link_key</code>를 사용합니다.</p>
-<p class="hint"><a href="https://github.com/rokrokss/kakaotalk-mcp-events/blob/main/docs/dot-plugin.md">연결 안내</a></p>""",
+<p>On the approval screen, use <code>secrets/mcp_link_key</code> from your server.</p>
+<p class="hint"><a href="https://github.com/rokrokss/kakaotalk-mcp-events/blob/main/docs/dot-plugin.md">Connection guide</a></p>""",
             )
         )
         response.headers["Content-Security-Policy"] = (

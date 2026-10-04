@@ -1,132 +1,132 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KakaoTalk Bridge · 관리</title>
+  <title>KakaoTalk Bridge · Admin</title>
   <link rel="icon" type="image/svg+xml" href="/admin/logo.svg?v=cc464e4">
   <link rel="stylesheet" href="/admin/style.css">
   <script src="/admin/app.js" defer></script>
 </head>
 <body>
   <header class="app-header">
-    <a class="brand" href="/admin/"><img src="/admin/logo.svg?v=cc464e4" width="28" height="28" alt="">KakaoTalk Bridge <span>관리</span></a>
+    <a class="brand" href="/admin/"><img src="/admin/logo.svg?v=cc464e4" width="28" height="28" alt="">KakaoTalk Bridge <span>Admin</span></a>
     <div class="header-actions">
-      <span id="connection">인증 필요</span>
-      <button id="logout" class="quiet" hidden>잠금</button>
+      <span id="connection">Authentication required</span>
+      <button id="logout" class="quiet" hidden>Lock</button>
     </div>
   </header>
   <main>
     <section id="login-panel" class="login-panel" aria-labelledby="login-title">
-      <h1 id="login-title">관리 화면 열기</h1>
-      <p>태블릿 화면과 메시지 수집 상태를 확인합니다.</p>
+      <h1 id="login-title">Open admin console</h1>
+      <p>View the tablet screen and message collection status.</p>
       <form id="login-form">
-        <label for="admin-token">관리자 키</label>
+        <label for="admin-token">Admin key</label>
         <input id="admin-token" type="password" autocomplete="off" required aria-describedby="key-help">
-        <p id="key-help" class="hint">서버의 <code>secrets/admin_token</code>에 저장된 키입니다.</p>
-        <button type="submit" class="primary wide">열기</button>
+        <p id="key-help" class="hint">Use the key stored in <code>secrets/admin_token</code> on the server.</p>
+        <button type="submit" class="primary wide">Open</button>
       </form>
     </section>
     <section id="console" hidden aria-labelledby="console-title">
       <div class="page-heading">
-        <h1 id="console-title">태블릿</h1>
-        <span id="collector-status" class="collector-state" role="status">수집 상태 확인 중</span>
+        <h1 id="console-title">Tablet</h1>
+        <span id="collector-status" class="collector-state" role="status">Checking collection status</span>
       </div>
       <div class="workspace">
-        <section class="device-panel" aria-label="태블릿 원격 화면">
+        <section class="device-panel" aria-label="Remote tablet screen">
           <div class="screen-toolbar">
-            <span id="screen-label">화면 연결 중</span>
+            <span id="screen-label">Connecting to screen</span>
             <div class="toolbar-actions">
-              <button id="refresh" class="quiet">새로고침</button>
-              <button id="pause" class="quiet" aria-pressed="false">일시정지</button>
+              <button id="refresh" class="quiet">Refresh</button>
+              <button id="pause" class="quiet" aria-pressed="false">Pause</button>
             </div>
           </div>
           <div class="screen-stage">
             <div id="screen-placeholder">
-              <h2>화면을 기다리고 있습니다</h2>
-              <p>연결되지 않으면 서버의 redroid 실행 상태를 확인하세요.</p>
+              <h2>Waiting for the screen</h2>
+              <p>If the screen does not connect, check that redroid is running on the server.</p>
             </div>
-            <img id="screen" hidden draggable="false" alt="클릭하거나 드래그해 조작하는 태블릿 화면">
+            <img id="screen" hidden draggable="false" alt="Tablet screen controlled by clicking or dragging">
           </div>
-          <nav class="device-keys" aria-label="Android 조작">
-            <button data-key="back">뒤로</button>
-            <button data-key="home">홈</button>
-            <button data-key="wake">화면 켜기</button>
-            <button data-action="open-kakao">카카오톡 열기</button>
+          <nav class="device-keys" aria-label="Android controls">
+            <button data-key="back">Back</button>
+            <button data-key="home">Home</button>
+            <button data-key="wake">Wake</button>
+            <button data-action="open-kakao">Open KakaoTalk</button>
           </nav>
-          <p class="screen-help">클릭으로 선택, 드래그로 스크롤합니다. 채팅방을 열면 읽음 상태가 바뀔 수 있습니다.</p>
+          <p class="screen-help">Click to select and drag to scroll. Opening a chat may change its read status.</p>
         </section>
-        <aside aria-label="상태와 설정">
+        <aside aria-label="Status and settings">
           <section class="status-section" aria-labelledby="status-title">
             <div class="section-heading">
-              <h2 id="status-title">로그인 상태</h2>
-              <button data-action="session-check" class="quiet">상태 확인</button>
+              <h2 id="status-title">Login status</h2>
+              <button data-action="session-check" class="quiet">Check status</button>
             </div>
-            <p id="session-inspected" class="hint">‘상태 확인’을 눌러 기기를 검사하세요.</p>
+            <p id="session-inspected" class="hint">Select “Check status” to inspect the device.</p>
             <dl class="status-list">
-              <div><dt>태블릿</dt><dd><span id="tablet-status">확인 전</span><small id="tablet-detail"></small></dd></div>
-              <div><dt>핸드폰</dt><dd><span id="phone-status">확인 전</span><small id="phone-detail">핸드폰 상태는 직접 확인한 기록입니다.</small></dd></div>
-              <div><dt>수집 승인</dt><dd><span id="approval-status">확인 전</span><small id="approval-detail"></small></dd></div>
+              <div><dt>Tablet</dt><dd><span id="tablet-status">Not checked</span><small id="tablet-detail"></small></dd></div>
+              <div><dt>Phone</dt><dd><span id="phone-status">Not checked</span><small id="phone-detail">Phone status reflects your manual confirmation.</small></dd></div>
+              <div><dt>Collection approval</dt><dd><span id="approval-status">Not checked</span><small id="approval-detail"></small></dd></div>
             </dl>
           </section>
           <details class="settings-section" open>
-            <summary>텍스트 입력</summary>
+            <summary>Text input</summary>
             <div class="section-body">
-              <p>태블릿의 입력칸을 선택한 뒤 보내세요.</p>
+              <p>Select an input field on the tablet before sending text.</p>
               <form id="text-form">
-                <label class="sr-only" for="device-text">태블릿에 입력할 내용</label>
+                <label class="sr-only" for="device-text">Text to enter on the tablet</label>
                 <div class="input-row">
-                  <input id="device-text" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="4096" required placeholder="입력할 내용">
-                  <button type="submit" id="send-text">입력</button>
+                  <input id="device-text" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="4096" required placeholder="Text to enter">
+                  <button type="submit" id="send-text">Insert</button>
                 </div>
-                <label class="check"><input id="show-text" type="checkbox">내용 보기</label>
+                <label class="check"><input id="show-text" type="checkbox">Show text</label>
               </form>
               <div class="input-tools">
-                <button data-action="keyboard" class="quiet">입력기 연결</button>
+                <button data-action="keyboard" class="quiet">Connect keyboard</button>
                 <div>
                   <button data-key="tab" class="quiet">Tab</button>
-                  <button data-key="delete" class="quiet" aria-label="한 글자 삭제">삭제</button>
+                  <button data-key="delete" class="quiet" aria-label="Delete one character">Delete</button>
                   <button data-key="enter" class="quiet">Enter</button>
                 </div>
               </div>
             </div>
           </details>
           <details id="login-setup" class="settings-section">
-            <summary>카카오톡 로그인 <span id="setup-summary"></span></summary>
+            <summary>KakaoTalk login <span id="setup-summary"></span></summary>
             <div class="section-body">
               <ol class="login-steps">
                 <li>
-                  <h3>보조 기기로 로그인</h3>
-                  <p>카카오톡의 <strong>‘다른 기기와 함께 사용’</strong>을 선택한 뒤 검사하세요. 이 옵션이 없으면 로그인을 진행하지 마세요.</p>
-                  <button id="login-check" data-action="login-check" class="wide" aria-describedby="login-check-help">로그인 옵션 검사</button>
-                  <p id="login-check-help" class="hint">로그인 전에만 사용합니다. 검사 통과 후 30분 안에 태블릿에서 로그인하세요.</p>
+                  <h3>Sign in as a secondary device</h3>
+                  <p>In the Korean KakaoTalk UI, select <strong>“Use with other devices” (<span lang="ko">다른 기기와 함께 사용</span>)</strong>, then run the check. Do not sign in if this option is missing.</p>
+                  <button id="login-check" data-action="login-check" class="wide" aria-describedby="login-check-help">Check login options</button>
+                  <p id="login-check-help" class="hint">Use only before signing in. Sign in on the tablet within 30 minutes of a successful check.</p>
                   <p id="login-check-result" class="job" role="status" hidden></p>
                 </li>
                 <li>
-                  <h3>양쪽 로그인 확인</h3>
-                  <label class="check"><input id="phone-active" type="checkbox">핸드폰의 기존 로그인이 유지됩니다.</label>
-                  <label class="check"><input id="tablet-active" type="checkbox">태블릿에 로그인했습니다.</label>
-                  <button id="confirm" class="primary wide" disabled>메시지 수집 시작</button>
+                  <h3>Confirm both sessions</h3>
+                  <label class="check"><input id="phone-active" type="checkbox">My existing phone session is still active.</label>
+                  <label class="check"><input id="tablet-active" type="checkbox">I have signed in on the tablet.</label>
+                  <button id="confirm" class="primary wide" disabled>Start collecting messages</button>
                 </li>
               </ol>
             </div>
           </details>
           <details class="settings-section">
-            <summary>핸드폰 확인 기록</summary>
+            <summary>Phone confirmation</summary>
             <div class="section-body">
-              <p>핸드폰에서 카카오톡을 열어 확인하세요. 이 서버는 핸드폰 세션을 자동으로 확인하지 않습니다.</p>
-              <label class="check"><input id="phone-rechecked" type="checkbox">핸드폰의 로그인이 유지됩니다.</label>
-              <button id="phone-recheck" class="wide" disabled>확인 시각 갱신</button>
-              <p class="hint">수집 승인 후 사용할 수 있습니다. 24시간이 지나면 재확인이 필요하다고 표시합니다.</p>
-              <button data-action="phone-lost" class="danger wide">로그아웃됨 · 수집 중단</button>
+              <p>Open KakaoTalk on your phone to check. This server does not monitor the phone session automatically.</p>
+              <label class="check"><input id="phone-rechecked" type="checkbox">My phone session is still active.</label>
+              <button id="phone-recheck" class="wide" disabled>Update confirmation time</button>
+              <p class="hint">Available after collection is approved. A reminder to recheck appears after 24 hours.</p>
+              <button data-action="phone-lost" class="danger wide">Signed out · Stop collection</button>
             </div>
           </details>
           <details class="settings-section">
-            <summary>설치 관리</summary>
+            <summary>Installation</summary>
             <div class="section-body">
-              <p>서버의 <code>inputs/kakao/</code>에 있는 카카오톡 APK와 수집 구성 요소를 설치합니다.</p>
-              <p class="hint">이미 사용 중이면 다시 설치할 필요가 없습니다.</p>
-              <button id="install" class="wide">설치 준비…</button>
+              <p>Install the KakaoTalk APK from <code>inputs/kakao/</code> on the server and the collection components.</p>
+              <p class="hint">A working setup does not need to be reinstalled.</p>
+              <button id="install" class="wide">Prepare installation…</button>
             </div>
           </details>
           <div id="job" class="job" role="status" hidden></div>
@@ -137,11 +137,11 @@
   </main>
   <dialog id="install-dialog" aria-labelledby="install-title" aria-describedby="install-description">
     <form method="dialog">
-      <h2 id="install-title">설치를 실행할까요?</h2>
-      <p id="install-description">설치 파일을 적용하고 기존 수집 승인을 초기화합니다. 사용 중인 계정은 양쪽 로그인을 다시 확인해야 수집을 재개할 수 있습니다.</p>
+      <h2 id="install-title">Install components?</h2>
+      <p id="install-description">This installs the components and resets existing collection approval. Confirm both login sessions again to resume collection for an existing account.</p>
       <div class="dialog-actions">
-        <button value="cancel" autofocus>취소</button>
-        <button value="install" class="primary">설치 실행</button>
+        <button value="cancel" autofocus>Cancel</button>
+        <button value="install" class="primary">Install</button>
       </div>
     </form>
   </dialog>

@@ -1,64 +1,64 @@
-# 관리 화면
+# Admin console
 
-[README](../README.md) · [설치](install.md)
+[README](../README.md) · [Installation](install.md)
 
-관리 화면에서 태블릿을 조작하고 로그인·수집 상태를 확인합니다. 운영자 PC에 ADB나 scrcpy를 설치할 필요는 없습니다.
+Use the admin console to control the tablet and check login and collection status. You do not need ADB or scrcpy on the operator's computer.
 
-## 접속
+## Access
 
-원격 서버는 SSH로 HTTPS 포트를 연결한 뒤 `https://localhost:18443/admin/`을 엽니다. Mac의 Lima 구성도 같은 주소를 사용합니다. 인증서 설정은 [설치 안내](install.md#4-관리-화면-열기)를 참고하세요.
+For a remote server, forward the HTTPS port over SSH and open `https://localhost:18443/admin/`. The Mac Lima setup uses the same address. See [Installation](install.md#4-open-the-admin-console) for certificate setup.
 
-관리자 키는 `secrets/admin_token`입니다. 카카오 비밀번호나 MCP 연결 키와는 다릅니다. **잠금**은 관리 화면의 인증만 종료합니다. 카카오톡에서 로그아웃하지 않습니다. 관리자 세션은 30분 후 만료됩니다.
+The admin key is stored in `secrets/admin_token`. It is separate from your Kakao password and MCP connection key. **Lock** ends the admin console session only; it does not sign out of KakaoTalk. Admin sessions expire after 30 minutes.
 
-## 처음 로그인하기
+## First login
 
-1. **설치 관리 → 설치 준비… → 설치 실행**으로 앱과 수집 구성 요소를 배치합니다. 이미 설치했다면 건너뜁니다.
-2. **카카오톡 열기**를 누릅니다. 입력이 필요하면 **입력기 연결**을 누르고, 태블릿의 입력칸을 선택한 뒤 **텍스트 입력**으로 값을 보냅니다.
-3. 카카오톡에서 **‘다른 기기와 함께 사용’**을 선택합니다. 웹의 **카카오톡 로그인 → 로그인 옵션 검사**를 누릅니다. 옵션이 없거나 주 기기 이전을 요구하면 진행하지 않습니다.
-4. 검사 통과 후 태블릿에서 로그인을 완료합니다. 핸드폰에서도 기존 카카오톡이 계속 열리는지 직접 확인합니다.
-5. 두 확인란을 선택하고 **메시지 수집 시작**을 누릅니다. 사전 검사는 30분간 유효하며, 앱 버전과 기기도 일치해야 합니다.
+1. Select **Installation → Prepare installation… → Install** to deploy the apps and collection components. Skip this if already installed.
+2. Select **Open KakaoTalk**. To enter text, select **Connect keyboard**, focus an input field on the tablet, then send a value through **Text input**.
+3. In KakaoTalk, select **“Use with other devices” (“다른 기기와 함께 사용” in the Korean UI)**. In the console, select **KakaoTalk login → Check login options**. The check currently recognizes the Korean KakaoTalk UI. Stop if the option is missing or KakaoTalk asks to transfer the primary device.
+4. After the check passes, finish signing in on the tablet. Manually verify that KakaoTalk still opens with the existing session on your phone.
+5. Select both checkboxes and **Start collecting messages**. The precheck is valid for 30 minutes and must match the current app version and device.
 
-수집 시작은 직접 확인한 결과를 기록합니다. 프로그램이 카카오톡의 로그인 방식을 통제하거나 핸드폰 로그아웃을 막는 것은 아닙니다.
+Starting collection records your manual confirmation. The program does not control KakaoTalk's login behavior or prevent your phone from being signed out.
 
-**로그인 옵션 검사**는 로그인 전 화면에서만 사용합니다. 이미 수집 승인이 완료됐다면 버튼이 비활성화되며, 현재 상태는 **상태 확인**으로 확인합니다. 검사 진행 상황과 결과는 버튼 아래에 표시됩니다. 검사 실패는 기존 승인과 검사 기록을 지우지 않습니다.
+Use **Check login options** only on the screen before signing in. Once collection is approved, the button is disabled; use **Check status** for the current state. Check progress and results appear below the button. A failed check preserves existing approval and precheck records.
 
-## 설치 관리
+## Installation
 
-처음 구성할 때 서버의 `inputs/kakao/`에 정식 카카오톡 APK(분할 APK라면 전체 세트)를 넣고 **설치 준비… → 설치 실행**을 누릅니다. 카카오톡, 등록 앱, 웹 입력기와 Iris를 배치합니다. 로그인은 설치 후 태블릿 화면에서 진행합니다.
+During initial setup, place the official KakaoTalk APK in the server's `inputs/kakao/` directory (the complete set for split APKs), then select **Prepare installation… → Install**. This deploys KakaoTalk, the registration app, the web keyboard, and Iris. Sign in on the tablet screen after installation.
 
-정상적으로 사용 중이면 다시 실행할 필요가 없습니다. 설치 실행은 Iris를 멈추고 기존 수집 승인을 초기화하므로, 다시 수집하려면 로그인 전 검사부터 진행해야 합니다. 카카오톡 데이터 삭제나 로그아웃을 실행하는 버튼은 아닙니다. **설치 준비…**에서 취소하면 아무 작업도 실행하지 않습니다.
+There is no need to reinstall a working setup. Installation stops Iris and resets existing collection approval, so resuming collection requires a new check before login. It does not delete KakaoTalk data or sign out. Canceling **Prepare installation…** performs no action.
 
-## 일상적인 사용
+## Everyday use
 
-왼쪽은 태블릿 화면, 오른쪽은 상태와 설정입니다. 작은 화면에서는 위아래로 배치합니다. 스크린샷은 약 1.2초 간격으로 갱신되며, 클릭·드래그와 아래의 Android 버튼으로 조작합니다.
+The tablet screen appears on the left, with status and settings on the right. On smaller screens, they stack vertically. Screenshots refresh roughly every 1.2 seconds. Use clicks, drags, and the Android buttons below the screen to control the tablet.
 
-**텍스트 입력**은 선택한 입력칸에 내용을 추가하고 웹 입력란을 비웁니다. 기본값은 가림 표시입니다. Enter나 기기 화면의 버튼을 누르기 전에는 자동 제출하지 않습니다. 채팅방을 직접 열면 카카오톡 읽음 상태가 바뀔 수 있습니다.
+**Text input** inserts text into the focused field and clears the web input. Text is masked by default. It is not automatically submitted until you press Enter or a button on the device. Opening a conversation manually may change its KakaoTalk read status.
 
-**일시정지**는 화면 갱신과 화면 클릭을 멈춥니다. 메시지 수집과 Android 버튼 조작은 계속 사용할 수 있습니다.
+**Pause** stops screen refreshes and clicks on the screen. Message collection and the Android buttons remain available.
 
-## 상태 읽기
+## Reading status
 
-**상태 확인**으로 현재 화면과 저장된 확인 기록을 가져옵니다. 기기를 조작하거나 60초가 지나면 다시 확인하도록 표시합니다.
+**Check status** retrieves the current screen and saved confirmation records. After a device action or 60 seconds, the console prompts you to check again.
 
-| 항목 | 의미 |
+| Field | Meaning |
 | --- | --- |
-| 태블릿 | 현재 화면에서 관찰한 로그인 화면·로그인 후 화면·연결 상태 |
-| 핸드폰 | 사용자가 직접 확인하거나 로그아웃을 보고한 시각 |
-| 수집 승인 | 현재 앱·기기에 유효한 보조 로그인 확인 기록이 있는지 |
-| 메시지 수집 중 | 최근 Iris DB 접근과 수집 승인이 유효함. 전체 대화 복원을 뜻하지 않음 |
+| Tablet | Login screen, signed-in screen, or connection state observed on the current screen |
+| Phone | Time of the operator's manual confirmation or sign-out report |
+| Collection approval | Whether the secondary-login confirmation matches the current app and device |
+| Collecting messages | Recent Iris database access and collection approval are valid; this does not mean the entire chat history has been restored |
 
-핸드폰 세션은 자동으로 감시하지 않습니다. **핸드폰 확인 기록**에서 유지 여부를 다시 확인하고 시각을 갱신할 수 있습니다. 24시간이 지난 기록에는 재확인 표시가 붙습니다.
+The phone session is not monitored automatically. Use **Phone confirmation** to check it manually again and update the timestamp. Records older than 24 hours are marked for rechecking.
 
-폰이 로그아웃됐다면 **로그아웃됨 · 수집 중단**을 누릅니다. 이 작업은 수집 승인을 해제합니다. 다시 시작하려면 로그인 옵션 검사와 양쪽 확인을 거쳐야 합니다.
+If your phone has been signed out, select **Signed out · Stop collection**. This revokes collection approval. Restarting requires the login-option check and confirmation of both sessions.
 
-## 문제가 있을 때
+## Troubleshooting
 
-| 화면/상황 | 할 일 |
+| Screen or situation | Action |
 | --- | --- |
-| 화면 연결 대기 | 서버의 redroid 부팅 상태 확인 후 새로고침 |
-| 입력되지 않음 | 입력기 연결 후 카카오톡 입력칸을 다시 선택 |
-| 수집 시작 버튼이 비활성 | 유효한 옵션 검사와 두 확인란 확인. 오래됐다면 상태 확인 |
-| 설치 뒤 등록 앱 화면이 열림 | 카카오톡 열기. Iris 모드는 알림 접근 권한이 필요 없음 |
-| 승인했는데 수집되지 않음 | [Iris 상태와 로그 확인](operations.md#상태-확인) |
+| Waiting for connection | Check that redroid has booted on the server, then refresh |
+| Text is not entered | Connect the keyboard, then focus the KakaoTalk input field again |
+| Start collection button is disabled | Check for a valid precheck and both checkboxes; refresh status if stale |
+| Registration app opens after installation | Select Open KakaoTalk; Iris mode does not need notification access |
+| Collection is approved but no messages arrive | [Check Iris status and logs](operations.md#check-status) |
 
-재설치는 기존 수집 승인을 초기화합니다. 설치 확인 대화상자에서 취소하면 실행되지 않습니다.
+Reinstallation resets existing collection approval. Canceling the installation dialog leaves the setup unchanged.

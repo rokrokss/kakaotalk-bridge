@@ -29,7 +29,7 @@ def create_preview():
     @app.get("/test/start")
     def start():
         client = app.state.oauth.register(
-            {"redirect_uris": [redirect], "client_name": "미리보기 클라이언트"}
+            {"redirect_uris": [redirect], "client_name": "Preview client"}
         )
         query = urlencode(
             {
@@ -47,7 +47,7 @@ def create_preview():
     @app.get("/test/callback")
     def callback():
         return HTMLResponse(
-            page("미리보기 완료", "<h1>폼 제출 완료</h1><p>실제 계정은 연결하지 않았습니다.</p>")
+            page("Preview complete", "<h1>Form submitted</h1><p>No real account was connected.</p>")
         )
 
     return app

@@ -6,13 +6,13 @@ let frame = null, pointer = null, blobURL = null, busy = false, generation = 0;
 let setupInitialized = false, precheckValid = false, collectionApproved = false;
 let loginAlreadyApproved = false;
 const messages = {
-  session_required: '관리자 인증이 만료됐습니다. 키를 다시 입력하세요.',
-  device_busy: '기기 작업 중입니다. 잠시 후 다시 시도하세요.',
-  invalid_request: '입력 내용을 확인하세요.',
-  invalid_csrf: '관리 화면을 새로 열어주세요.',
-  invalid_origin: '같은 HTTPS 주소에서 관리 화면을 열어주세요.',
-  invalid_swipe: '드래그를 다시 시도하세요.',
-  point_outside_screen: '화면 안을 선택하세요.',
+  session_required: 'Your admin session has expired. Enter the key again.',
+  device_busy: 'A device operation is in progress. Try again shortly.',
+  invalid_request: 'Check your input.',
+  invalid_csrf: 'Reopen the admin console.',
+  invalid_origin: 'Open the admin console at the same HTTPS address.',
+  invalid_swipe: 'Try dragging again.',
+  point_outside_screen: 'Select a point inside the screen.',
 };
 
 function feedback(message) {
@@ -31,7 +31,7 @@ function locked() {
   $('console').hidden = true;
   $('login-panel').hidden = false;
   $('logout').hidden = true;
-  $('connection').textContent = '인증 필요';
+  $('connection').textContent = 'Authentication required';
   $('screen').hidden = true;
   $('screen').removeAttribute('src');
   $('device-text').value = '';
@@ -50,10 +50,10 @@ async function api(path, data) {
     body: data === undefined ? undefined : JSON.stringify(data),
   });
   if (!response.ok) {
-    let reason = '요청에 실패했습니다. 잠시 후 다시 시도하세요.';
+    let reason = 'The request failed. Try again shortly.';
     try {
       const error = await response.json();
-      reason = messages[error.detail] || (typeof error.detail === 'string' && /[가-힣]/.test(error.detail) ? error.detail : reason);
+      reason = messages[error.detail] || (typeof error.detail === 'string' && error.detail.trim() ? error.detail : reason);
     } catch {}
     if (response.status === 401) locked();
     throw new Error(reason);
@@ -69,8 +69,8 @@ function unlocked(session) {
   $('login-panel').hidden = true;
   $('console').hidden = false;
   $('logout').hidden = false;
-  $('connection').textContent = `관리자 · ${Math.ceil(session.expires_in / 60)}분 이내 만료`;
-  $('pause').textContent = '일시정지';
+  $('connection').textContent = `Admin · Expires within ${Math.ceil(session.expires_in / 60)} min`;
+  $('pause').textContent = 'Pause';
   $('pause').setAttribute('aria-pressed', 'false');
   $('screen-placeholder').hidden = false;
   updateState();
@@ -117,11 +117,11 @@ async function refresh(force = false) {
     pendingURL = null;
     $('screen').hidden = false;
     $('screen-placeholder').hidden = true;
-    $('screen-label').textContent = paused ? '일시정지됨' : `${next.width} × ${next.height}`;
+    $('screen-label').textContent = paused ? 'Paused' : `${next.width} × ${next.height}`;
   } catch {
     if (requestedGeneration === generation) {
       frame = null;
-      $('screen-label').textContent = '연결 대기';
+      $('screen-label').textContent = 'Waiting for connection';
       $('screen-placeholder').hidden = false;
       $('screen').hidden = true;
     }
@@ -131,33 +131,33 @@ async function refresh(force = false) {
   }
 }
 
-const localTime = value => value ? new Date(value * 1000).toLocaleString('ko-KR') : '기록 없음';
+const localTime = value => value ? new Date(value * 1000).toLocaleString('en-US') : 'No record';
 function renderSessions(s, stale) {
   const fresh = !!s && !stale;
   $('session-inspected').textContent = s
-    ? `${localTime(s.checked_at)}${fresh ? ' 확인' : ' · 다시 확인 필요'}`
-    : '‘상태 확인’을 눌러 기기를 검사하세요.';
+    ? `${localTime(s.checked_at)}${fresh ? ' · Checked' : ' · Check again'}`
+    : 'Select “Check status” to inspect the device.';
   const screens = {
-    login_required: '로그인 화면', main_screen_observed: '로그인 후 화면',
-    not_visible: '카카오톡이 열려 있지 않음', not_installed: '카카오톡 미설치', unknown: '화면에서 판별할 수 없음',
+    login_required: 'Login screen', main_screen_observed: 'Signed-in screen',
+    not_visible: 'KakaoTalk is not open', not_installed: 'KakaoTalk is not installed', unknown: 'Cannot determine from screen',
   };
   $('tablet-status').textContent = fresh
-    ? s.device === 'offline' ? '연결 끊김' : s.device === 'booting' ? '부팅 중' : screens[s.screen?.state] || '확인 전'
-    : '확인 필요';
-  $('tablet-detail').textContent = s?.tablet?.confirmed_at ? `로그인 직접 확인: ${localTime(s.tablet.confirmed_at)}` : '';
+    ? s.device === 'offline' ? 'Disconnected' : s.device === 'booting' ? 'Booting' : screens[s.screen?.state] || 'Not checked'
+    : 'Check needed';
+  $('tablet-detail').textContent = s?.tablet?.confirmed_at ? `Login manually confirmed: ${localTime(s.tablet.confirmed_at)}` : '';
   const phone = s?.phone;
   const overdue = phone?.confirmed_at && Date.now() / 1000 - phone.confirmed_at > 86400;
   const phoneLabels = {
-    operator_confirmed: '유지 확인 기록', recheck_due: '재확인 필요',
-    reported_lost: '로그아웃 보고됨', unknown: '확인 기록 없음',
+    operator_confirmed: 'Confirmed active', recheck_due: 'Recheck needed',
+    reported_lost: 'Reported signed out', unknown: 'No confirmation record',
   };
-  $('phone-status').textContent = phoneLabels[overdue && phone?.state === 'operator_confirmed' ? 'recheck_due' : phone?.state] || '확인 전';
+  $('phone-status').textContent = phoneLabels[overdue && phone?.state === 'operator_confirmed' ? 'recheck_due' : phone?.state] || 'Not checked';
   $('phone-detail').textContent = phone?.state === 'reported_lost'
-    ? `${localTime(phone.reported_at)} · 직접 보고`
-    : phone?.confirmed_at ? `${localTime(phone.confirmed_at)} · 직접 확인` : '핸드폰 상태는 직접 확인한 기록입니다.';
+    ? `${localTime(phone.reported_at)} · Manually reported`
+    : phone?.confirmed_at ? `${localTime(phone.confirmed_at)} · Manually confirmed` : 'Phone status reflects your manual confirmation.';
   $('approval-status').textContent = fresh
-    ? ({ approved: '승인됨', locked: '확인 대기', unknown: '확인할 수 없음' }[s.collection_approval] || '확인 전')
-    : '확인 필요';
+    ? ({ approved: 'Approved', locked: 'Awaiting confirmation', unknown: 'Unknown' }[s.collection_approval] || 'Not checked')
+    : 'Check needed';
   const proof = s?.precheck;
   // Typing makes the screen snapshot stale, but the precheck retains its own
   // 30-minute deadline. The server revalidates the device and app on approval.
@@ -165,13 +165,13 @@ function renderSessions(s, stale) {
   collectionApproved = fresh && s.collection_approval === 'approved';
   loginAlreadyApproved = s?.collection_approval === 'approved';
   $('login-check-help').textContent = loginAlreadyApproved
-    ? '이미 수집 승인이 완료되어 검사가 필요 없습니다. 현재 상태는 ‘상태 확인’으로 확인하세요.'
-    : '로그인 전에만 사용합니다. 검사 통과 후 30분 안에 태블릿에서 로그인하세요.';
+    ? 'Collection is already approved. Use “Check status” to see the current state.'
+    : 'Use only before signing in. Sign in on the tablet within 30 minutes of a successful check.';
   $('approval-detail').textContent = precheckValid
-    ? `${localTime(proof.expires_at)}까지 양쪽 로그인을 확인하세요.`
-    : collectionApproved ? '앱과 기기의 승인 기록이 일치합니다.'
-    : fresh ? '로그인 옵션 검사와 양쪽 확인이 필요합니다.' : '';
-  $('setup-summary').textContent = collectionApproved ? '확인 완료' : precheckValid ? '옵션 검사 완료' : '';
+    ? `Confirm both sessions by ${localTime(proof.expires_at)}.`
+    : collectionApproved ? 'Approval matches the current app and device.'
+    : fresh ? 'Check login options and confirm both sessions.' : '';
+  $('setup-summary').textContent = collectionApproved ? 'Confirmed' : precheckValid ? 'Options checked' : '';
   if (fresh && !setupInitialized) {
     $('login-setup').open = s.collection_approval === 'locked';
     setupInitialized = true;
@@ -199,17 +199,17 @@ async function updateState() {
     $('login-check-result').hidden = !loginJob || !state.job.message;
     $('login-check-result').textContent = loginJob ? state.job.message : '';
     $('login-check-result').dataset.state = state.job.state;
-    $('login-check').textContent = busy && state.job.action === 'login-check' ? '검사 중…' : '로그인 옵션 검사';
+    $('login-check').textContent = busy && state.job.action === 'login-check' ? 'Checking…' : 'Check login options';
     const collector = state.collector.state;
     $('collector-status').dataset.state = collector;
-    $('collector-status').textContent = collector === 'collecting_partial' ? '메시지 수집 중'
-      : collector === 'unavailable' ? '수집 서버 연결 대기' : '수집 상태 확인 필요';
-    $('collector-status').title = '태블릿에 수신된 메시지를 수집합니다. 전체 대화의 복원을 뜻하지 않습니다.';
+    $('collector-status').textContent = collector === 'collecting_partial' ? 'Collecting messages'
+      : collector === 'unavailable' ? 'Waiting for collection server' : 'Check collection status';
+    $('collector-status').title = 'Collects messages received on the tablet. This does not restore the entire chat history.';
     renderSessions(state.sessions, state.sessions_stale);
     updateControls();
   } catch {
     if (active && requestedGeneration === generation) {
-      $('collector-status').textContent = '상태를 가져오지 못했습니다';
+      $('collector-status').textContent = 'Could not retrieve status';
       $('collector-status').dataset.state = 'unavailable';
       renderSessions(null, true);
       updateControls();
@@ -222,15 +222,15 @@ async function action(name, extra = {}) {
   busy = true;
   updateControls();
   if (name === 'login-check') {
-    $('login-check').textContent = '검사 중…';
-    $('login-check-result').textContent = '태블릿 설정과 로그인 옵션을 확인하고 있습니다.';
+    $('login-check').textContent = 'Checking…';
+    $('login-check-result').textContent = 'Checking tablet settings and login options.';
     $('login-check-result').dataset.state = 'running';
     $('login-check-result').hidden = false;
   }
   try { await api('action', { name, ...extra }); await updateState(); }
   catch (error) {
     busy = false;
-    $('login-check').textContent = '로그인 옵션 검사';
+    $('login-check').textContent = 'Check login options';
     if (name === 'login-check') {
       $('login-check-result').textContent = error.message;
       $('login-check-result').dataset.state = 'failed';
@@ -266,7 +266,7 @@ $('text-form').addEventListener('submit', async event => {
   if (!active || busy) return;
   const text = $('device-text').value;
   $('device-text').value = '';
-  try { await api('text', { text }); feedback('입력했습니다. 태블릿 화면을 확인하세요.'); await refresh(true); }
+  try { await api('text', { text }); feedback('Text inserted. Check the tablet screen.'); await refresh(true); }
   catch (error) { feedback(error.message); }
 });
 document.querySelectorAll('[data-key]').forEach(button => button.addEventListener('click', async () => {
@@ -306,9 +306,9 @@ $('refresh').addEventListener('click', () => refresh(true));
 $('pause').addEventListener('click', () => {
   paused = !paused;
   frame = null;
-  $('pause').textContent = paused ? '다시 연결' : '일시정지';
+  $('pause').textContent = paused ? 'Resume' : 'Pause';
   $('pause').setAttribute('aria-pressed', String(paused));
-  $('screen-label').textContent = paused ? '일시정지됨' : '화면 연결 중';
+  $('screen-label').textContent = paused ? 'Paused' : 'Connecting to screen';
   if (!paused) refresh();
 });
 document.addEventListener('visibilitychange', () => {

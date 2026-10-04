@@ -1,42 +1,42 @@
-# Linux 설치
+# Linux installation
 
-[README](../README.md) · [Mac 설치](local-redroid.md)
+[README](../README.md) · [Mac installation](local-redroid.md)
 
-단일 계정용 Docker Compose 구성입니다. Linux amd64/arm64에서 실행하며 Docker Engine, Compose v2, Bash, OpenSSL, Android binder/binderfs가 필요합니다. 처음에는 4 vCPU·8GB RAM으로 준비하세요. 최소 사양을 측정한 값은 아닙니다.
+This Docker Compose stack supports one account on Linux amd64/arm64. It requires Docker Engine, Compose v2, Bash, OpenSSL, and Android binder/binderfs. Start with 4 vCPUs and 8 GB RAM; these are suggested starting resources, not measured minimum requirements.
 
-## 1. 설정과 키 준비
+## 1. Prepare configuration and keys
 
-저장소 루트에서 실행합니다.
+Run from the repository root:
 
 ```bash
 cp .env.example .env
 ./scripts/preflight.sh
 ```
 
-`preflight`가 실패하면 Linux 커널과 binder 구성을 먼저 해결하세요. 공유 메모리는 `androidboot.use_memfd=1`을 사용합니다.
+If `preflight` fails, resolve the Linux kernel and binder configuration first. Shared memory uses `androidboot.use_memfd=1`.
 
-`.env`의 `DEVICE_SUBNET`이 LAN·VPN·다른 Docker 네트워크와 겹치지 않는지 확인합니다. 변경할 때는 `GATEWAY_IP`와 `DEVICE_IP_RANGE`도 함께 맞추되, 자동 배정 범위에 고정 gateway 주소를 넣지 않습니다. 기본값은 각각 `172.29.87.0/24`, `172.29.87.3`, `172.29.87.128/25`입니다.
+Check that `DEVICE_SUBNET` in `.env` does not overlap your LAN, VPN, or other Docker networks. If you change it, update `GATEWAY_IP` and `DEVICE_IP_RANGE` as well, keeping the fixed gateway address outside the automatic allocation range. The defaults are `172.29.87.0/24`, `172.29.87.3`, and `172.29.87.128/25`, respectively.
 
 ```bash
 ./scripts/init-secrets.sh
 ```
 
-이 스크립트는 기존 키를 보존합니다. `.env`는 셸 호환 `KEY=value` 형식을 유지하고, 생성한 `secrets/`와 Bridge 서명 키를 보관하세요.
+This script preserves existing keys. Keep `.env` in shell-compatible `KEY=value` format, and retain the generated `secrets/` directory and Bridge signing key.
 
-## 2. 카카오톡 APK 준비
+## 2. Prepare the KakaoTalk APK
 
-정식 설치 파일을 `inputs/kakao/`에 넣습니다. split APK라면 같은 버전·서명의 전체 설치 세트가 필요합니다. 이미 redroid에 설치했다면 비워 둘 수 있습니다.
+Place official installation files in `inputs/kakao/`. Split APKs require the complete installation set with matching versions and signatures. This directory can be empty if KakaoTalk is already installed in redroid.
 
-USB로 연결한 Android 폰에서 가져오려면 호스트에 ADB와 Python 개발 환경이 필요합니다. 폰에서 USB 디버깅을 허용한 뒤 실행하세요.
+To import APKs from an Android phone connected over USB, install ADB and the Python development environment on the host. Enable USB debugging on the phone, then run:
 
 ```bash
 uv sync --frozen --python 3.12
 uv run python scripts/import-phone-apks.py
 ```
 
-이 명령은 APK만 복사합니다. 폰의 앱 데이터나 로그인 설정은 바꾸지 않습니다. 카카오톡 APK와 계정 정보는 이미지에 포함하지 않습니다.
+This command copies APKs only. It does not change the phone's app data or login settings. KakaoTalk APKs and account credentials are not included in the images.
 
-## 3. 빌드와 실행
+## 3. Build and start
 
 ```bash
 docker compose build api device-agent
@@ -44,24 +44,24 @@ docker compose up -d
 docker compose ps
 ```
 
-Python·JDK·Android SDK는 이미지 안에서 준비합니다. Android 빌드 도구는 amd64 바이너리이므로 arm64 빌드 머신에는 amd64 실행 지원이 필요합니다. 없다면 별도 빌드 머신에서 arm64 런타임 이미지를 만들어 전달하세요. 카카오톡 APK도 redroid의 ABI와 호환되어야 합니다.
+Python, the JDK, and the Android SDK are prepared inside the images. Android build tools use amd64 binaries, so arm64 build machines need amd64 execution support. Otherwise, build the arm64 runtime images on a separate build machine and transfer them. The KakaoTalk APK must also support redroid's ABI.
 
-## 4. 관리 화면 열기
+## 4. Open the admin console
 
-서버에 원격으로 접속한다면 PC에서 터널을 엽니다.
+For a remote server, open a tunnel from your computer:
 
 ```bash
 ssh -N -L 18443:127.0.0.1:8443 user@linux-server
 ```
 
-브라우저에서 `https://localhost:18443/admin/`을 엽니다. 서버 자체에서는 `https://localhost:8443/admin/`입니다. 생성한 `secrets/tls_cert.pem`을 확인하고 브라우저에서 신뢰하도록 설정하세요.
+Open `https://localhost:18443/admin/` in your browser, or `https://localhost:8443/admin/` on the server itself. Verify the generated `secrets/tls_cert.pem` and configure your browser to trust it.
 
-`secrets/admin_token`으로 인증한 뒤 **설치 관리 → 설치 준비… → 설치 실행**을 누릅니다. 카카오톡 APK, 등록 앱, 입력기와 Iris를 배치합니다. Iris는 Android 화면에 별도 앱으로 열리지 않습니다.
+Authenticate with `secrets/admin_token`, then select **Installation → Prepare installation… → Install**. This deploys the KakaoTalk APK, registration app, keyboard, and Iris. Iris does not open as a separate app on the Android screen.
 
-이후 [관리 화면의 로그인 절차](web-ui.md#처음-로그인하기)를 따릅니다. 재설치는 수집 승인을 초기화하므로, 이미 수집 중인 서버에서는 일상적인 복구 수단으로 사용하지 마세요.
+Follow the [first login procedure](web-ui.md#first-login). Reinstalling resets collection approval, so do not use it as a routine recovery step on a server that is already collecting messages.
 
-## 5. 수집 확인과 연결
+## 5. Verify collection and connect
 
-양쪽 로그인 확인 후 관리 화면에서 **메시지 수집 시작**을 누릅니다. 핸드폰에서 나에게 메시지를 보내고 [API](api.md) 또는 [ChatGPT](dot-plugin.md)로 새 메시지가 조회되는지 확인하세요.
+After confirming both login sessions, select **Start collecting messages** in the admin console. Send yourself a message from your phone and verify that it appears through the [API](api.md) or [ChatGPT](dot-plugin.md).
 
-운영 명령과 백업은 [운영 안내](operations.md)에 있습니다.
+See [Operations](operations.md) for management commands and backups.

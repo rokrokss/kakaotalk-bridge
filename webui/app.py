@@ -81,11 +81,11 @@ def collector_status():
 
 
 ERRORS = {
-    "screen_unavailable": "화면을 가져오지 못했습니다. redroid 부팅 상태를 확인하세요.",
-    "keyboard_unavailable": "‘입력기 연결’을 누르고 카카오톡 입력칸을 선택하세요. 설치 전이라면 설치 관리에서 먼저 설치하세요.",
-    "focus_kakao_input": "카카오톡의 입력칸을 먼저 클릭하세요.",
-    "input_result_unknown": "입력 결과를 확인하지 못했습니다. 화면을 확인한 뒤 필요할 때 다시 입력하세요.",
-    "kakao_not_installed": "카카오톡 설치를 먼저 완료하세요.",
+    "screen_unavailable": "Could not retrieve the screen. Check that redroid has booted.",
+    "keyboard_unavailable": "Select “Connect keyboard”, then focus a KakaoTalk input field. If needed, install the components under Installation first.",
+    "focus_kakao_input": "Click an input field in KakaoTalk first.",
+    "input_result_unknown": "Could not confirm the input result. Check the screen before entering text again.",
+    "kakao_not_installed": "Complete the KakaoTalk installation first.",
 }
 
 
@@ -159,7 +159,7 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
         except (OSError, RuntimeError, ValueError, IndexError, subprocess.TimeoutExpired) as exc:
             raise HTTPException(
                 503,
-                ERRORS.get(str(exc), "기기 작업에 실패했습니다. 연결 및 설치 상태를 확인하세요."),
+                ERRORS.get(str(exc), "The device operation failed. Check the connection and installation status."),
             ) from None
         finally:
             lock.release()
@@ -191,10 +191,10 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
             while failures and failures[0] <= now - 60:
                 failures.popleft()
             if len(failures) >= 5:
-                raise HTTPException(429, "잠시 후 다시 시도하세요.")
+                raise HTTPException(429, "Try again shortly.")
             if not hmac.compare_digest(body.token.encode(), token.encode()):
                 failures.append(now)
-                raise HTTPException(401, "관리자 키가 올바르지 않습니다.")
+                raise HTTPException(401, "The admin key is incorrect.")
             key, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
             # Only one administrator session controls the tablet at a time.
             sessions.clear()
@@ -267,7 +267,7 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
         with session_lock:
             frame = current["frames"].get(body.frame)
         if not frame or time.monotonic() - frame[2] > 10:
-            raise HTTPException(409, "화면이 오래되었습니다. 새 화면을 받은 뒤 다시 조작하세요.")
+            raise HTTPException(409, "The screen is outdated. Wait for a new frame before trying again.")
         if (body.end_x is None) != (body.end_y is None):
             raise HTTPException(422, "invalid_swipe")
         points = [(body.x, body.y)]
@@ -321,44 +321,44 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
                     session_snapshot = device.session_status()
                     snapshot_invalidated = False
             message = {
-                "bootstrap": "설치했습니다. 카카오톡을 열어 로그인 옵션을 검사하세요.",
-                "open-kakao": "카카오톡을 열었습니다.",
-                "keyboard": "입력기를 연결했습니다. 태블릿의 입력칸을 선택하세요.",
+                "bootstrap": "Installation complete. Open KakaoTalk and check login options.",
+                "open-kakao": "KakaoTalk opened.",
+                "keyboard": "Keyboard connected. Select an input field on the tablet.",
                 "login-check": (
-                    "이미 수집 승인이 완료되어 있습니다. 현재 상태는 ‘상태 확인’으로 확인하세요."
+                    "Collection is already approved. Use “Check status” to see the current state."
                     if already_approved
-                    else "보조 로그인 옵션 검사를 통과했습니다. 이제 화면에서 로그인하세요."
+                    else "Secondary-login options verified. Sign in on the tablet now."
                 ),
-                "confirm-secondary": "양쪽 로그인을 확인했습니다. 메시지 수집을 시작합니다.",
-                "session-check": "현재 화면과 로그인 확인 기록을 검사했습니다.",
-                "phone-active": "핸드폰에서 직접 확인한 시각을 갱신했습니다.",
-                "phone-lost": "핸드폰 로그아웃 보고를 기록하고 Iris 수집 승인을 해제했습니다.",
+                "confirm-secondary": "Both sessions confirmed. Starting message collection.",
+                "session-check": "Checked the current screen and login confirmation records.",
+                "phone-active": "Updated the time of your manual phone confirmation.",
+                "phone-lost": "Phone sign-out recorded. Iris collection approval revoked.",
             }[body.name]
             job.update(state="done", message=message)
         except Exception:  # noqa: BLE001 — isolate background jobs without leaking credentials
             # Login UI dumps, input strings, filesystem paths and exception bodies stay private.
             message = (
-                "로그인 옵션을 확인하지 못했습니다. 로그인 전 화면에서 ‘다른 기기와 함께 사용’을 선택하세요. 기존 수집 승인은 변경하지 않았습니다."
+                "Could not verify login options. Select “Use with other devices” on the Korean KakaoTalk login screen before signing in. Existing collection approval is unchanged."
                 if body.name == "login-check"
-                else "보조 로그인 확인 실패. 검사 유효시간 및 양쪽 세션을 확인하세요."
+                else "Secondary-login confirmation failed. Check the precheck expiry and both sessions."
                 if body.name in ("confirm-secondary", "phone-active")
-                else "수집 중단을 완료하지 못했습니다. 기기 연결과 Iris 수집 상태를 확인하세요."
+                else "Could not stop collection. Check the device connection and Iris collection status."
                 if body.name == "phone-lost"
-                else "작업에 실패했습니다. redroid 연결, APK 배치 및 설치 상태를 확인하세요."
+                else "The operation failed. Check the redroid connection, APK files, and installation status."
             )
             job.update(state="failed", message=message)
 
     @app.post("/admin/api/action", status_code=202)
     def action(body: Action, current: Annotated[dict, Depends(authenticated)]):
         if body.name == "confirm-secondary" and not (body.phone_active and body.tablet_active):
-            raise HTTPException(422, "핸드폰과 redroid 양쪽 로그인을 직접 확인해야 합니다.")
+            raise HTTPException(422, "Manually confirm both the phone and redroid login sessions.")
         if body.name == "phone-active" and not body.phone_active:
-            raise HTTPException(422, "핸드폰의 기존 로그인을 직접 확인해야 합니다.")
+            raise HTTPException(422, "Manually confirm that your existing phone session is active.")
         with session_lock:
             if job["state"] == "running":
                 raise HTTPException(409, "device_busy")
             invalidate_snapshot()
-            job.update(state="running", action=body.name, message="작업 중…")
+            job.update(state="running", action=body.name, message="Working…")
             pool.submit(run_action, body)
         return {"accepted": True}
 

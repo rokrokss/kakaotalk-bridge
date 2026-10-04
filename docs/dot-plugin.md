@@ -1,42 +1,42 @@
-# ChatGPT 연결
+# Connect ChatGPT
 
-[README](../README.md) · [Events](events.md) · [보안](security.md)
+[README](../README.md) · [Events](events.md) · [Security](security.md)
 
-`dot-plugin`은 수집 API에 저장된 메시지를 OAuth로 제공하는 원격 MCP 서버입니다. 카카오톡에 다시 로그인하지 않으며, 메시지 조회·검색·수집 상태 확인에 사용합니다.
+`dot-plugin` is a remote MCP server that exposes messages stored in the collection API through OAuth. It does not sign in to KakaoTalk again. Use it to browse and search messages and check collection status.
 
-## 연결하기
+## Connect
 
-먼저 아래 배포 절차로 공개 HTTPS 주소를 준비합니다.
+First, prepare a public HTTPS address using the deployment instructions below.
 
-1. ChatGPT에서 맞춤형 MCP 서버를 추가합니다. 이름은 `KakaoTalk Bridge`, URL은 `https://<서버주소>/mcp`, 인증은 OAuth로 설정합니다.
-2. 서버의 승인 화면에서 `secrets/mcp_link_key`를 입력합니다. 카카오 비밀번호나 관리자 키가 아닙니다.
-3. 연결 후 최근 메시지 조회나 검색을 요청합니다. 예: “KakaoTalk Bridge에서 최근 메시지를 확인해줘.”
+1. Add a custom MCP server in ChatGPT. Set its name to `KakaoTalk Bridge`, its URL to `https://<your-host>/mcp`, and authentication to OAuth.
+2. On the server's approval screen, enter `secrets/mcp_link_key`. This is separate from your Kakao password and admin key.
+3. Once connected, request recent messages or a search. For example: “Show my recent messages from KakaoTalk Bridge.”
 
-Mac에서는 키를 출력하지 않고 복사할 수 있습니다.
+On a Mac, copy the key without printing it:
 
 ```bash
 pbcopy < secrets/mcp_link_key
 ```
 
-플러그인 연결은 이벤트 구독이나 자동 작업을 생성하지 않습니다. [Events](events.md)는 필요할 때 별도로 구독합니다.
+Connecting the plugin does not create event subscriptions or automated tasks. Subscribe to [Events](events.md) separately when needed.
 
-## 도구
+## Tools
 
-| 도구 | 용도 |
+| Tool | Purpose |
 | --- | --- |
-| `get_recent_messages` | 최근 수집 행 조회·커서 기반 페이지 탐색 |
-| `search_messages` | 본문 부분 문자열 검색 |
-| `list_conversations` | 관찰된 방 참조. 같은 방이 반복될 수 있음 |
-| `get_collector_status` | 수집 상태와 현재 연결의 구독·전달 상태 |
-| `get_profile` | 연결 식별용 불투명 프로필 ID |
-| `get_pending_messages` | consumer별 미처리 메시지 조회 |
-| `acknowledge_messages` | 조회한 페이지까지 처리 완료 기록 |
+| `get_recent_messages` | Retrieve recent collected rows with cursor-based pagination |
+| `search_messages` | Search message bodies by substring |
+| `list_conversations` | Retrieve observed conversation references; the same conversation may appear more than once |
+| `get_collector_status` | Collection status and subscription/delivery status for the current connection |
+| `get_profile` | Opaque profile ID identifying the connection |
+| `get_pending_messages` | Retrieve unprocessed messages for a consumer |
+| `acknowledge_messages` | Record processing completion through a retrieved page |
 
-`get_recent_messages`의 기본 범위는 최근 N개 커서 위치입니다. 방 필터가 있으면 그 안의 일치 행만 반환하므로 N개보다 적을 수 있습니다. 메시지 전송·로그인·ADB 조작 도구는 없습니다.
+By default, `get_recent_messages` covers the latest N cursor positions. A conversation filter returns matching rows within that range, so the result may contain fewer than N rows. There are no message-sending, login, or ADB-control tools.
 
-## Linux에 배포
+## Deploy on Linux
 
-API와 Iris가 실행 중인 서버에서 `.env`의 `DOT_PUBLIC_URL`을 실제 HTTPS origin으로 설정합니다. 끝의 `/`와 `/mcp`는 제외합니다.
+On a server already running the API and Iris, set `DOT_PUBLIC_URL` in `.env` to the actual HTTPS origin, without a trailing `/` or `/mcp`.
 
 ```bash
 uv run python scripts/init-dot-secrets.py
@@ -46,25 +46,25 @@ docker compose --profile dot build dot-plugin
 docker compose --profile dot up -d --no-deps dot-plugin
 ```
 
-공개 HTTPS 프록시의 목적지는 기본 `127.0.0.1:18787`입니다. **이 포트만 공개**하고 API gateway와 관리 화면은 사설 경로로 유지합니다. dot-plugin은 API read 토큰만 사용하며 Android 볼륨과 admin 토큰은 받지 않습니다.
+The public HTTPS proxy targets `127.0.0.1:18787` by default. **Expose only this port** and keep the API gateway and admin console private. dot-plugin uses only the API read token and receives neither Android volumes nor the admin token.
 
-## Mac의 Lima 배포
+## Deploy in Lima on a Mac
 
-컨테이너는 Mac의 Docker Desktop이 아닌 Lima에서 실행합니다. 키는 VM에도 복사하고 VM 안에서 UID 10001이 읽도록 소유권을 맞춥니다. 이미지를 전달하는 방법은 [Mac 설치](local-redroid.md)를 따릅니다.
+Run the containers in Lima, not in the Mac's Docker Desktop. Copy the keys into the VM and set ownership there so UID 10001 can read them. Follow [Mac installation](local-redroid.md) to transfer images.
 
-제공된 터널 구성은 다음 경로를 사용합니다.
+The supplied tunnel configuration uses this route:
 
 ```text
 Tailscale Funnel HTTPS :443
   → Mac 127.0.0.1:18788
-  → SSH 터널 → Lima 127.0.0.1:18787 → dot-plugin:8787
+  → SSH tunnel → Lima 127.0.0.1:18787 → dot-plugin:8787
 ```
 
-`scripts/dot-tunnel.sh`를 실행하거나 `deploy/dev.kakaocollector.dot-tunnel.plist.example`의 절대 경로를 맞춰 사용자 LaunchAgent로 설치합니다. 머신별 plist는 Git에서 제외되는 `deploy/*.local.plist`에 보관합니다. 이후 Tailscale Funnel을 Mac의 `127.0.0.1:18788`에 연결합니다. 기존 Funnel 설정이 있다면 목적지를 확인하고 충돌하지 않게 구성하세요.
+Run `scripts/dot-tunnel.sh`, or update the absolute paths in `deploy/dev.kakaocollector.dot-tunnel.plist.example` and install it as a user LaunchAgent. Store machine-specific plists in the Git-ignored `deploy/*.local.plist` files. Then point Tailscale Funnel to `127.0.0.1:18788` on the Mac. Check any existing Funnel destinations to avoid conflicts.
 
-Mac의 잠자기·종료, Lima 또는 Tailscale 정지는 공개 연결도 중단합니다. Funnel 주소가 공개되어도 `/mcp`에는 OAuth 인증이 필요합니다.
+Mac sleep or shutdown, or stopping Lima or Tailscale, interrupts the public connection. Even though the Funnel address is public, `/mcp` still requires OAuth authentication.
 
-## 확인과 문제 해결
+## Verification and troubleshooting
 
 ```bash
 ./scripts/lima-compose.sh --profile dot ps
@@ -73,19 +73,19 @@ tailscale funnel status
 uv run python scripts/smoke-dot.py https://your-host.example
 ```
 
-Linux에서는 `scripts/lima-compose.sh` 대신 `docker compose`를 사용합니다. smoke 검사는 임시 OAuth grant로 TLS·인증·도구 검색·실제 최신 행 조회를 확인한 뒤 철회합니다. 본문과 키는 출력하지 않으며 이벤트 구독도 만들지 않습니다.
+On Linux, use `docker compose` instead of `scripts/lima-compose.sh`. The smoke test uses a temporary OAuth grant to verify TLS, authentication, tool discovery, and retrieval of actual recent rows, then revokes the grant. It prints neither message bodies nor keys and creates no event subscriptions.
 
-| 오류 | 확인 |
+| Error | What to check |
 | --- | --- |
-| `invalid_origin` | `DOT_PUBLIC_URL`과 브라우저 주소의 scheme·host·port 일치 여부. 승인 HTML의 Referrer-Policy는 `same-origin`이어야 함 |
-| `invalid_approval` | 10분이 지났거나 쿠키가 없는 승인 화면. ChatGPT에서 연결을 다시 시작 |
-| `invalid_link_key` | `mcp_link_key`를 사용했는지 확인 |
-| 연결 후 도구 오류 | 수집 API 상태와 read 토큰, 수집 승인 상태 |
+| `invalid_origin` | The scheme, host, and port in `DOT_PUBLIC_URL` must match the browser address; the approval HTML's Referrer-Policy must be `same-origin` |
+| `invalid_approval` | The approval screen is over 10 minutes old or its cookie is missing; restart the connection from ChatGPT |
+| `invalid_link_key` | Verify that you used `mcp_link_key` |
+| Tool errors after connecting | Collection API health, read token, and collection approval |
 
-승인 폼의 Origin·쿠키 검사와 PKCE 검증은 유지해야 합니다. 폼 정책 변경 후에는 실제 브라우저에서 승인과 ChatGPT 복귀까지 확인하세요.
+Keep the approval form's Origin/cookie checks and PKCE validation. After changing form policies, verify approval and the return to ChatGPT in a real browser.
 
-## 프로토콜
+## Protocol
 
-MCP `2026-07-28`과 `kakao.read`, `kakao.events` 범위를 제공합니다. DCR과 ChatGPT CIMD를 지원하며, CIMD fetch 실패 시 임의 redirect를 허용하지 않습니다. CIMD는 `none`, DCR은 `none`·`client_secret_basic`·`client_secret_post`를 지원합니다. `private_key_jwt`는 지원하지 않습니다.
+The server provides MCP `2026-07-28` and the `kakao.read` and `kakao.events` scopes. It supports DCR and ChatGPT CIMD, without allowing arbitrary redirects if CIMD fetching fails. CIMD supports `none`; DCR supports `none`, `client_secret_basic`, and `client_secret_post`. `private_key_jwt` is not supported.
 
-[OpenAI MCP Events](https://developers.openai.com/plugins/build/mcp-events) · [OAuth 인증](https://developers.openai.com/plugins/build/auth) · [ChatGPT 연결](https://developers.openai.com/plugins/build/app-quickstart#connect-your-mcp-server-in-chatgpt)
+[OpenAI MCP Events](https://developers.openai.com/plugins/build/mcp-events) · [OAuth authentication](https://developers.openai.com/plugins/build/auth) · [Connect ChatGPT](https://developers.openai.com/plugins/build/app-quickstart#connect-your-mcp-server-in-chatgpt)

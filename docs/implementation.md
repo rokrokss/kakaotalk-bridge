@@ -1,27 +1,27 @@
-# 검증 범위
+# Validation scope
 
-[개발과 테스트 명령](development.md) · [현재 구조](design.md)
+[Development and test commands](development.md) · [Current architecture](design.md)
 
-## 실제 계정으로 확인한 항목
+## Verified with a real account
 
-2026-10-04, Apple Silicon Mac의 Lima/Ubuntu 24.04 arm64 환경:
+On 2026-10-04, using Lima/Ubuntu 24.04 arm64 on an Apple Silicon Mac:
 
-- Android 14, SM-T970 태블릿 설정, 1200 × 1920 / density 240으로 redroid 부팅.
-- 웹 관리 화면의 화면 조회·조작·한글 입력.
-- 카카오톡 ‘다른 기기와 함께 사용’ 옵션 검사와 보조 로그인.
-- 핸드폰 로그인 유지: 사용자가 폰에서 직접 확인. 서버의 자동 검사 결과가 아님.
-- 승인 후 Iris DB 행 저장과 나에게 보낸 새 메시지 수집.
-- 컨테이너·VM 재시작 후 상태 볼륨 유지.
-- 공개 HTTPS의 OAuth 흐름과 ChatGPT의 `KakaoTalk Bridge` 연결 완료.
+- redroid boot with Android 14, SM-T970 tablet configuration, and 1200 × 1920 resolution at density 240.
+- Screen viewing, control, and Korean text input through the web admin console.
+- KakaoTalk secondary-device option check (“다른 기기와 함께 사용”, meaning “Use with other devices”) and secondary login.
+- Phone session continuity, manually confirmed by the user on the phone; this was not an automated server check.
+- Iris database row storage and collection of new messages sent to self after approval.
+- State volume persistence across container and VM restarts.
+- Public HTTPS OAuth flow and successful connection of `KakaoTalk Bridge` in ChatGPT.
 
-## 자동 검사 범위
+## Automated checks
 
-Python 테스트는 인증·CSRF·Origin, 로그인 승인 조건, DB 중복 제거·커서·복원, MCP 조회, 이벤트 재시도·철회·만료 등을 합성 데이터로 검사합니다. Docker smoke는 API·gateway·stdio MCP·SQLite·암호화 백업을 확인합니다.
+Python tests use synthetic data to cover authentication, CSRF, Origin, login approval conditions, database deduplication, cursors, restores, MCP queries, and event retries, revocation, and expiry. Docker smoke tests cover the API, gateway, stdio MCP, SQLite, and encrypted backups.
 
-amd64는 이미지 빌드와 API 실행을 확인했습니다. amd64 호스트의 redroid·카카오톡 호환성까지 확인한 것은 아닙니다. 재현 명령은 [개발 안내](development.md)에 있습니다.
+Image builds and API startup have been verified on amd64. This does not establish redroid or KakaoTalk compatibility on an amd64 host. Reproduction commands are in [Development](development.md).
 
-## 미확인 범위
+## Not yet verified
 
-다른 카카오톡 버전과 호스트의 호환성, 전체 대화의 누락 여부, 수집 전후 읽음 상태의 종단 간 비교, 24~72시간 연속 수신은 별도 검증이 필요합니다. 실제 Dot 이벤트 실행은 검증하지 않았으며 자동 구독은 요구사항에 포함하지 않습니다.
+Compatibility with other KakaoTalk versions and hosts, completeness of conversation history, end-to-end comparison of read status before and after collection, and 24–72 hours of continuous reception require further validation. Actual Dot event execution has not been verified, and automatic subscription is not a requirement.
 
-초기 알림 기반 MVP와 문제 해결 과정의 세부 기록은 Git 이력에 남아 있습니다. 현재 동작은 [Iris](iris.md), [관리 화면](web-ui.md), [MCP](dot-plugin.md) 문서를 기준으로 합니다.
+Details of the initial notification-based MVP and troubleshooting history remain in Git. Refer to [Iris](iris.md), [Admin console](web-ui.md), and [MCP](dot-plugin.md) for current behavior.

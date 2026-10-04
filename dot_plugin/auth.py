@@ -207,23 +207,23 @@ class OAuth:
         esc = html.escape
         permissions = []
         if "kakao.read" in scope.split():
-            permissions.append("<li>저장된 메시지 조회·검색과 수집 상태 확인</li>")
+            permissions.append("<li>Read and search stored messages and check collection status</li>")
         if "kakao.events" in scope.split():
-            permissions.append("<li>요청한 새 메시지 이벤트 구독과 처리 위치 기록</li>")
+            permissions.append("<li>Subscribe to requested new-message events and record processing progress</li>")
         page = render_page(
-            "연결 승인",
-            f'''<h1>연결 승인</h1>
-<p><strong>{esc(client["client_name"])}</strong>에 다음 권한을 허용합니다.</p>
+            "Approve connection",
+            f'''<h1>Approve connection</h1>
+<p>Allow <strong>{esc(client["client_name"])}</strong> the following permissions:</p>
 <ul>{"".join(permissions)}</ul>
-<p>조회한 메시지는 연결한 클라이언트에 전달됩니다. 카카오톡 전송·기기 조작 권한은 포함하지 않습니다.</p>
+<p>Retrieved messages are shared with the connected client. These permissions do not allow sending KakaoTalk messages or controlling the device.</p>
 <form method="post" action="/authorize">
 <input type="hidden" name="ticket" value="{esc(ticket)}">
-<label for="link-key">서버 연결 키</label>
+<label for="link-key">Server connection key</label>
 <input id="link-key" type="password" name="link_key" autocomplete="off" required aria-describedby="key-help">
-<p id="key-help" class="hint"><code>secrets/mcp_link_key</code>에 저장된 키입니다. 카카오 비밀번호와 다릅니다.</p>
-<button type="submit">연결 허용</button>
+<p id="key-help" class="hint">Use the key stored in <code>secrets/mcp_link_key</code>, not your Kakao password.</p>
+<button type="submit">Allow connection</button>
 </form>
-<p class="hint">연결만으로 이벤트 구독이나 자동 작업을 만들지 않습니다.</p>''',
+<p class="hint">Connecting does not create event subscriptions or automated tasks.</p>''',
         )
         return page, cookie, redirect_origin(query["redirect_uri"])
 

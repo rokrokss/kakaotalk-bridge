@@ -1,8 +1,8 @@
-# 개발
+# Development
 
-[README](../README.md) · [구조](design.md) · [검증 범위](implementation.md)
+[README](../README.md) · [Architecture](design.md) · [Validation scope](implementation.md)
 
-## 로컬 검사
+## Local checks
 
 ```bash
 uv sync --frozen --python 3.12
@@ -12,28 +12,28 @@ node --check webui/static/app.js
 docker compose --profile dot config --quiet
 ```
 
-Python 의존성은 `uv.lock`과 해시를 포함한 `requirements.lock`으로 고정합니다. 의존성을 변경했다면 다음으로 동기화합니다.
+Python dependencies are pinned in `uv.lock` and in `requirements.lock` with hashes. After changing dependencies, synchronize them with:
 
 ```bash
 uv export --frozen --no-dev --no-emit-project --output-file requirements.lock
 ```
 
-## 코드 위치
+## Code layout
 
-| 경로 | 역할 |
+| Path | Purpose |
 | --- | --- |
-| `device/` | redroid 설정, 로그인 검사, Iris 수집기 |
-| `iris/` | Iris의 읽기 전용 진입점과 라이선스 고지 |
-| `android/` | 등록 앱과 웹 입력기. 이전 알림 수집 코드 포함 |
-| `server/` | 저장, API, stdio MCP, 백업 |
-| `webui/` | 관리자 인증, 기기 조작, 정적 웹 화면 |
-| `dot_plugin/` | OAuth, 원격 MCP, 선택적 Events |
-| `tests/` | 합성 데이터 테스트와 브라우저용 가짜 기기 |
-| `deploy/`, `scripts/` | Lima, supervisor, 설치·진단·백업 도구 |
+| `device/` | redroid configuration, login checks, and Iris collector |
+| `iris/` | Read-only Iris entry point and license notice |
+| `android/` | Registration app and web keyboard, including legacy notification collection code |
+| `server/` | Storage, API, stdio MCP, and backups |
+| `webui/` | Admin authentication, device control, and static web console |
+| `dot_plugin/` | OAuth, remote MCP, and optional Events |
+| `tests/` | Synthetic-data tests and fake devices for browser previews |
+| `deploy/`, `scripts/` | Lima, supervisor, installation, diagnostics, and backup tools |
 
-## 웹 화면 미리보기
+## Preview the web console
 
-ADB와 실제 계정에 연결되지 않는 fixture를 사용합니다. 로컬에서 신뢰하는 localhost TLS 인증서가 필요합니다. 기존 설치의 인증서가 신뢰되어 있다면:
+Use fixtures that do not connect to ADB or a real account. You need a locally trusted localhost TLS certificate. If your existing installation's certificate is trusted:
 
 ```bash
 uv run uvicorn tests.webui_preview:create_preview --factory \
@@ -42,26 +42,28 @@ uv run uvicorn tests.webui_preview:create_preview --factory \
   --no-access-log
 ```
 
-`https://localhost:19443/admin/`에 접속합니다. 키는 `preview-only-key-` 뒤에 숫자 `0` 32개입니다. `/test/calls`에는 가짜 기기에 보낸 동작 이름만 표시합니다. 설치·로그인 검사·양쪽 확인·핸드폰 보고를 이 환경에서 시험하세요. 운영 화면에서는 설치나 승인 초기화 동작으로 UI를 검증하지 않습니다.
+Open `https://localhost:19443/admin/`. The key is `preview-only-key-` followed by 32 zeroes. `/test/calls` shows only the names of actions sent to the fake device. Use this environment to test installation, login checks, confirmation of both sessions, and phone reports. Do not validate the UI by installing or resetting approval on a production instance.
 
-## 컨테이너 검사
+## Container checks
 
 ```bash
 docker compose build api device-agent
 ./scripts/smoke.sh
 ```
 
-smoke는 독립적인 `kakaocollector-smoke-PID` 프로젝트에 합성 Iris 행을 넣어 HTTPS 인증, 재전송, 영속성, 백업, stdio MCP를 확인합니다. 테스트 프로젝트의 볼륨만 제거하며 실제 redroid나 계정은 사용하지 않습니다. 호스트에 uv 또는 Python 3.12와 의존성이 필요합니다. 기본 테스트 subnet은 `172.29.88.0/24`, 포트는 `18443`이므로 기존 배포와 충돌하지 않도록 확인하세요.
+The smoke test inserts synthetic Iris rows into an isolated `kakaocollector-smoke-PID` project and checks HTTPS authentication, retransmission, persistence, backups, and stdio MCP. It removes only the test project's volumes and uses no real redroid instance or account. The host needs uv or Python 3.12 with dependencies. The default test subnet is `172.29.88.0/24` and the port is `18443`; avoid conflicts with existing deployments.
 
-Docker 기반 이미지는 digest로 고정합니다. device 빌드는 Bridge의 `assembleRelease`, `lintRelease`, `apksigner verify`와 Iris의 `assembleRelease`를 실행합니다.
+Docker base images are pinned by digest. The device build runs Bridge's `assembleRelease`, `lintRelease`, and `apksigner verify`, plus Iris's `assembleRelease`.
 
-## 변경 원칙
+## Contribution guidelines
 
-UI에는 상태와 다음 행동에 필요한 설명을 둡니다. 설치·운영 절차는 해당 문서에, 프로토콜과 저장 형식은 구조·API 문서에 기록합니다. 진행 상황이나 실패 후 재시도 과정을 README에 덧붙이지 않습니다.
+English is the primary language for documentation and project-owned user interfaces. Keep Korean literals where they identify the supported KakaoTalk UI, and preserve multilingual test data. Document this distinction when describing login checks.
 
-로그인·인증을 수정했다면 단위 테스트 외에 실제 브라우저의 폼 제출도 확인합니다. HTTP 클라이언트가 직접 지정한 Origin은 브라우저 동작의 대체 검증이 아닙니다. 테스트나 스크린샷에 토큰·실제 대화·계정 정보를 남기지 않습니다.
+Keep UI explanations focused on status and the next action. Put installation and operations procedures in their respective guides, and protocol and storage details in the architecture and API documentation. Do not append progress logs or troubleshooting attempts to the README.
 
-OAuth 승인 화면도 실제 계정 없이 확인할 수 있습니다.
+When changing login or authentication, verify form submission in a real browser as well as unit tests. An Origin header set directly by an HTTP client is not a substitute for browser validation. Do not include tokens, real conversations, or account information in tests or screenshots.
+
+The OAuth approval screen can also be previewed without a real account:
 
 ```bash
 uv run uvicorn tests.dot_preview:create_preview --factory \
@@ -70,4 +72,4 @@ uv run uvicorn tests.dot_preview:create_preview --factory \
   --no-access-log
 ```
 
-`https://localhost:20443/test/start`에서 같은 미리보기 키를 입력하면 로컬 콜백으로 돌아옵니다. 상태는 임시 디렉터리에 저장되며 수집 API와 이벤트 worker는 연결하지 않습니다.
+Enter the same preview key at `https://localhost:20443/test/start` to return to the local callback. State is stored in a temporary directory, without connecting to the collection API or event worker.
