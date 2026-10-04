@@ -1,16 +1,18 @@
-# redroid + Iris 운영 가이드
+# Iris 수집 구현
+
+[README](../README.md) · [운영과 복구](operations.md)
 
 ## 구성과 전제
 
 별도 태블릿 없이 Linux 서버의 redroid가 보조 태블릿 역할을 한다. 기존 핸드폰은 주 기기로 남는다. Iris는 redroid 내부에서 root `app_process`로 실행하며, Python `iris-collector`는 별도 Docker 컨테이너에서 동작한다. Termux나 PC 카카오톡을 사용하지 않는다.
 
-redroid의 태블릿 크기/모델 속성은 보조 로그인 보장이 아니다. 정식 카카오톡 APK의 실제 로그인 화면에서 ‘다른 기기와 함께 사용’ 선택을 확인하고, 로그인 후 휴대폰과 redroid 양쪽 세션이 유지됨을 운영자가 확인해야 한다. 코드가 휴대폰 로그아웃 자체를 막거나 휴대폰 세션을 감시하는 것은 아니다. 이 실기 검증은 아직 수행하지 않았다.
+redroid의 태블릿 크기/모델 속성은 보조 로그인 보장이 아니다. 정식 카카오톡 APK의 실제 로그인 화면에서 ‘다른 기기와 함께 사용’ 선택을 확인하고, 로그인 후 휴대폰과 redroid 양쪽 세션이 유지됨을 운영자가 확인해야 한다. 코드가 휴대폰 로그아웃 자체를 막거나 휴대폰 세션을 감시하는 것은 아니다. Apple Silicon의 Lima 환경에서 보조 로그인과 신규 메시지 수집을 확인했으며, 핸드폰 로그인 유지는 사용자가 직접 확인했다.
 
 ## 실행
 
 기본 운영 방법은 [관리자 웹 UI](web-ui.md)다. 화면 조작과 설치·로그인 확인을 브라우저에서 수행할 수 있다. 아래 CLI/scrcpy는 대체 경로이며 웹 작업과 동시에 실행하지 않는다.
 
-README의 Linux 커널·시크릿 준비와 정식 Kakao APK 배치를 완료한 뒤:
+[Linux 설치](install.md)의 커널·시크릿 준비와 정식 Kakao APK 배치를 완료한 뒤:
 
 ```bash
 docker compose build api device-agent
@@ -62,7 +64,7 @@ docker compose logs --tail 30 iris-collector
 
 본문은 16,384 UTF-16 코드 단위로 제한하고 잘림을 표시한다. 현재 수집 대상은 행의 본문·메시지 종류·ID·시간·origin·isMine이다. 첨부 원본, 표시 이름 조회, 메시지 수정/삭제 동기화는 미구현이다. JSON 또는 복호화 오류는 페이지 단위로 중단하며 ciphertext를 정상 본문으로 저장하지 않는다.
 
-실제 Linux/redroid에서 확인할 사항:
+새 환경에서 확인할 사항과 아직 남아 있는 검증 범위:
 
 1. 커널/binder, 카카오 APK ABI 및 root DB 접근 호환성.
 2. 보조 로그인 옵션과 휴대폰 기존 세션 유지.
@@ -71,46 +73,3 @@ docker compose logs --tail 30 iris-collector
 5. 24~72시간 장기 수신과 디스크 사용량.
 
 로컬 API 테스트와 APK 빌드 성공을 위 항목의 성공으로 대신하지 않는다.
-
-## Iris 최초 통합 검증 기록 (2026-10-04)
-
-웹 입력기 추가 전의 기록이다. 현재 Bridge APK와 웹 UI 검증은 [웹 UI 검증 기록](web-ui.md#로컬-검증-기록-2026-10-04)을 따른다.
-
-- `uv run pytest -q`: `47 passed, 1 warning in 1.51s`. 변경된 등록 거절, 서버 commit 후 ACK 유실, 재시작, DB 교체/역행, 미확인 수집 차단, 보관 기간 정리와 암호화 복원 후 커서를 합성 데이터로 검증했다.
-- `uv run ruff check server device tests deploy scripts/smoke.py`: `All checks passed!`
-- `docker compose config --quiet`, `git diff --check`: exit 0, 출력 없음.
-- `./scripts/smoke.sh`: exit 0. 실제 Docker API/gateway/MCP/SQLite를 사용하되 Iris 입력 행은 합성 데이터다.
-
-```text
-PASS: synthetic Iris row, durable cursor and scoped conversation ID
-PASS: TLS verification, authenticated ingest, duplicate retry, Korean text, read API, partial coverage
-PASS: container stdio MCP calls all four read-only tools against the API
-PASS: container restart preserves collected data
-PASS: encrypted backup and verified restore inside non-root container
-```
-
-`./scripts/preflight.sh`는 현재 macOS 환경에서 다음과 같이 exit 1로 종료했다. 실제 redroid 운영 검증은 수행하지 않았다.
-
-```text
-Docker Compose version v2.40.3-desktop.1
-Docker: linux/aarch64
-FAIL: Full redroid deployment requires a prepared Linux host. API/APK builds can run here.
-```
-
-Docker/Android 빌드 및 산출물 검증도 완료했다.
-
-- `docker compose build api device-agent`: exit 0, server/device `Built`.
-- 최종 Iris 수정 후 `docker compose build device-agent`: exit 0, device `Built`.
-- `docker buildx build --platform linux/amd64 -f docker/server.Dockerfile -t kakaotalk-collector/server:0.1.0-amd64 --load .`: exit 0.
-- `docker buildx build --platform linux/amd64 -f docker/device.Dockerfile --secret id=bridge_keystore,src=secrets/bridge.jks --secret id=bridge_key_password,src=secrets/bridge_key_password -t kakaotalk-collector/device:0.1.0-amd64 --load .`: exit 0.
-- 두 device 이미지에서 `import device.iris` 및 APK dex 안의 `CollectorMain` 존재를 확인했다. `PASS: linux/arm64 collector imports and Iris entrypoint is present in APK`, `PASS: linux/amd64 collector imports and Iris entrypoint is present in APK`.
-- amd64 서버의 readiness/인증 조회: `PASS: linux/amd64 API readiness and authenticated status`.
-
-Bridge `assembleRelease`/`lintRelease`/서명 검증, Iris `assembleRelease`를 Docker 빌드에서 실행했다. 최초 병렬 빌드의 Gradle 캐시 잠금 충돌은 BuildKit cache mount의 `sharing=locked`로 해결했다. upstream Iris의 deprecated Android API 컴파일 경고는 남아 있다.
-
-이미지 태그는 server/device 각각 `0.1.0`(로컬 arm64), `0.1.0-amd64`이며 registry에 push하지 않았다. APK와 대응 소스/빌드 파일은 무시되는 `artifacts/`에 추출했다.
-
-```text
-bridge.apk SHA256 3a12167cccacda91aa8acb568714b3c8935a1644226f7776775e997b3f1c1453
-iris.apk   SHA256 836860111c3c3ec840385cc74c52287bf07f52746e511a4ae77419ccefa2ff7f
-```

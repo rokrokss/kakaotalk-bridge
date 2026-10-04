@@ -82,7 +82,7 @@ def collector_status():
 
 ERRORS = {
     "screen_unavailable": "화면을 가져오지 못했습니다. redroid 부팅 상태를 확인하세요.",
-    "keyboard_unavailable": "초기 설치 후 ‘입력 연결’을 누르고 카카오톡 입력칸을 선택하세요.",
+    "keyboard_unavailable": "‘입력기 연결’을 누르고 카카오톡 입력칸을 선택하세요. 설치 전이라면 설치 관리에서 먼저 설치하세요.",
     "focus_kakao_input": "카카오톡의 입력칸을 먼저 클릭하세요.",
     "input_result_unknown": "입력 결과를 확인하지 못했습니다. 화면을 확인한 뒤 필요할 때 다시 입력하세요.",
     "kakao_not_installed": "카카오톡 설치를 먼저 완료하세요.",
@@ -318,11 +318,11 @@ def create_app(admin_token=None, android=None, status_provider=None, session_ttl
                     session_snapshot = device.session_status()
                     snapshot_invalidated = False
             message = {
-                "bootstrap": "초기 설치 완료. 카카오톡을 열어 보조 로그인 옵션을 선택하세요.",
+                "bootstrap": "설치했습니다. 카카오톡을 열어 로그인 옵션을 검사하세요.",
                 "open-kakao": "카카오톡을 열었습니다.",
-                "keyboard": "입력 연결 완료. 화면의 카카오톡 입력칸을 클릭하세요.",
+                "keyboard": "입력기를 연결했습니다. 태블릿의 입력칸을 선택하세요.",
                 "login-check": "보조 로그인 옵션 검사를 통과했습니다. 이제 화면에서 로그인하세요.",
-                "confirm-secondary": "양쪽 세션 확인을 기록했습니다. Iris 수집 상태를 확인하세요.",
+                "confirm-secondary": "양쪽 로그인을 확인했습니다. 메시지 수집을 시작합니다.",
                 "session-check": "현재 화면과 로그인 확인 기록을 검사했습니다.",
                 "phone-active": "핸드폰에서 직접 확인한 시각을 갱신했습니다.",
                 "phone-lost": "핸드폰 로그아웃 보고를 기록하고 Iris 수집 승인을 해제했습니다.",

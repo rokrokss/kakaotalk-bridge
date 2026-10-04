@@ -27,6 +27,7 @@ class FakeAndroid:
     def __init__(self):
         self.calls = []
         self.config = {}
+        self.proof = {}
 
     def screenshot(self):
         return png(), 360, 640
@@ -45,6 +46,8 @@ class FakeAndroid:
 
     def bootstrap(self):
         self.calls.append(("bootstrap", ()))
+        self.config = {}
+        self.proof = {}
 
     def enable_keyboard(self):
         self.calls.append(("keyboard", ()))
@@ -54,9 +57,14 @@ class FakeAndroid:
 
     def login_check(self):
         self.calls.append(("login-check", ()))
+        self.proof = {
+            "checked_at": time.time(),
+            "signature": {"kakao_version": 1234, "fingerprint": "test"},
+        }
 
     def confirm(self, *args):
         self.calls.append(("confirm", args))
+        self.proof = {}
         self.config = {
             "collector_mode": "iris",
             "secondary_login_version": 1234,
@@ -77,8 +85,13 @@ class FakeAndroid:
         return {
             "checked_at": time.time(),
             "device": "android_ready",
-            "screen": {"state": "unknown", "secondary_option": "unknown"},
-            **enrollment_evidence(self.config, {}, {"kakao_version": 1234, "fingerprint": "test"}),
+            "screen": {
+                "state": "main_screen_observed" if self.config else "login_required",
+                "secondary_option": "unknown",
+            },
+            **enrollment_evidence(
+                self.config, self.proof, {"kakao_version": 1234, "fingerprint": "test"}
+            ),
         }
 
 
@@ -87,7 +100,12 @@ def create_preview():
     app = create_app(
         "preview-only-key-" + "0" * 32,
         android,
-        lambda: {"state": "needs_attention", "warnings": []},
+        lambda: {
+            "state": "collecting_partial"
+            if android.config.get("secondary_login_version")
+            else "needs_attention",
+            "warnings": [],
+        },
     )
 
     @app.get("/test/calls")

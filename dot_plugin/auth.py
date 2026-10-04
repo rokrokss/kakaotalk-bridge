@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 
 from dot_plugin import network
 from dot_plugin.config import SCOPES
+from dot_plugin.pages import page as render_page
 
 
 def digest(value):
@@ -204,14 +205,26 @@ class OAuth:
             },
         )
         esc = html.escape
-        page = f'''<!doctype html><html lang="ko"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KakaoTalk · ChatGPT 연결</title><body><main><h1>카카오톡 수집 서버 연결</h1>
-<p><strong>{esc(client["client_name"])}</strong>에 저장된 카카오톡 메시지 조회 및 새 메시지 이벤트 구독을 허용합니다.</p>
-<p>카카오톡 메시지 전송이나 기기 조작 권한은 제공하지 않습니다.</p>
-<form method="post" action="/authorize"><input type="hidden" name="ticket" value="{esc(ticket)}">
-<label>서버 연결 키 <input type="password" name="link_key" autocomplete="off" required></label>
-<p>서버의 secrets/mcp_link_key 값입니다. 카카오 계정 비밀번호를 입력하지 마세요.</p>
-<button type="submit">연결 허용</button></form></main></body></html>'''
+        permissions = []
+        if "kakao.read" in scope.split():
+            permissions.append("<li>저장된 메시지 조회·검색과 수집 상태 확인</li>")
+        if "kakao.events" in scope.split():
+            permissions.append("<li>요청한 새 메시지 이벤트 구독과 처리 위치 기록</li>")
+        page = render_page(
+            "연결 승인",
+            f'''<h1>연결 승인</h1>
+<p><strong>{esc(client["client_name"])}</strong>에 다음 권한을 허용합니다.</p>
+<ul>{"".join(permissions)}</ul>
+<p>조회한 메시지는 연결한 클라이언트에 전달됩니다. 카카오톡 전송·기기 조작 권한은 포함하지 않습니다.</p>
+<form method="post" action="/authorize">
+<input type="hidden" name="ticket" value="{esc(ticket)}">
+<label for="link-key">서버 연결 키</label>
+<input id="link-key" type="password" name="link_key" autocomplete="off" required aria-describedby="key-help">
+<p id="key-help" class="hint"><code>secrets/mcp_link_key</code>에 저장된 키입니다. 카카오 비밀번호와 다릅니다.</p>
+<button type="submit">연결 허용</button>
+</form>
+<p class="hint">연결만으로 이벤트 구독이나 자동 작업을 만들지 않습니다.</p>''',
+        )
         return page, cookie, redirect_origin(query["redirect_uri"])
 
     def approve(self, form, cookie, origin):

@@ -240,6 +240,39 @@ def test_non_approval_responses_do_not_send_referrers(plugin):
         assert client.get(path).headers["referrer-policy"] == "no-referrer"
 
 
+@pytest.mark.parametrize("scope", ["kakao.read", "kakao.events", SCOPES])
+def test_approval_displays_requested_permissions_and_escapes_client_name(plugin, scope):
+    client, *_ = plugin
+    registration = client.post(
+        "/register",
+        json={"redirect_uris": [REDIRECT], "client_name": '<img src=x onerror="alert(1)">'},
+    ).json()
+    response = client.get(
+        "/authorize",
+        params={
+            "client_id": registration["client_id"],
+            "redirect_uri": REDIRECT,
+            "response_type": "code",
+            "resource": BASE + "/mcp",
+            "scope": scope,
+            "code_challenge_method": "S256",
+            "code_challenge": "a" * 43,
+        },
+    )
+    assert response.status_code == 200
+    assert "<img" not in response.text
+    assert "&lt;img" in response.text
+    assert ("<li>저장된 메시지" in response.text) == ("kakao.read" in scope.split())
+    assert ("<li>요청한 새 메시지" in response.text) == ("kakao.events" in scope.split())
+    policy = response.headers["content-security-policy"]
+    assert "default-src 'none'; style-src 'self';" in policy
+    assert "unsafe-inline" not in policy
+    assert response.headers["referrer-policy"] == "same-origin"
+    css = client.get("/assets/style.css")
+    assert css.status_code == 200 and css.headers["content-type"].startswith("text/css")
+    assert client.get("/assets/../auth.py").status_code == 404
+
+
 def test_signal_then_read_ack_and_restart_without_payload(plugin):
     client, app, source, _, _, verified, delivered, config = plugin
     first = rpc(client, "events/subscribe", subscription())["result"]
