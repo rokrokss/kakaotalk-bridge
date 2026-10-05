@@ -4,6 +4,34 @@
 
 날짜별 항목은 해당 시점의 검증 기록이며 모든 설치 경로를 실행했다는 뜻은 아닙니다. 최근 관리 화면·연결 설정 검사는 [아래](#admin-ux-and-connection-setup-2026-10-05)에 있습니다. 명령과 실제 진단 출력은 원문을 유지합니다.
 
+<a id="public-release-2026-10-06"></a>
+
+## 공개 릴리스와 사전 빌드 설치 (2026-10-06)
+
+[`v0.1.0`](https://github.com/rokrokss/kakaotalk-bridge/releases/tag/v0.1.0)은 커밋 `88a19c27ffbd4b0d53748f8e343f63c24c259690`에서 생성했습니다. [GitHub Actions 실행](https://github.com/rokrokss/kakaotalk-bridge/actions/runs/37383947477)이 성공했고 개인 계정 `rokrokss`의 GHCR 서버·기기·게이트웨이 이미지를 공개했습니다. 각 이미지에 Linux amd64·arm64가 포함됩니다.
+
+| 실행한 검사 | 실제 결과 |
+| --- | --- |
+| 로컬 `uv run pytest -q` (초기 구현) | `389 passed, 1 warning in 23.59s` |
+| 추가 수정 후 `uv run pytest -q tests/test_releases.py tests/test_onboarding.py tests/test_web_connection_setup.py` | `87 passed, 1 warning in 4.35s` |
+| 최종 커밋의 CI `uv run pytest -q` | `392 passed, 2 skipped, 1 warning in 17.10s`; Caddy 실행 파일이 없는 러너에서 로컬 프록시 테스트 2개 생략 |
+| `uv run ruff check .` | `All checks passed!` |
+| `actionlint`, `bash -n install.sh`, `git diff --check` | 종료 코드 0 |
+| `python3 scripts/verify-release-images.py <release.json>` | 세 이미지 모두 `공개 다운로드 및 amd64·arm64 확인 완료` |
+| `gh release download v0.1.0` 및 `SHA256SUMS` 대조 | 설치 번들·Unix/Windows 진입점·매니페스트·체크섬 파일 5개 다운로드, 모든 페이로드 SHA-256 일치 |
+| `gh attestation verify bridge-install.tar.gz --repo rokrokss/kakaotalk-bridge --format json` | 종료 코드 0, 검증 결과 1개 |
+| 커밋에서 설치 번들 생성·압축 해제 | 실행 권한·업데이터·매니페스트·체크섬 확인, 로컬 상태·인증 키 미포함 |
+
+새 Ubuntu 24.04.5 arm64 VM은 Docker가 설치되지 않았고 Binder가 로드되지 않은 상태에서 시작했습니다. 디스플레이와 호스트 홈 공유 없이 공개 `install.sh --no-browser --admin-url http://localhost:39789`를 실행했습니다. Docker·커널 모듈 준비, GHCR 이미지 다운로드, 서비스 시작, SSH 포워딩 안내까지 종료 코드 0으로 완료했습니다. 설치된 이미지는 공개 Bridge 이미지 3개와 redroid뿐이며 Android SDK/Gradle 소스 빌드는 수행하지 않았습니다.
+
+`bridge doctor`는 누락된 인증 키 0개를 보고했고, Android의 `getprop sys.boot_completed`는 `1`을 반환했습니다. 호스트에서 전달된 localhost 관리 주소는 HTTP 200과 한국어 HTML을 반환했습니다. 설치 명령 재실행과 `sudo reboot` 후에도 인증 키 12개의 해시가 모두 일치했고, 별도의 `bridge up` 없이 서비스가 복구됐습니다.
+
+업데이트는 테스트 VM에서 릴리스 메타데이터를 별도 보관한 뒤 `bridge upgrade --version v0.1.0`으로 같은 릴리스를 다시 적용했습니다. 암호화 백업(`.kcs`, 약 25 MiB), 이전 코드 보관, 상태 확인, 인증 키 유지가 모두 성공했습니다. 다시 같은 버전을 요청하면 `이미 v0.1.0 릴리스를 사용하고 있습니다.`로 종료했습니다. 단위 테스트는 다운로드 해시 불일치·경로 이탈·잘못된 버전 거부와 업데이트 실패 시 코드 복구도 확인합니다.
+
+Apple Silicon Mac에서는 공개 설치 번들을 받아 `bash install.sh --no-browser --vm kakaotalk-release-mac-20261006 --admin-port 39444 --mcp-port 39788`로 새 전용 Lima VM을 만들었습니다. 소스 빌드 없이 설치가 완료됐고 호스트의 localhost 관리 화면에서 HTTP 200·한국어 HTML을 확인했습니다. VM을 완전히 정지한 뒤 `bridge up --no-browser`로 다시 실행하고 `bridge doctor`가 종료 코드 0을 반환하는 것도 확인했습니다. Mac에서도 같은 릴리스를 재적용해 호스트·VM의 코드가 함께 갱신되고, VM의 암호화 백업·이전 코드 보관·업데이트 후 상태 검사가 성공하는 것을 확인했습니다.
+
+이번 실환경 검증은 Ubuntu arm64 VM과 Apple Silicon Mac의 설치·운영 경로를 대상으로 했습니다. amd64 이미지는 빌드와 공개 다운로드를 검증했으며, 독립 amd64 서버에서 카카오톡 로그인·수집까지 실행한 검증은 아닙니다. 테스트 VM에는 개인 카카오톡 계정을 연결하지 않았고 기존 운영 VM과 로그인 데이터는 변경하지 않았습니다. Windows·Intel Mac의 실제 설치는 여전히 미검증입니다. 검증에 사용한 두 VM은 종료 후 정지했습니다.
+
 <a id="korean-user-guidance-2026-10-06"></a>
 
 ## 한국어 사용자 안내 (2026-10-06)

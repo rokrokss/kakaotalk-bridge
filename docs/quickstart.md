@@ -73,14 +73,14 @@ bash install.sh --source
 
 | 환경 | 실행 방식 | 현재 검증 |
 | --- | --- | --- |
-| Apple Silicon Mac | 전용 Lima Ubuntu VM 자동 준비, Docker Desktop 불필요 | 새 VM에서 소스 설치·브라우저·OAuth 확인 |
+| Apple Silicon Mac | 전용 Lima Ubuntu VM 자동 준비, Docker Desktop 불필요 | 새 VM에서 릴리스 이미지 설치·관리 화면 확인 |
 | Intel Mac | QEMU 기반 Lima, 없으면 설치 | 코드 경로 제공, 실제 설치 미검증 |
-| Ubuntu·Debian Linux | 로컬 Docker Engine, Binder 모듈 설치·로드 시도 | 준비된 Ubuntu VM에서 `bridge up` 확인, 독립 신규 호스트 미검증 |
+| Ubuntu·Debian Linux | 로컬 Docker Engine, Binder 모듈 설치·로드 시도 | 새 Ubuntu 24.04 arm64 VM에서 릴리스 설치·재부팅·업데이트 확인 |
 | 기타 Linux | 호환되는 기존 도구와 Binder 재사용 | 지원하지 않는 필수 도구가 없으면 조치 안내와 함께 중단 |
 | Windows + Linux 서버 | PowerShell에서 SSH 설치 및 localhost 포워딩 유지 | 스크립트 제공, Windows 실행 미검증 |
 | Windows WSL2 | Binder가 이미 로드된 기존 배포판 | 호환성 확인 후 진행. 기본 WSL2가 작동한다고 보장하지 않음 |
 
-[설치 검증 내역과 미검증 범위](implementation.md#installation-and-restart-2026-10-05)
+[설치 검증 내역과 미검증 범위](implementation.md#public-release-2026-10-06)
 
 로컬 실행에는 arm64 또는 x86_64, 충분한 메모리·디스크, 가상화·커널 기능 접근 권한이 필요합니다. 권한이 제한된 컨테이너나 회사 관리 장비에서는 실행이 어려울 수 있습니다. Linux에서는 전용 호스트나 VM을 사용하세요.
 
