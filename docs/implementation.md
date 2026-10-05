@@ -201,6 +201,14 @@ ARM64 운영에 server/device `security-20261005-r2`, gateway `security-20261005
 
 ADB 인증을 위해 기존 볼륨으로 Android를 한 번 재시작했습니다. 마지막 의존성·ingress 배포에서는 Android 실행을 유지했습니다. 패스키·MCP 연결은 남지만 쿠키 이전 후 소유자가 관리 화면에 한 번 다시 로그인해야 합니다. 휴대폰 세션은 자동 확인하지 않습니다. 오래된 Android 패치는 미해결이며 미검증 주요 버전 교체는 포함하지 않았습니다.
 
+<a id="installation-and-restart-2026-10-05"></a>
+
+## 설치와 재시작 (2026-10-05)
+
+2026-10-05 검증은 격리된 Apple Silicon Lima VM에서 소스 빌드 이미지, 실제 Android·Aurora 준비, 공식 카카오톡 APK 가져오기·서명 검증, 한국어 보조 기기 로그인 화면, 가상 인증기의 브라우저 WebAuthn, 실제 OAuth/MCP 서비스를 사용했습니다. MCP 콜백은 브라우저 테스트에서 가로챘습니다. VM을 완전히 중지한 뒤 같은 명령으로 약 27초 만에 재개했고 인증 정보·기기 등록·패스키·OAuth/MCP가 유지되었습니다. Mac 필수 도구는 이미 설치되어 있었습니다. 소스 빌드 재시도에는 약 22분이 걸렸습니다.
+
+카카오톡 계정 로그인, Aurora 익명 다운로드, 신규 Tailscale·Funnel 설정, Intel Mac, Windows는 해당 테스트에 포함하지 않았습니다. 로컬 HTTPS 프록시를 사용해 기존 설치의 Tailscale 경로는 유지했습니다.
+
 <a id="admin-ux-and-connection-setup-2026-10-05"></a>
 
 ## 관리 화면과 연결 설정 (2026-10-05)
