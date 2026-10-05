@@ -155,11 +155,13 @@ services:
       BRIDGE_URL: https://${GATEWAY_IP:-172.29.87.3}:8443
       ADMIN_AUTH_DB: /auth/admin.db
       ADMIN_AUTH_MODE: ${ADMIN_AUTH_MODE:-passkey}
+      ADMIN_LOCAL_ORIGIN: ${ADMIN_LOCAL_ORIGIN:-}
       DOT_CONTROL_URL: http://dot-control:8788
     volumes:
       - device-state:/state
       - admin-state:/auth
       - ./inputs/kakao:/inputs/kakao:ro
+      - ./.bridge/setup-agent:/run/bridge-setup:ro
     secrets: [admin_token, read_token, ingest_token, tls_cert, mcp_approval_token]
     networks: [device-net, backend-net, private-control-net, admin-ingress-net]
     depends_on:
@@ -189,6 +191,33 @@ services:
     depends_on:
       redroid:
         condition: service_started
+
+  # Browser-only loopback entry point, also usable through SSH forwarding.
+  admin-local:
+    image: ${GATEWAY_IMAGE:-kakaotalk-collector/gateway:2.11.7}
+    profiles: [local-admin]
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    pids_limit: 64
+    tmpfs: [/tmp, "/config:uid=10001,gid=10001,mode=0700", "/data:uid=10001,gid=10001,mode=0700"]
+    environment:
+      ADMIN_LOCAL_HOST: ${ADMIN_LOCAL_HOST:-localhost:18789}
+    volumes: [./docker/Caddyfile.local:/etc/caddy/Caddyfile:ro]
+    ports: ["127.0.0.1:${ADMIN_LOCAL_PORT:-18789}:8785"]
+    networks: [admin-ingress-net, local-admin-edge-net]
+    depends_on:
+      admin:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -T, "3", -O, /dev/null, "http://127.0.0.1:8785/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging: *logging
 
   mcp:
     <<: *server
@@ -313,6 +342,8 @@ services:
     environment:
       CONTROL_PLANE_TUNNEL_ID: ${OPENAI_TUNNEL_ID:-}
       MCP_SERVER_URL: http://dot-tunnel:8789/mcp
+      # Docker daemon restarts do not honor Compose dependency readiness.
+      MCP_STARTUP_WAIT_TIMEOUT: 60s
       MCP_EXTRA_HEADERS: "X-Bridge-Tunnel-Authorization: file:/run/secrets/mcp_tunnel_authorization"
       MCP_DISCOVERY_EXTRA_HEADERS: "X-Bridge-Tunnel-Authorization: file:/run/secrets/mcp_tunnel_authorization"
       HEALTH_LISTEN_ADDR: 0.0.0.0:8080
@@ -352,6 +383,7 @@ networks:
   admin-ingress-net:
     internal: true
   public-edge-net:
+  local-admin-edge-net:
   dot-net:
   tunnel-mcp-net:
     internal: true

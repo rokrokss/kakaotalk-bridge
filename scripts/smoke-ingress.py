@@ -34,7 +34,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Set-Cookie', '__Host-kakao-link=consent-test; Secure; Path=/; HttpOnly')
-        for name in ['__Host-kakao-admin', '__Secure-kakao-admin-v2', '__Host-passkey-admin-flow']:
+        for name in ['__Host-kakao-admin', '__Secure-kakao-admin-v2', '__Host-passkey-admin-flow', 'kakao-admin-local-18789', 'passkey-admin-local-18789']:
             self.send_header('Set-Cookie', name+'=private-test; Secure; Path=/admin; HttpOnly')
         self.end_headers()
         self.wfile.write(json.dumps(self.headers.get_all('Cookie', [])).encode())
@@ -65,7 +65,7 @@ for _ in range(40):
     except OSError: pass
     time.sleep(.25)
 else: raise AssertionError('ingress did not become ready')
-private = ['__Host-kakao-admin', '__Secure-kakao-admin-v2', '__Host-passkey-admin-flow']
+private = ['__Host-kakao-admin', '__Secure-kakao-admin-v2', '__Host-passkey-admin-flow', 'kakao-admin-local-18789', 'passkey-admin-local-18789']
 keep = '__Host-kakao-link=consent-test'
 cases = [[keep], [], ['; '.join(n + '=private-test' for n in private) + '; ' + keep]]
 for name in private:

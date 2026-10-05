@@ -17,7 +17,7 @@
         <mxCell id="5" value="HTTPS with OAuth" style="text;html=0;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;spacing=0;fontFamily=Helvetica;fontSize=25;fontColor=#242320;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="92" y="28" width="630" height="33" as="geometry" />
         </mxCell>
-        <mxCell id="6" value="For ChatGPT and other clients that connect to a public MCP URL." style="text;html=0;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;spacing=0;fontFamily=Helvetica;fontSize=14;fontColor=#6f7069;fontStyle=0;" vertex="1" parent="1">
+        <mxCell id="6" value="Shared HTTPS example: approve with a passkey on the same hostname." style="text;html=0;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;spacing=0;fontFamily=Helvetica;fontSize=14;fontColor=#6f7069;fontStyle=0;" vertex="1" parent="1">
           <mxGeometry x="32" y="72" width="830" height="22" as="geometry" />
         </mxCell>
         <mxCell id="7" value="" style="rounded=1;absoluteArcSize=1;arcSize=15.0;fillColor=#ffffff;strokeColor=none;strokeWidth=1;" vertex="1" parent="1">
@@ -329,10 +329,10 @@
             <mxPoint x="381" y="450" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="52" value="Private HTTPS" style="text;html=0;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;spacing=0;fontFamily=Helvetica;fontSize=12;fontColor=#47735e;fontStyle=0;" vertex="1" parent="1">
+        <mxCell id="52" value="Admin access" style="text;html=0;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;spacing=0;fontFamily=Helvetica;fontSize=12;fontColor=#47735e;fontStyle=0;" vertex="1" parent="1">
           <mxGeometry x="268.0" y="419" width="120" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="53" value="Tailscale / VPN" style="text;html=0;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;spacing=0;fontFamily=Helvetica;fontSize=11;fontColor=#6f7069;fontStyle=0;" vertex="1" parent="1">
+        <mxCell id="53" value="Local · SSH · HTTPS" style="text;html=0;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;spacing=0;fontFamily=Helvetica;fontSize=11;fontColor=#6f7069;fontStyle=0;" vertex="1" parent="1">
           <mxGeometry x="266.0" y="462" width="124" height="19" as="geometry" />
         </mxCell>
         <mxCell id="54" style="edgeStyle=none;rounded=0;html=0;endArrow=open;endFill=0;endSize=7;startArrow=none;startFill=0;startSize=7;strokeWidth=1.8;strokeColor=#47735e;dashed=1;" edge="1" parent="1">

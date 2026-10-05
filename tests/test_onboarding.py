@@ -58,6 +58,7 @@ def test_first_run_installs_then_waits_before_browser(home, monkeypatch):
         "kakaotalk-bridge",
     )
     assert runtime.wait_ready.call_count == 2
+    assert ("setup-agent", "install") in [call.args for call in runtime.call.call_args_list]
     opened.assert_called_once_with(runtime.call.return_value)
     assert json.loads((home / ".bridge/onboarding.json").read_text())["state"] == "ready"
     assert "passkey" not in (home / ".bridge/onboarding.json").read_text()
@@ -120,13 +121,26 @@ def test_bad_registration_response_never_opens_browser(home, monkeypatch, url):
     opened.assert_not_called()
 
 
-def test_custom_proxy_requires_matching_admin_and_public_hosts(home):
-    with pytest.raises(ValueError, match="both"):
-        onboarding.validate(options("--admin-url", "https://private.test"))
-    with pytest.raises(ValueError, match="same hostname"):
-        onboarding.validate(
-            options("--admin-url", "https://a.test", "--public-url", "https://b.test")
-        )
+def test_admin_and_ai_connections_are_independent(home):
+    for flags in (
+        (),
+        ("--connection", "none"),
+        ("--admin-url", "https://private.test"),
+        ("--admin-url", "http://localhost:18789", "--public-url", "https://public.test"),
+        ("--connection", "https", "--public-url", "https://public.test"),
+    ):
+        onboarding.validate(options(*flags))
+    with pytest.raises(ValueError):
+        onboarding.validate(options("--connection", "none", "--public-url", "https://a.test"))
+
+
+def test_default_does_not_touch_network_providers(home, monkeypatch):
+    runtime = Mock()
+    monkeypatch.setattr(cli, "tailscale_binary", Mock(side_effect=AssertionError("no provider")))
+    args = options()
+    onboarding.validate(args)
+    onboarding.connect_network(args, runtime)
+    runtime.call.assert_not_called()
 
 
 def test_shared_proxy_uses_one_origin_for_setup_and_mcp(home, monkeypatch):
@@ -306,7 +320,7 @@ def test_failed_first_vm_boot_retains_selected_ports_for_retry(home, monkeypatch
     (home / "deploy").mkdir()
     (home / "deploy/lima.yaml").write_text("hostPort: 18443\n  - guestPortRange:\n")
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/limactl")
-    choose = Mock(side_effect=[39443, 38787])
+    choose = Mock(side_effect=[39443, 38787, 38789])
     monkeypatch.setattr(cli, "available_port", choose)
 
     def execute(args, **kwargs):
@@ -324,4 +338,21 @@ def test_failed_first_vm_boot_retains_selected_ports_for_retry(home, monkeypatch
     assert (saved["admin_port"], saved["mcp_port"]) == (39443, 38787)
     with pytest.raises(RuntimeError, match="interrupted"):
         cli.mac(args)
-    assert choose.call_count == 2
+    assert choose.call_count == 3
+    assert saved["local_admin_port"] == 38789
+
+
+def test_root_owned_network_settings_are_read_without_exposing_secrets(home, monkeypatch):
+    (home / ".env").write_text(
+        "OPENAI_TUNNEL_ENABLED=1\nADMIN_LOCAL_PORT=19789\nPRIVATE_VALUE=never-return\n"
+    )
+    monkeypatch.setattr(cli, "read_env", Mock(side_effect=PermissionError))
+
+    def privileged(command, **kwargs):
+        return subprocess.run(command, text=True, capture_output=True, check=True).stdout
+
+    monkeypatch.setattr(onboarding, "privileged", privileged)
+    assert onboarding.network_config() == {
+        "OPENAI_TUNNEL_ENABLED": "1",
+        "ADMIN_LOCAL_PORT": "19789",
+    }

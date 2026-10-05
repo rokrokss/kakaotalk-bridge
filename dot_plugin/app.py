@@ -1,5 +1,6 @@
 import json
 import threading
+import time
 from contextlib import asynccontextmanager
 from html import escape
 from pathlib import Path
@@ -28,6 +29,7 @@ Resolved names reflect the last local profile lookup, not necessarily names at s
 Recent/search use opaque query cursors; they are unrelated to event acknowledgment cursors.
  Results cover redroid's local database, not guaranteed full account history.
 Only subscribe to message.created when the user explicitly requests it. Connecting does not create subscriptions.
+Events and pending-message pages include only conversations enabled by the owner in admin Conversation events. All conversations default off; enabling starts at the current collection cursor. Normal recent/search/context queries are unaffected. A successful subscription alone does not enable any conversation.
 For requested subscriptions, use a distinct consumer_id per dot/workflow (default: dot).
 Events are wake-up signals. Even if event data is missing, always call get_pending_messages using the subscription's consumer_id.
 Process each page, then acknowledge_messages with that page's next_cursor and cursor_epoch only after completing the requested work.
@@ -501,6 +503,9 @@ def create_app(
                 "collector": collector.get("/v1/status"),
                 "plugin": events.summary(principal["owner"]),
             }
+        # Discovery and tunnel startup probes are not evidence of client use.
+        # Store only the time of a successful tool call, never its arguments/data.
+        state.put("connection_activity", principal["grant_id"], {"last_tool_at": time.time()})
         return {
             "content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False)}],
             "structuredContent": output,

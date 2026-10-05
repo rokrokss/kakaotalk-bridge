@@ -30,7 +30,21 @@ Iris rows have `source=iris_db`. `database_ref` contains database message, conve
 
 ## stdio MCP
 
-With the collection API running, add the following to your MCP client configuration. Replace the project path with its actual absolute path.
+With the collection API running, open **AI connections → Add or change a
+connection → An AI app on my computer** in admin. **Run Bridge from my AI app ·
+local or SSH** provides copyable configuration for `./bridge mcp`. For a remote
+server, enter its SSH host alias or `user@host`; the account needs noninteractive
+SSH authentication and Docker access. The CLI alternative is
+`./bridge setup-connection --method stdio`.
+
+The client starts the adapter when needed. This requires neither public HTTPS,
+OAuth, Tailscale nor an OpenAI tunnel. Confirm it by asking your client for
+collector status and retrieving a test message. Local stdio calls do not appear
+in admin's **Remote AI activity** card.
+
+For a manually managed Docker installation, you can also configure the client
+directly. Replace the project path with its actual absolute path on the Docker
+host:
 
 ```json
 {

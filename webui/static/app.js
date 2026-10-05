@@ -6,7 +6,8 @@ let passkeyEnrollment = new URLSearchParams(location.hash.slice(1)).get('passkey
 if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 // Opening a server-issued link in this existing tab must run login initialization again.
 window.addEventListener('hashchange', () => { if (location.hash) location.reload(); });
-let collectionBaseline = null, lastObservation = null, mcpConnected = false;
+let collectionBaseline = null, lastObservation = null;
+let overviewInitialized = false;
 let setupState = null, latestState = null;
 let csrf = '', active = false, paused = false, fetching = false, rendering = false;
 let frame = null, pointer = null, blobURL = null, busy = false, generation = 0;
@@ -15,6 +16,7 @@ let loginAlreadyApproved = false;
 let loginMode = 'passkey';
 const preparationAttempts = new Set();
 let setupCheckedAt = 0;
+let inspectionRetries = 0, inspectionTimer = null;
 const messages = {
   session_required: 'Your admin session has expired. Sign in again.',
   device_busy: 'A device operation is in progress. Try again shortly.',
@@ -33,11 +35,13 @@ function feedback(message) {
 }
 
 function locked() {
+  clearTimeout(inspectionTimer);
   generation++;
   active = false;
   csrf = '';
   frame = pointer = null;
   busy = precheckValid = collectionApproved = setupInitialized = loginAlreadyApproved = false;
+  overviewInitialized = false;
   preparationAttempts.clear();
   $('console').hidden = true;
   $('login-panel').hidden = false;
@@ -47,6 +51,11 @@ function locked() {
   $('screen').removeAttribute('src');
   $('device-text').value = '';
   $('device-text').type = 'password';
+  connectionSetup.lock();
+  $('event-conversations').replaceChildren();
+  $('event-search').value = '';
+  $('event-list-status').textContent = '';
+  $('more-events').hidden = true;
   ['phone-active', 'tablet-active', 'phone-rechecked', 'show-text'].forEach(id => { $(id).checked = false; });
   if ($('install-dialog').open) $('install-dialog').close('cancel');
   if (blobURL) URL.revokeObjectURL(blobURL);
@@ -67,12 +76,13 @@ async function api(path, data) {
       reason = messages[error.detail] || (typeof error.detail === 'string' && error.detail.trim() ? error.detail : reason);
     } catch {}
     if (response.status === 401) locked();
-    throw new Error(reason);
+    const error = new Error(reason); error.status = response.status; throw error;
   }
   return response.json();
 }
 
 function unlocked(session) {
+  inspectionRetries = 0; clearTimeout(inspectionTimer);
   generation++;
   csrf = session.csrf;
   active = true;
@@ -88,6 +98,7 @@ function unlocked(session) {
   $('screen-placeholder').hidden = false;
   action('setup-check');
   refreshConnections();
+  connectionSetup.refresh();
   refresh();
 }
 
@@ -104,7 +115,7 @@ $('logout').addEventListener('click', async () => {
 });
 
 async function refresh(force = false) {
-  if (!active || fetching || pointer || busy || document.hidden || (!force && paused)) return;
+  if (!active || fetching || pointer || busy || document.hidden || (!force && (paused || !$('tablet-workspace').open))) return;
   fetching = true;
   const requestedGeneration = generation;
   let pendingURL;
@@ -145,7 +156,16 @@ async function refresh(force = false) {
   }
 }
 
-const localTime = value => value ? new Date(value * 1000).toLocaleString('en-US') : 'No record';
+const localTime = value => value ? new Date(value * 1000).toLocaleString() : 'No record';
+function openPanel(id) {
+  const panel = $(id);
+  for (let parent = panel.parentElement; parent; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
+  panel.open = true; panel.scrollIntoView({behavior:'smooth', block:'start'});
+}
+document.querySelectorAll('[data-panel]').forEach(button => button.addEventListener('click', () => openPanel(button.dataset.panel)));
+$('overview-connect').addEventListener('click', () => openPanel('connections-panel'));
+$('overview-phone-action').addEventListener('click', () => openPanel('phone-panel'));
+$('tablet-workspace').addEventListener('toggle', () => { if ($('tablet-workspace').open) void refresh(); });
 function renderSessions(s, stale) {
   const fresh = !!s && !stale;
   $('session-inspected').textContent = s
@@ -157,7 +177,7 @@ function renderSessions(s, stale) {
   };
   $('tablet-status').textContent = fresh
     ? s.device === 'offline' ? 'Disconnected' : s.device === 'booting' ? 'Booting' : screens[s.screen?.state] || 'Not checked'
-    : 'Check needed';
+    : s ? 'Inspection out of date' : 'Not inspected yet';
   $('tablet-detail').textContent = s?.tablet?.confirmed_at ? `Login manually confirmed: ${localTime(s.tablet.confirmed_at)}` : '';
   const phone = s?.phone;
   const overdue = phone?.confirmed_at && Date.now() / 1000 - phone.confirmed_at > 86400;
@@ -169,9 +189,7 @@ function renderSessions(s, stale) {
   $('phone-detail').textContent = phone?.state === 'reported_lost'
     ? `${localTime(phone.reported_at)} · Manually reported`
     : phone?.confirmed_at ? `${localTime(phone.confirmed_at)} · Manually confirmed` : 'Phone status reflects your manual confirmation.';
-  $('approval-status').textContent = fresh
-    ? ({ approved: 'Approved', locked: 'Awaiting confirmation', unknown: 'Unknown' }[s.collection_approval] || 'Not checked')
-    : 'Check needed';
+  $('approval-status').textContent = ({ approved: 'Approved', locked: 'Awaiting confirmation', unknown: 'Unknown' }[s?.collection_approval] || 'Not checked') + (!fresh && s ? ' · last inspection' : '');
   const proof = s?.precheck;
   // Typing makes the screen snapshot stale, but the precheck retains its own
   // 30-minute deadline. The server revalidates the device and app on approval.
@@ -184,8 +202,10 @@ function renderSessions(s, stale) {
   $('approval-detail').textContent = precheckValid
     ? `Confirm both sessions by ${localTime(proof.expires_at)}.`
     : collectionApproved ? 'Approval matches the current app and device.'
-    : fresh ? 'Check login options and confirm both sessions.' : '';
-  $('setup-summary').textContent = collectionApproved ? 'Confirmed' : precheckValid ? 'Options checked' : '';
+    : fresh ? 'Check login options and confirm both sessions.' : s ? `Last inspected ${localTime(s.checked_at)}. Refresh before changing confirmation.` : '';
+  $('setup-summary').textContent = loginAlreadyApproved ? 'Approved' : precheckValid ? 'Options checked' : '';
+  $('overview-phone').textContent = $('phone-status').textContent;
+  $('overview-phone-detail').textContent = phone?.confirmed_at ? `Last manual confirmation ${localTime(phone.confirmed_at)}` : 'Confirm on your phone after signing in on the tablet.';
   if (fresh && !setupInitialized) {
     $('login-setup').open = s.collection_approval === 'locked';
     setupInitialized = true;
@@ -197,6 +217,8 @@ function updateControls() {
   $('login-check').disabled = busy || loginAlreadyApproved;
   $('confirm').disabled = busy || !precheckValid || !$('phone-active').checked || !$('tablet-active').checked;
   $('phone-recheck').disabled = busy || !collectionApproved || !$('phone-rechecked').checked;
+  $('phone-recheck-help').textContent = busy ? 'Wait for the current tablet operation.' : !loginAlreadyApproved ? 'Finish KakaoTalk sign-in and collection approval first.' : !collectionApproved ? 'Refresh the tablet inspection before updating your phone confirmation.' : !$('phone-rechecked').checked ? 'Check your phone, then select the confirmation box above.' : '';
+  $('phone-inspect').hidden = !loginAlreadyApproved || collectionApproved;
 }
 
 async function updateState() {
@@ -230,6 +252,8 @@ async function updateState() {
     $('collector-status').textContent = collector === 'collecting_partial' ? 'Collecting messages'
       : collector === 'unavailable' ? 'Waiting for collection server' : 'Check collection status';
     $('collector-status').title = 'Collects messages received on the tablet. This does not restore the entire chat history.';
+    $('overview-collection').textContent = $('collector-status').textContent;
+    $('overview-last').textContent = lastObservation ? `Last collected ${new Date(lastObservation).toLocaleString()} · Partial history` : 'No collected messages recorded yet.';
     renderSessions(state.sessions, state.sessions_stale);
     updateControls();
     // Decide only after busy/session state is updated. Mark the action before
@@ -257,6 +281,7 @@ async function updateState() {
 
 async function action(name, extra = {}) {
   if (!active || busy) return;
+  if (['open-kakao', 'open-store', 'prepare', 'configure', 'login-check'].includes(name)) openPanel('tablet-workspace');
   if (['setup-check', 'setup-poll'].includes(name)) setupCheckedAt = Date.now();
   busy = true;
   updateControls();
@@ -275,6 +300,11 @@ async function action(name, extra = {}) {
       $('login-check-result').dataset.state = 'failed';
     }
     updateControls();
+    if (name === 'setup-check' && error.status === 409 && inspectionRetries++ < 3) {
+      const retryGeneration = generation;
+      inspectionTimer = setTimeout(() => { if (active && generation === retryGeneration) void action('setup-check'); }, 1500);
+      return;
+    }
     feedback(error.message);
   }
 }
@@ -354,6 +384,8 @@ document.addEventListener('visibilitychange', () => {
   frame = null;
   if (!document.hidden) { refresh(); updateState(); }
 });
+const connectionSetup = BridgeConnectionSetup({api, isActive: () => active, onChange: refreshConnections, feedback});
+$('open-ai-setup').addEventListener('click', connectionSetup.open);
 setInterval(() => refresh(), 1200);
 setInterval(updateState, 3000);
 setInterval(() => { if (active && !document.hidden) refreshConnections(); }, 15000);
@@ -479,8 +511,15 @@ function renderSetup() {
   const enrolled = !!s?.enrolled;
   const approved = session?.collection_approval === 'approved';
   const collecting = latestState?.collector.state === 'collecting_partial';
-  const steps = [enrolled, approved, collecting && mcpConnected];
-  const labels = ['Prepare', 'Sign in', 'Connect AI'];
+  const steps = [enrolled, approved, collecting];
+  const labels = ['Prepare', 'Sign in', 'Collect'];
+  $('guide-summary').textContent = collecting ? 'Collection is running' : 'Continue setup';
+  if (!overviewInitialized && s) {
+    overviewInitialized = true;
+    $('setup-guide').open = !collecting;
+    $('tablet-workspace').open = !collecting;
+  }
+  if (latestState?.job.state === 'failed') $('setup-guide').open = true;
   $('setup-progress').replaceChildren(...labels.map((label, i) => {
     const item = document.createElement('li'); item.textContent = label;
     item.dataset.complete = String(steps[i]); return item;
@@ -493,13 +532,12 @@ function renderSetup() {
   else if (ready && !enrolled) next = ['Finishing preparation for KakaoTalk sign-in…', 'configure', 'Retry preparation'];
   else if (enrolled && !approved) next = ['Open KakaoTalk. Check “Use with other devices” before login, then confirm both phone and tablet sessions below.', 'open-kakao', 'Open KakaoTalk'];
   else if (approved && !collecting) next = ['Both sessions were confirmed. Waiting for the collector; refresh status if needed.', 'session-check', 'Check status'];
-  else if (collecting && !mcpConnected) next = ['Collection is running. Send a test message, then connect ChatGPT under Connections.', '', ''];
-  else if (collecting && mcpConnected) next = ['Setup complete. Phone session health still requires your manual confirmation.', '', ''];
+  else if (collecting) next = ['KakaoTalk collection is ready. AI connections are optional; add one whenever you need it.', '', ''];
   if (latestState?.job.state === 'failed') next[0] = latestState.job.message || 'Preparation stopped. Check the result below and retry.';
   $('setup-next').textContent = next[0];
   $('setup-next-button').hidden = !next[1];
   $('setup-next-button').textContent = next[2];
-  $('setup-next-button').onclick = () => action(next[1]);
+  $('setup-next-button').onclick = () => next[1] === 'connect-ai' ? connectionSetup.open() : action(next[1]);
   $('setup-next-button').disabled = latestState?.job.state === 'running';
 }
 
@@ -519,18 +557,24 @@ async function refreshConnections() {
   try {
     const data = await api('connections');
     if (!active) return;
-    mcpConnected = data.grants.length > 0 || !!data.tunnel?.approved;
+    connectionSetup.setConnections(data);
+    const activity = Math.max(0, ...data.grants.map(row => row.last_tool_at || 0), data.tunnel?.approved ? data.tunnel.last_tool_at || 0 : 0);
+    const allowed = data.grants.length + (data.tunnel?.approved ? 1 : 0);
+    $('overview-ai').textContent = activity ? 'Successful tool call recorded' : allowed ? 'Waiting for first AI request' : 'No AI access allowed';
+    $('overview-ai-detail').textContent = activity ? `Last success ${localTime(activity)} · Current reachability is checked separately.` : allowed ? 'Access is allowed. Ask your AI to check collector status.' : 'Optional. Local clients can also use the stdio configuration.';
     $('mcp-address').textContent = data.resource;
     $('connection-help').textContent = data.approval_mode === 'passkey'
       ? 'Add this MCP address in ChatGPT and choose OAuth. Confirm with your passkey, review access, then allow the connection. You can disconnect it here.'
       : data.approval_mode === 'key'
         ? 'This server uses legacy connection-key approval. Enter its connection key in the connecting browser.'
         : 'Add this MCP address in ChatGPT and choose OAuth. Approve only the request whose code matches that browser.';
-    if (data.tunnel?.configured && data.resource.includes('.invalid/')) {
+    if (data.resource.includes('.invalid/')) {
       $('mcp-address').textContent = 'Public OAuth connection is not configured.';
-      $('connection-help').textContent = 'Connect your personal OpenAI tunnel below. Public HTTPS connections remain available when configured.';
+      $('connection-help').textContent = data.tunnel?.configured
+        ? 'Approve your personal OpenAI tunnel below. You can also add other connections later.'
+        : 'Collection works without an AI connection. Choose “Set up an AI connection” to add one.';
     }
-    $('pending-count').textContent = data.pending.length ? `(${data.pending.length} pending)` : '';
+    $('pending-count').textContent = data.pending.length ? `${data.pending.length} approval pending` : `${allowed} allowed`;
     renderSetup();
     const signature = JSON.stringify(data);
     if (signature === connectionSignature) return;
@@ -541,6 +585,7 @@ async function refreshConnections() {
     if (tunnel?.configured) {
       const card = document.createElement('div'); card.className = 'connection-card';
       card.append(paragraph('OpenAI personal tunnel'), paragraph(tunnel.tunnel_id));
+      card.append(paragraph(tunnel.last_tool_at && tunnel.approved ? `Last successful tool call: ${localTime(tunnel.last_tool_at)}` : 'No successful tool call recorded for this approval.'));
       card.append(paragraph(tunnel.approved
         ? `${tunnel.expires === null ? 'Access allowed with no automatic expiration.' : `Access allowed until ${localTime(tunnel.expires)}.`} In ChatGPT, choose Tunnel and select this ID. No OAuth login is needed.`
         : 'Allow this personal tunnel to read collected messages and manage event subscriptions you request. Use a tunnel accessible only to you. Approval has no automatic expiration; you can disconnect it here.'));
@@ -554,6 +599,7 @@ async function refreshConnections() {
         await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: !tunnel.approved});
         connectionSignature = ''; await refreshConnections();
       }));
+      card.append(button('Connection instructions', () => connectionSetup.open('openai-tunnel')));
       tunnelPanel.replaceChildren(card);
     }
     const nodes = data.pending.map(row => {
@@ -574,16 +620,78 @@ async function refreshConnections() {
     });
     for (const row of data.grants) {
       const card = document.createElement('div'); card.className = 'connection-card';
+      card.append(paragraph(row.last_tool_at ? `Last successful tool call: ${localTime(row.last_tool_at)}` : 'Access allowed · waiting for the first successful tool call.'));
       card.append(paragraph(row.client_id), paragraph(`${row.scope} · Expires ${localTime(row.expires)}`), button('Disconnect', async () => {
         await api(`connections/${row.id}/revoke`, {}); await refreshConnections();
       })); nodes.push(card);
     }
-    $('connections-list').replaceChildren(...(nodes.length ? nodes : [paragraph('No pending or connected clients.')]));
-  } catch { if (active) $('mcp-address').textContent = 'Connection service unavailable. Run ./bridge connect --url https://your-address.'; }
+    $('connections-list').replaceChildren(...(nodes.length ? nodes : [paragraph('No pending or approved OAuth clients.')]));
+  } catch { if (active) { $('mcp-address').textContent = 'Connection status unavailable. Try Refresh connections.'; $('overview-ai').textContent = 'Could not retrieve AI status'; $('overview-ai-detail').textContent = 'Open AI connections and refresh to retry.'; } }
   finally { connectionsLoading = false; }
 }
 $('refresh-connections').addEventListener('click', refreshConnections);
 $('connections-panel').addEventListener('toggle', () => { if ($('connections-panel').open) refreshConnections(); });
+let eventCursor = null, eventQuery = '', eventsLoading = false;
+function eventRoom(row) {
+  const card = document.createElement('div'); card.className = 'event-room';
+  const info = document.createElement('div'); info.className = 'event-room-info';
+  const name = row.name || 'Unnamed conversation';
+  const title = paragraph(name);
+  const ref = document.createElement('details'); const refLabel = document.createElement('summary'); refLabel.textContent = 'Conversation identifier'; const refCode = document.createElement('code'); refCode.textContent = row.ref; ref.append(refLabel, refCode);
+  const status = paragraph(''); status.className = 'hint';
+  const toggle = button('', async () => {
+    const requestedGeneration = generation;
+    const enabled = !row.enabled;
+    await api('events/conversations', {conversation_ref: row.ref, enabled});
+    if (!active || requestedGeneration !== generation) return;
+    row.enabled = enabled; render();
+    feedback(enabled ? `Events on for ${name}. A client subscription is also required.` : `Events off for ${name}. Queued events cancelled.`);
+  });
+  toggle.className = 'event-switch';
+  toggle.setAttribute('role', 'switch');
+  toggle.setAttribute('aria-label', `Events for ${name} (${row.ref})`);
+  function render() {
+    toggle.textContent = row.enabled ? 'Allowed' : 'Off';
+    toggle.setAttribute('aria-checked', String(row.enabled));
+    status.textContent = !row.enabled ? 'Events off' : row.subscriptions
+      ? `${row.subscriptions} registered subscription${row.subscriptions === 1 ? '' : 's'} · receipt does not confirm an AI notification`
+      : 'Allowed · no AI subscription yet. Ask your connected AI to subscribe to new messages from this conversation.';
+  }
+  render(); info.append(title, ref, status); card.append(info, toggle); return card;
+}
+async function refreshEvents(reset = true) {
+  if (!active || eventsLoading) return;
+  eventsLoading = true;
+  const requestedGeneration = generation;
+  if (reset) {
+    eventCursor = null; eventQuery = $('event-search').value.trim();
+    $('event-conversations').replaceChildren(); $('more-events').hidden = true;
+  }
+  ['event-search-button', 'refresh-events', 'more-events'].forEach(id => { $(id).disabled = true; });
+  $('event-list-status').textContent = 'Loading conversations…';
+  try {
+    const query = new URLSearchParams();
+    if (eventQuery) query.set('q', eventQuery);
+    if (eventCursor) query.set('cursor', eventCursor);
+    const data = await api('events/conversations?' + query);
+    if (!active || requestedGeneration !== generation) return;
+    $('event-conversations').append(...data.items.map(eventRoom));
+    eventCursor = data.next_cursor;
+    $('more-events').hidden = !(data.has_more && eventCursor);
+    $('event-list-status').textContent = $('event-conversations').childElementCount
+      ? 'Only conversations retained by this collector are listed. Settings apply to all connected AI clients.'
+      : eventQuery ? 'No conversations match this name.' : 'No conversations collected yet. Send a message, then refresh.';
+  } catch (error) {
+    if (active && requestedGeneration === generation) $('event-list-status').textContent = error.message;
+  } finally {
+    eventsLoading = false;
+    ['event-search-button', 'refresh-events', 'more-events'].forEach(id => { $(id).disabled = false; });
+  }
+}
+$('events-panel').addEventListener('toggle', () => { if ($('events-panel').open) refreshEvents(); });
+$('event-search-form').addEventListener('submit', event => { event.preventDefault(); refreshEvents(); });
+$('refresh-events').addEventListener('click', () => refreshEvents());
+$('more-events').addEventListener('click', () => refreshEvents(false));
 $('browsers-panel').addEventListener('toggle', refreshBrowsers);
 async function refreshBrowsers() {
   if (!active || !$('browsers-panel').open) return;

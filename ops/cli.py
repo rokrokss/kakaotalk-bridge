@@ -96,6 +96,8 @@ def compose(*args, capture=False, **kwargs):
             "dot",
             "--profile",
             "tunnel",
+            "--profile",
+            "local-admin",
             *args,
         ],
         capture=capture,
@@ -112,7 +114,14 @@ def services():
         else (["dot-control"] if read_env().get("ADMIN_AUTH_MODE", "passkey") == "passkey" else [])
     )
     if read_env().get("OPENAI_TUNNEL_ENABLED") == "1":
-        selected += ["dot-plugin", "dot-control", "dot-ingress", "dot-tunnel", "openai-tunnel"]
+        selected += ["dot-plugin", "dot-control", "dot-tunnel", "openai-tunnel"]
+        saved = ROOT / ".bridge/admin-url"
+        if saved.exists() and saved.read_text().strip().startswith("https://"):
+            # Older tunnel installs can route private HTTPS admin through this
+            # listener without a public MCP URL. Preserve their access.
+            selected += ["dot-ingress"]
+    if read_env().get("ADMIN_LOCAL_ORIGIN"):
+        selected += ["admin-local"]
     return list(dict.fromkeys(selected))
 
 
@@ -345,7 +354,8 @@ def install(args):
     compose("up", "-d", "--no-build", *services())
     atomic(ROOT / ".bridge/installed", "1\n")
     print(
-        "Containers started. Run ./bridge expose, then ./bridge passkey-login to register your passkey."
+        "Containers started. Run ./bridge passkey-login to register your passkey.\n"
+        "AI connections are optional: configure them later with ./bridge setup-connection."
     )
 
 
@@ -432,10 +442,14 @@ def admin_url(override=None):
         return private_url(path.read_text().strip())
     if platform.system() == "Darwin":
         path = ROOT / ".bridge/mac.json"
-        port = str(json.loads(path.read_text())["admin_port"]) if path.exists() else "18443"
+        port = (
+            str(json.loads(path.read_text()).get("local_admin_port", 18789))
+            if path.exists()
+            else "18789"
+        )
     else:
-        port = read_env().get("HTTPS_PORT", "8443")
-    return private_url("https://localhost:" + port)
+        port = read_env().get("ADMIN_LOCAL_PORT", "18789")
+    return private_url("http://localhost:" + port)
 
 
 def open_admin_page(url):
@@ -481,11 +495,14 @@ def passkey_setup(args):
         saved_origin = ROOT / ".bridge/admin-url"
         if args.url or saved_origin.exists():
             command += ["--url", args.url or saved_origin.read_text().strip()]
+        elif config.get("local_admin_port"):
+            command += ["--url", "http://localhost:" + str(config["local_admin_port"])]
         if args.public_url:
             command += ["--public-url", args.public_url]
         if args.enroll:
             command += ["--enroll"]
         link = run(command, capture=True)
+        atomic(saved_origin, private_url(link.partition("#")[0]))
     else:
         # A new limited verifier credential can be added without rotating existing identities.
         ensure_passkey_verifier_secret()
@@ -520,22 +537,43 @@ def passkey_setup(args):
             validate_public_url(public)
             if public != read_env().get("DOT_PUBLIC_URL"):
                 raise ValueError("Run ./bridge connect --url with the public origin first")
+        # A localhost passkey cannot authenticate a different public RP. Keep
+        # the admin identity and use the existing code-confirmation consent flow.
+        passkey_public = (
+            public
+            if (
+                origin.startswith("https://")
+                and urlsplit(origin).hostname == urlsplit(public).hostname
+            )
+            else ""
+        )
         if (
             not info["configured"]
             or info["admin_origin"] != origin
-            or info["public_origin"] != public
+            or info["public_origin"] != passkey_public
         ):
-            helper("configure", json.dumps({"admin_origin": origin, "public_origin": public}))
-        env_update(
-            {"ADMIN_AUTH_MODE": "passkey", **({"DOT_APPROVAL_MODE": "passkey"} if public else {})}
-        )
+            helper(
+                "configure", json.dumps({"admin_origin": origin, "public_origin": passkey_public})
+            )
+        updates = {"ADMIN_AUTH_MODE": "passkey"}
+        if public:
+            updates["DOT_APPROVAL_MODE"] = "passkey" if passkey_public else "admin"
+        if origin.startswith("http://localhost:"):
+            updates.update(
+                {"ADMIN_LOCAL_ORIGIN": origin, "ADMIN_LOCAL_HOST": urlsplit(origin).netloc}
+            )
+        env_update(updates)
         atomic(ROOT / ".bridge/admin-url", private_url(origin))
         compose(
             "up",
             "-d",
             "--no-build",
             "--no-deps",
+            "--wait",
+            "--wait-timeout",
+            "60",
             "admin",
+            *(["admin-local"] if origin.startswith("http://localhost:") else []),
             *(["dot-plugin", "dot-control", "dot-ingress"] if public else []),
             capture=True,
         )
@@ -555,7 +593,15 @@ def passkey_setup(args):
 def private_url(value):
     parsed = urlsplit(value)
     if (
-        parsed.scheme != "https"
+        not (
+            parsed.scheme == "https"
+            or (
+                parsed.scheme == "http"
+                and parsed.netloc == f"localhost:{parsed.port}"
+                and parsed.port is not None
+                and 1024 <= parsed.port <= 65535
+            )
+        )
         or not parsed.hostname
         or parsed.username
         or parsed.password
@@ -563,7 +609,9 @@ def private_url(value):
         or parsed.fragment
         or parsed.path not in ("", "/admin/")
     ):
-        raise ValueError("Use the admin HTTPS address without query parameters")
+        raise ValueError(
+            "Use an HTTPS admin address or http://localhost:<port>, without query parameters"
+        )
     return value.rstrip("/").removesuffix("/admin") + "/admin/"
 
 
@@ -650,11 +698,16 @@ def expose(args):
     if existing.get("Web", {}).get(hostname + ":8443"):
         run([*tailscale, "serve", "--https=8443", "off"])
         record_routes()
-    admin_url = "https://" + hostname
-    atomic(ROOT / ".bridge/admin-url", admin_url)
+    saved_admin = ROOT / ".bridge/admin-url"
+    admin_url = (
+        saved_admin.read_text().strip().removesuffix("/admin/")
+        if saved_admin.exists()
+        else "https://" + hostname
+    )
+    atomic(saved_admin, admin_url)
     atomic(ROOT / ".bridge/public-url", "https://" + hostname)
     print(
-        f"Admin: {admin_url}/admin/\nMCP: {admin_url}/mcp\nBoth use HTTPS port 443. Admin requires passkey sign-in; MCP requires OAuth.\nRun ./bridge passkey-login to configure sign-in at this address."
+        f"Admin: {admin_url}/admin/\nMCP: https://{hostname}/mcp\nRun ./bridge passkey-login to configure OAuth approval."
     )
 
 
@@ -980,11 +1033,13 @@ def mac(args):
         config = json.loads(config_path.read_text())
     else:
         admin_port = available_port(18443, args.admin_port)
+        mcp_port = available_port(18787, args.mcp_port, (admin_port,))
         config = {
             "vm": args.vm,
             "directory": "/srv/kakaotalk-bridge",
             "admin_port": admin_port,
-            "mcp_port": available_port(18787, args.mcp_port, (admin_port,)),
+            "mcp_port": mcp_port,
+            "local_admin_port": available_port(18789, None, (admin_port, mcp_port)),
         }
     vm, directory = config["vm"], config["directory"]
 
@@ -1024,6 +1079,11 @@ def mac(args):
                 "  - guestPortRange:",
                 f"  - guestPort: 18787\n    hostPort: {config.get('mcp_port', 18787)}\n    hostIP: 127.0.0.1\n  - guestPortRange:",
             )
+            if config.get("local_admin_port"):
+                template = template.replace(
+                    "  - guestPortRange:",
+                    f"  - guestPort: 18789\n    hostPort: {config['local_admin_port']}\n    hostIP: 127.0.0.1\n  - guestPortRange:",
+                )
             if platform.machine() == "x86_64":
                 template = template.replace("arch: aarch64", "arch: x86_64").replace(
                     "vmType: vz", "vmType: qemu"
@@ -1075,6 +1135,29 @@ def mac(args):
             guest("python3", helper, "commit", directory)
         finally:
             guest("rm", "-f", helper)
+    elif args.command == "setup-agent":
+        # The web service runs inside Linux; desktop clients use the host adapter.
+        if args.agent_command == "install":
+            run(
+                [
+                    "limactl",
+                    "shell",
+                    "--workdir=/",
+                    vm,
+                    "sudo",
+                    "python3",
+                    "-c",
+                    (
+                        "import pathlib,sys; p=pathlib.Path(sys.argv[1]); p.parent.mkdir(parents=True,exist_ok=True); "
+                        "p.write_text(sys.stdin.read()); p.chmod(0o600)"
+                    ),
+                    directory + "/.bridge/stdio-client.json",
+                ],
+                input=json.dumps(
+                    {"command": sys.executable, "args": [str(ROOT / "bridge"), "mcp"]}
+                ),
+            )
+        invoke("setup-agent", args.agent_command)
     elif args.command == "admin":
         if args.recovery:
             code = invoke("admin", "--recovery", "--code-only", capture=True)
@@ -1192,6 +1275,14 @@ def main():
     from ops.tunnel import add_arguments as tunnel_arguments
 
     tunnel_arguments(sub.add_parser("tunnel", help="Manage a private personal OpenAI MCP tunnel"))
+    from ops.connections import add_arguments as connection_arguments
+
+    connection_arguments(
+        sub.add_parser("setup-connection", help="Choose and configure an optional AI connection")
+    )
+    sub.add_parser("mcp", help="Run the local MCP stdio adapter")
+    agent = sub.add_parser("setup-agent", help="Manage the admin connection setup service")
+    agent.add_argument("agent_command", choices=("install", "serve", "job"))
     for name in ("install", "update"):
         cmd = sub.add_parser(name)
         mode = cmd.add_mutually_exclusive_group()
@@ -1211,7 +1302,7 @@ def main():
         "passkey-login",
         help="Configure passkeys for admin and MCP",
     )
-    cmd.add_argument("--url", help="HTTPS admin origin; same hostname as public MCP")
+    cmd.add_argument("--url", help="Admin HTTPS origin or http://localhost:<port>")
     cmd.add_argument("--public-url", help="Public HTTPS MCP origin")
     cmd.add_argument(
         "--enroll", action="store_true", help="Issue a one-time registration/recovery link"
@@ -1232,6 +1323,23 @@ def main():
     try:
         if args.command == "up":
             up(args)
+            return
+        if args.command == "setup-connection":
+            from ops.connections import setup
+
+            setup(args)
+            return
+        if args.command == "setup-agent":
+            if platform.system() == "Darwin" and not args.local:
+                mac(args)
+            else:
+                from ops import setup_agent
+
+                {
+                    "install": setup_agent.install,
+                    "serve": setup_agent.serve,
+                    "job": setup_agent.job_main,
+                }[args.agent_command]()
             return
         if (
             args.command == "backup"
@@ -1266,6 +1374,8 @@ def main():
         elif args.command == "doctor":
             if not doctor():
                 raise SystemExit(1)
+        elif args.command == "mcp":
+            compose("run", "--rm", "--no-deps", "-T", "mcp")
         elif args.command == "connect":
             connect(args.url)
         elif args.command == "tunnel":

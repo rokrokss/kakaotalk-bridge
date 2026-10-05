@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import os
 import tempfile
 import threading
 from pathlib import Path
@@ -20,7 +21,8 @@ from tests.test_dot_plugin import REDIRECT, VERIFIER, Source
 from tests.webui_preview import FakeAndroid
 from webui.app import create_app
 
-ADMIN = "https://localhost:19446"
+LOCAL = os.getenv("LOCAL_ADMIN") == "1"
+ADMIN = ("http" if LOCAL else "https") + "://localhost:19446"
 PUBLIC = "https://localhost:19447"
 
 
@@ -37,6 +39,7 @@ def previews(folder):
         dict,
         auth_mode="passkey",
         passkeys=passkeys,
+        local_origin=ADMIN if LOCAL else None,
         connections=connections,
     )
     config = Config(
@@ -80,4 +83,9 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory(prefix="passkey-browser-") as folder:
         admin, public = previews(folder)
         threading.Thread(target=serve, args=(public, 19447), daemon=True).start()
-        serve(admin, 19446)
+        if LOCAL:
+            import uvicorn
+
+            uvicorn.run(admin, host="127.0.0.1", port=19446, access_log=False)
+        else:
+            serve(admin, 19446)

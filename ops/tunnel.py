@@ -117,7 +117,14 @@ def configure(identity, key_file):
                 cli.atomic(path, value + "\n")
             path.chmod(0o444)  # Docker secrets must be readable by non-root containers.
         cli.env_update({"OPENAI_TUNNEL_ENABLED": "1", "OPENAI_TUNNEL_ID": identity})
-        cli.compose("up", "-d", "--no-build", "dot-control", "dot-plugin", "dot-ingress")
+        cli.compose(
+            "up",
+            "-d",
+            "--no-build",
+            "dot-control",
+            "dot-plugin",
+            *(["dot-ingress"] if "dot-ingress" in cli.services() else []),
+        )
         # Atomic file replacement needs new mounts even if only the API key changed.
         cli.compose(
             "up",

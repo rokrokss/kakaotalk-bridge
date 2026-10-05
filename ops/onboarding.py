@@ -19,9 +19,34 @@ from ops import cli
 STEPS = (
     ("environment", "Preparing the execution environment"),
     ("runtime", "Starting your private bridge"),
-    ("network", "Connecting your secure address"),
+    ("network", "Preparing optional AI connections"),
     ("browser", "Opening KakaoTalk setup"),
 )
+
+
+def network_config():
+    try:
+        return cli.read_env()
+    except PermissionError:
+        # Linux installs may use sudo. Read only non-secret networking settings
+        # instead of loosening permissions on the runtime configuration.
+        return json.loads(
+            privileged(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "import json,pathlib,sys; "
+                        "values=dict(line.split('=',1) for line in pathlib.Path(sys.argv[1]).read_text().splitlines() "
+                        "if '=' in line and not line.lstrip().startswith('#')); "
+                        "print(json.dumps({k:values[k] for k in "
+                        "('OPENAI_TUNNEL_ENABLED','ADMIN_LOCAL_PORT') if k in values}))"
+                    ),
+                    str(cli.ROOT / ".env"),
+                ],
+                capture=True,
+            )
+        )
 
 
 def add_arguments(parser):
@@ -44,22 +69,23 @@ def add_arguments(parser):
     )
     parser.add_argument("--apk-folder", help="Import your official APK set on first setup")
     parser.add_argument("--url", help="Shared HTTPS origin for an existing reverse proxy")
-    parser.add_argument("--admin-url", help="Admin HTTPS origin for an existing proxy (advanced)")
+    parser.add_argument(
+        "--admin-url", help="Admin HTTPS origin or http://localhost:<port> (advanced)"
+    )
     parser.add_argument("--public-url", help="Public MCP HTTPS origin for an existing proxy")
     parser.add_argument(
         "--connection",
-        choices=("tailscale", "https", "openai-tunnel"),
-        help="MCP connection method; existing tunnel installations are reused",
+        choices=("none", "tailscale", "https", "openai-tunnel"),
+        help="Optional AI connection; default keeps existing connections and adds none",
     )
     parser.add_argument("--tunnel-id", help="Personal OpenAI tunnel ID (first configuration)")
     parser.add_argument("--api-key-file", help="Private file containing the tunnel runtime API key")
 
 
 def validate(args):
-    saved_tunnel = (
-        (cli.ROOT / ".bridge/tunnel.json").exists()
-        or cli.read_env().get("OPENAI_TUNNEL_ENABLED") == "1"
-    )
+    saved_tunnel = (cli.ROOT / ".bridge/tunnel.json").exists() or network_config().get(
+        "OPENAI_TUNNEL_ENABLED"
+    ) == "1"
     if args.connection is None and not args.url and not args.public_url and saved_tunnel:
         args.connection = "openai-tunnel"
     tunnel = args.connection == "openai-tunnel"
@@ -69,14 +95,10 @@ def validate(args):
                 "Use --admin-url for private tunnel setup; configure public HTTPS separately"
             )
         saved = cli.ROOT / ".bridge/admin-url"
-        if not args.admin_url and saved.exists():
+        if not args.admin_url and saved.exists() and os.access(saved, os.R_OK):
             args.admin_url = saved.read_text().strip().removesuffix("/admin/")
-        if not args.admin_url and not saved_tunnel:
-            raise ValueError(
-                "Supply --admin-url with a trusted HTTPS address reachable by your browser (private is fine)"
-            )
         if args.admin_url:
-            cli.validate_public_url(args.admin_url)
+            cli.private_url(args.admin_url)
         if bool(args.tunnel_id) != bool(args.api_key_file):
             raise ValueError("Supply both --tunnel-id and --api-key-file")
         if args.tunnel_id:
@@ -87,8 +109,8 @@ def validate(args):
             raise ValueError("First tunnel setup needs --tunnel-id and --api-key-file")
     elif args.tunnel_id or args.api_key_file:
         raise ValueError("Tunnel credentials require --connection openai-tunnel")
-    if args.connection == "https" and not (args.url or args.admin_url):
-        raise ValueError("Supply --url for an existing HTTPS proxy")
+    if args.connection == "https" and not (args.url or args.public_url):
+        raise ValueError("Supply --url or --public-url for an existing HTTPS proxy")
     if args.connection == "tailscale" and (args.url or args.admin_url or args.public_url):
         raise ValueError("Use either Tailscale or existing HTTPS proxy options")
     if platform.system() not in {"Darwin", "Linux"}:
@@ -104,15 +126,12 @@ def validate(args):
             raise ValueError("Use --url alone, or the --admin-url/--public-url pair.")
         cli.validate_public_url(args.url)
         args.admin_url = args.public_url = args.url
-    if not tunnel and bool(args.admin_url) != bool(args.public_url):
-        raise ValueError("Supply both --admin-url and --public-url for your existing HTTPS proxy.")
-    if args.admin_url and not tunnel:
-        from urllib.parse import urlsplit
-
+    if args.connection == "none" and (args.url or args.public_url):
+        raise ValueError("--connection none cannot configure a public MCP address")
+    if args.admin_url:
         cli.private_url(args.admin_url)
+    if args.public_url:
         cli.validate_public_url(args.public_url)
-        if urlsplit(args.admin_url).hostname != urlsplit(args.public_url).hostname:
-            raise ValueError("Admin and MCP must use the same hostname for passkeys.")
     for port in (args.admin_port, args.mcp_port):
         if port is not None and not 1024 <= port <= 65535:
             raise ValueError("Choose ports between 1024 and 65535.")
@@ -183,7 +202,7 @@ def prepare_mac(args):
         if not shutil.which("brew"):
             install_script("https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")
         cli.run(["brew", "install", "qemu"])
-    if args.connection != "openai-tunnel" and not args.admin_url and not cli.tailscale_binary():
+    if args.connection == "tailscale" and not cli.tailscale_binary():
         require_install(args, "Tailscale for your secure browser connection")
         if not shutil.which("brew"):
             install_script("https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")
@@ -253,7 +272,7 @@ def prepare_linux(args):
             ) from None
     if shutil.which("systemctl"):
         privileged(["systemctl", "start", "docker"])
-    if args.connection != "openai-tunnel" and not args.admin_url and not cli.tailscale_binary():
+    if args.connection == "tailscale" and not cli.tailscale_binary():
         require_install(args, "Tailscale for your secure browser connection")
         install_script("https://tailscale.com/install.sh")
 
@@ -350,8 +369,10 @@ def connect_network(args, runtime):
                 str(Path(args.api_key_file).resolve()),
             )
         return
-    if args.admin_url:
+    if args.public_url:
         runtime.call("connect", "--url", args.public_url, capture=True)
+        return
+    if args.connection != "tailscale":
         return
     tailscale = cli.tailscale_binary()
     if not tailscale:
@@ -404,13 +425,25 @@ def open_setup(args, runtime):
     command = ["passkey-login", "--link-only"]
     if args.admin_url:
         command += ["--url", args.admin_url]
-        if args.public_url:
-            command += ["--public-url", args.public_url]
+    if args.public_url:
+        command += ["--public-url", args.public_url]
     link = runtime.call(*command, capture=True).strip()
     base, _, fragment = link.partition("#")
     cli.private_url(base)
     if fragment and not re.fullmatch(r"passkey-setup=[A-Za-z0-9_-]{43}", fragment):
         raise RuntimeError("Unexpected registration response; run bridge passkey-login.")
+    if base.startswith("http://localhost:") and (
+        args.no_browser or os.environ.get("SSH_CONNECTION")
+    ):
+        from urllib.parse import urlsplit
+
+        port = urlsplit(base).port
+        target = network_config().get("ADMIN_LOCAL_PORT") or "18789"
+        print(
+            f"\nOn your computer, keep this SSH forwarding session open:\n"
+            f"  ssh -N -L 127.0.0.1:{port}:127.0.0.1:{target} user@your-server\n"
+            "Then open the localhost setup link on that computer."
+        )
     print("\nOpen your setup page:\n" + link, flush=True)
     if not args.no_browser:
         webbrowser.open(link)
@@ -433,7 +466,14 @@ def up(args):
         print(
             "Existing installation and login data are reused; images change only with bridge update."
         )
-        print("Connection: " + (args.connection or ("https" if args.admin_url else "tailscale")))
+        print(
+            "Connection: "
+            + (args.connection or ("https" if args.public_url else "none (reuse existing)"))
+        )
+        print("Admin: local browser or SSH forwarding; an existing HTTPS address is reused.")
+        print(
+            "AI: add stdio, public HTTPS/OAuth or an OpenAI tunnel later with bridge setup-connection."
+        )
         print("First use requires an admin passkey and KakaoTalk installation/login.")
         return
     with installation_lock():
@@ -475,6 +515,7 @@ def up(args):
             progress("network")
             connect_network(args, runtime)
             runtime.wait_ready()
+            runtime.call("setup-agent", "install")
             progress("browser")
             open_setup(args, runtime)
         except BaseException:
@@ -490,4 +531,7 @@ def up(args):
         cli.atomic(
             cli.ROOT / ".bridge/onboarding.json", json.dumps({"step": "browser", "state": "ready"})
         )
-        print("\nBridge is ready. Continue in your browser. Next time, run the same command.")
+        print(
+            "\nBridge is ready. Continue in your browser. Next time, run the same command.\n"
+            "AI connections are optional: choose Connect your AI in admin when ready."
+        )

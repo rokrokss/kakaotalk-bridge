@@ -9,7 +9,8 @@ uv sync --frozen --python 3.12
 uv run pytest -q
 uv run ruff check .
 node --check webui/static/app.js
-node --test tests/setup-flow.test.cjs
+node --check webui/static/connection-setup.js
+node --test tests/setup-flow.test.cjs tests/connection-guidance.test.cjs
 node --check dot_plugin/static/approval.js
 docker compose --profile dot config --quiet
 ```
@@ -32,6 +33,8 @@ uv export --frozen --no-dev --no-emit-project --output-file requirements.lock
 | `dot_plugin/` | OAuth, remote MCP, and optional Events |
 | `ops/`, `bridge` | Host CLI, isolated Lima installation, image updates and encrypted full snapshots |
 | `install.sh`, `install.ps1`, `ops/onboarding.py` | One-command launch, dependency preparation and resumable setup |
+| `ops/setup_agent.py`, `server/connection_setup.py`, `webui/setup.py` | Private host setup jobs, shared input validation and authenticated admin proxy |
+| `webui/static/connection-setup.js` | Destination/method selection, saved instructions, progress and retry UI |
 | `tests/` | Synthetic-data tests and fake devices for browser previews |
 | `deploy/`, `scripts/` | Lima, supervisor, installation, diagnostics, and backup tools |
 
@@ -57,6 +60,38 @@ uv run python -m tests.passkey_preview
 In another terminal run `node tests/passkey_browser.cjs`. Set `PLAYWRIGHT_MODULE` to an existing Playwright module path and `CHROME_EXECUTABLE` to a Chromium/Chrome binary if needed. The fixture uses ports 19446 and 19447, a disposable TLS certificate and temporary state. Restart it before each browser run.
 
 The test uses native Chromium WebAuthn with a virtual CTAP2 authenticator: registration, re-login, a remembered session, reload, the same credential across admin/MCP ports, explicit consent, denial, PKCE exchange, refresh rotation and MCP tool discovery. It uses no real account or messages and changes no system trust. Stop the fixture with Ctrl-C afterward. Python tests separately verify actual ES256 signatures and invalid browser, origin, challenge, user verification, RP and user-handle combinations.
+
+## Connection setup and overview checks
+
+```bash
+uv run pytest -q tests/test_web_connection_setup.py tests/test_connection_setup.py tests/test_tunnel.py tests/test_event_settings.py
+node --test tests/connection-guidance.test.cjs tests/setup-flow.test.cjs
+```
+
+These cover the setup input boundary, job/credential handling, saved method
+selection, progress isolation, persistent instructions, tunnel approval and
+successful-call activity, and conversation event permissions. The pure JavaScript
+guidance tests do not replace browser interaction checks.
+
+For UI changes, use synthetic providers in an isolated fixture and verify:
+
+- A configured, approved connection without recorded activity awaits its first
+  successful tool call; a service check does not create one.
+- Saved instructions survive checks, failures and reloads; an interrupted job
+  reopens for review, and retry allows settings to be corrected.
+- HTTPS `/mcp` input normalizes to the origin; credentials clear from the form.
+- Stale inspection preserves the last-observed approval label and explains how
+  to enable dependent phone-confirmation actions.
+- A running collector starts with setup/tablet folded. At a 390-pixel viewport,
+  navigation and controls remain reachable without horizontal overflow.
+- Event permission and subscription status remain distinct; do not create real
+  subscriptions merely to test layout.
+
+On an authorized real deployment, check existing authentication, run **Check
+server connection**, make a successful MCP status call and verify its timestamp.
+Do not equate this with a fresh install or a full provider onboarding test. The
+latest [validation scope](implementation.md#admin-ux-and-connection-setup-2026-10-05)
+separates real checks from synthetic ones.
 
 ## Container checks
 

@@ -219,3 +219,22 @@ def test_tunnel_admin_decision_requires_session_csrf_and_origin():
         connections.call.assert_not_called()
         assert client.post(path, json=body, headers=headers).status_code == 200
         connections.call.assert_called_once_with("POST", "/tunnel/decision", body)
+
+
+def test_tunnel_only_needs_no_public_ingress_but_keeps_old_https_admin(home):
+    cli.env_update({"OPENAI_TUNNEL_ENABLED": "1", "DOT_PUBLIC_URL": "https://a.invalid"})
+    assert "dot-ingress" not in cli.services()
+    cli.atomic(home / ".bridge/admin-url", "https://private-admin.test/admin/")
+    assert "dot-ingress" in cli.services()
+    cli.atomic(home / ".bridge/admin-url", "http://localhost:18789/admin/")
+    assert "dot-ingress" not in cli.services()
+
+
+def test_fresh_tunnel_setup_does_not_require_an_admin_proxy(home):
+    key = home / "key"
+    key.write_text("sk-" + "x" * 40)
+    args = options(
+        "--connection", "openai-tunnel", "--tunnel-id", TUNNEL, "--api-key-file", str(key)
+    )
+    onboarding.validate(args)
+    assert args.admin_url is None

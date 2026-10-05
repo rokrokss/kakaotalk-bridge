@@ -2,6 +2,10 @@
 
 [Development and test commands](development.md) · [Current architecture](design.md)
 
+The dated sections record validation at each checkpoint, not a claim that every
+installation path has been exercised. The latest admin and connection setup
+checks are [below](#admin-ux-and-connection-setup-2026-10-05).
+
 ## Verified with a real account
 
 On 2026-10-04, using Lima/Ubuntu 24.04 arm64 on an Apple Silicon Mac:
@@ -162,6 +166,70 @@ The [security report](security.md#security-fixes-2026-10-05) records findings, c
 The real ARM64 deployment now runs server/device `security-20261005-r2` and gateway `security-20261005`. The full pre-migration encrypted snapshot was authenticated. Final source hashes, APK hashes, passkey identities, MCP grants and profile identity were checked. A temporary ingress 502 was corrected by fixing file permissions and giving the isolated ingress a separate edge network for Docker port publishing; health checks were added. Final public MCP returned 401 without OAuth; public admin routes returned 404. The already connected client's **get_profile** and **get_collector_status** then succeeded, reporting `collecting_partial`, Iris connected and no warnings. No message body was queried or sent during these checks.
 
 Redroid restarted once to enforce ADB authentication, with its existing data volume. The final dependency/ingress rollout kept that Android container running. Registered passkeys and MCP connections remain, while the owner must log back into admin once after the cookie migration. This does not automatically verify the phone session. The old Android OS security patch level remains open; moving to an unverified major image was not included in this rollout.
+
+## Admin UX and connection setup (2026-10-05)
+
+The admin console now starts with collection status, remote AI activity and manual
+phone confirmation. Existing collectors fold setup and tablet controls. The
+connection form starts from the user's destination, keeps saved instructions
+after checks/reloads, reports setup stages and elapsed time, and offers explicit
+review/retry. Inspection freshness, recorded approval and actual successful MCP
+use are separate signals. Conversation event permission and client subscriptions
+are also shown separately.
+
+Automated commands and observed results for this implementation:
+
+```text
+.venv/bin/pytest -q
+  354 passed, 1 warning in 14.13s
+node --test tests/connection-guidance.test.cjs tests/setup-flow.test.cjs
+  7 passed, 0 failed
+.venv/bin/ruff check .
+  All checks passed!
+node --check webui/static/app.js
+node --check webui/static/connection-setup.js
+git diff --check
+  Each exited 0 with no output.
+```
+
+After the final interrupted-job change, the focused Python suite
+`tests/test_web_connection_setup.py tests/test_tunnel.py` reported **56 passed,
+1 warning**. A strengthened failed-tool assertion then passed independently in
+`test_actual_tool_activity_is_separate_from_approval_and_discovery`. The warning
+is the existing Starlette/httpx deprecation. JavaScript syntax and lint checks
+also passed after the final initial-inspection retry fix.
+
+Synthetic browser checks used the actual admin UI/API with fixture providers.
+They covered approval without recorded use, instructions surviving a server
+check/reload, full `/mcp` URL normalization, deliberate setup failure followed by
+a successful corrected retry, and stale tablet inspection with a disabled-action
+explanation. At a 390 × 844 viewport the page had no horizontal overflow. These
+checks did not create provider credentials or expose a real test endpoint.
+
+The real Apple Silicon Lima deployment was updated after consistent admin,
+OAuth/tunnel and passkey database backups. The admin, MCP services and host setup
+agent were updated; redroid, API, device-agent, Iris collector, gateway and
+dot-ingress retained their container IDs, images and start times. The two existing
+OAuth grants, permanent tunnel approval, passkey registration and private admin
+origin were preserved. The setup socket remained mode 0600 inside a mode-0700
+directory, mounted read-only into admin without a Docker socket.
+
+In the actual authenticated admin browser, **Check server connection** completed
+with saved instructions visible and existing fields collapsed. Reload displayed
+the overview without the initial device-operation conflict. An actual
+`get_collector_status` call through the OpenAI tunnel succeeded at **17:21 UAE**
+and appeared as the tunnel's last successful tool call in admin. It reported
+`collecting_partial`, an active listener, no warnings and no subscriptions. No
+KakaoTalk message was sent or event subscription created during this UX check.
+An old manual phone confirmation was shown as needing recheck; the phone session
+was not remotely verified.
+
+This checkpoint verifies an existing connection and deployment, not creation of
+a fresh OpenAI tunnel or new Tailscale onboarding. Earlier real message retrieval
+is recorded in the [tunnel validation scope](openai-tunnel.md#validation-scope).
+Remote-server browser-entry automation and a collection test that matches a
+unique test message remain future work. Current collection tests accept any new
+row. End-to-end AI event execution remains unverified.
 
 ## Not yet verified
 

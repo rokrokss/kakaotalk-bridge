@@ -17,6 +17,9 @@ if ($Remote) {
     }
     Write-Host 'Preparing Bridge on your Linux server. Open the setup link printed below.'
     & ssh -t -- $Remote $command
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host 'Keeping localhost:18789 connected to your server. Open the setup link above. Press Ctrl+C to close forwarding.'
+    & ssh -N -o ExitOnForwardFailure=yes -L '127.0.0.1:18789:127.0.0.1:18789' -- $Remote
     exit $LASTEXITCODE
 }
 if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {

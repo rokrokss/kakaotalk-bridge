@@ -2,17 +2,31 @@
 
 [README](../README.md) · [Events](events.md) · [Security](security.md)
 
-`dot-plugin` is a remote MCP server that exposes messages stored in the collection API through OAuth. It does not sign in to KakaoTalk again. Use it to browse and search messages and check collection status.
+`dot-plugin` is a remote MCP server that exposes messages stored in the collection API through OAuth. It does not sign in to KakaoTalk again. Use it to browse and search messages and check collection status. This page covers public HTTPS/OAuth; for outbound-only OpenAI access, use the optional [personal tunnel](openai-tunnel.md).
 
 ## Connect
 
-First, prepare a public HTTPS address using the deployment instructions below and register a [passkey](passkeys.md) for the private admin and public MCP origins.
+In admin, open **AI connections → Add or change a connection**. Choose
+**ChatGPT** or **Another remote AI client**, then your existing HTTPS address or
+Tailscale. The form accepts an origin or full `/mcp` URL, prepares OAuth and shows
+the client address. You keep the existing admin/passkey origin. For manually
+managed deployments, use the instructions below.
 
 1. Add a custom MCP server in ChatGPT. Set its name to `KakaoTalk Bridge`, its URL to `https://<your-host>/mcp`, and authentication to OAuth.
-2. Confirm with your passkey. Review the client, callback and permissions, then choose **Allow connection** to return to ChatGPT. Canceling creates no connection.
-3. Once connected, request recent messages or a search. For example: “Show my recent messages from KakaoTalk Bridge.”
+2. Follow the consent screen. With shared HTTPS admin/MCP, confirm with your passkey, review the client, callback and permissions, then choose **Allow connection**. With localhost/private admin, match the eight-character code in admin **AI connections** and choose **Approve connection**. Canceling creates no connection.
+3. Ask for collector status, then retrieve recent messages or search for a message you sent from your phone. For example: “Show my recent messages from KakaoTalk Bridge.”
 
-Use [the installer](onboarding.md) to configure private Tailscale Serve and public Funnel, or follow the manual deployment below. Normal connections need neither a linking key nor a visit to the admin console. Disconnect clients under private admin **Connections**. Explicit `DOT_APPROVAL_MODE=admin` retains the previous eight-character approval-code flow; `key` is a legacy opt-in mode.
+Tailscale is optional when you already have an HTTPS reverse proxy. Shared HTTPS
+consent needs no linking key or separate admin visit; split-origin setup selects
+`DOT_APPROVAL_MODE=admin` automatically and uses code approval in your private
+admin. `key` remains a legacy opt-in mode. Disconnect clients under **AI
+connections**.
+
+**Server setup complete** reports service configuration, not client access. The admin
+overview and connection cards distinguish approval from a recorded successful
+tool call. Tool discovery and failed calls do not count, and timestamps do not
+prove current reachability. Saved connection instructions stay available after
+checks and reloads. See [admin status meanings](web-ui.md#what-each-status-proves).
 
 Connecting the plugin does not create event subscriptions or automated tasks. Subscribe to [Events](events.md) separately when needed.
 
@@ -45,7 +59,14 @@ docker compose --profile dot up -d --no-deps dot-plugin dot-control dot-ingress
 # Update the device/admin image too, then run ./bridge passkey-login.
 ```
 
-The public HTTPS proxy targets `dot-ingress` at `127.0.0.1:18787` by default. **Expose only this port** and keep the API gateway and admin console private. Do not publish dot-plugin directly: the ingress blocks private paths and removes private admin cookies from requests and responses. It has no admin, device or API network access. dot-plugin uses the API read token and receives neither Android volumes nor the admin token.
+The public HTTPS proxy targets `dot-ingress` at `127.0.0.1:18787` by default.
+**Expose only this port**, never the API/admin gateway. Do not publish dot-plugin
+directly: the ingress blocks internal paths and removes private admin cookies
+on MCP routes. It joins a dedicated admin ingress network, not the device, API
+or control networks. If admin must stay private, deny `/admin` and `/admin/*` at
+the public proxy; otherwise the shared ingress serves authenticated admin at that
+hostname. dot-plugin uses the API read token and receives neither Android volumes
+nor the admin token.
 
 ## Deploy in Lima on a Mac
 
@@ -78,7 +99,7 @@ On Linux, use `docker compose` instead of `scripts/lima-compose.sh`. The legacy 
 | --- | --- |
 | `invalid_origin` | The scheme, host, and port in `DOT_PUBLIC_URL` must match the browser address; the approval HTML's Referrer-Policy must be `same-origin` |
 | `invalid_approval` | The approval screen is over 10 minutes old or its cookie is missing; restart the connection from ChatGPT |
-| `approval_required` | Approve the matching code in private admin Connections |
+| `approval_required` | Approve the matching code in private admin **AI connections** |
 | Passkey sign-in needs setup | Run `./bridge passkey-login` on the server and finish registration at the private admin hostname |
 | No passkey is available | Use the device or password manager where it was saved, check the hostname, and restart in a supported system browser |
 | Code is incorrect or request expired | Check the initiating browser and restart a request older than ten minutes |

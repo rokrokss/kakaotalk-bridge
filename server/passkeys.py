@@ -27,7 +27,7 @@ from webauthn.helpers.structs import (
 
 from dot_plugin.storage import State
 from server.config import secret
-from server.origins import validate_origin
+from server.origins import validate_admin_origin, validate_origin
 
 
 def encode(value):
@@ -53,7 +53,7 @@ class Passkeys:
         self.state = state
 
     def configure(self, admin_origin, public_origin=""):
-        validate_origin(admin_origin)
+        validate_admin_origin(admin_origin)
         if public_origin:
             validate_origin(public_origin)
         host = urlsplit(admin_origin).hostname

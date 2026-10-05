@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from dot_plugin.app import create_app
 from dot_plugin.auth import AuthError, OAuth
 from dot_plugin.config import EVENT, SCOPES, Config
+from dot_plugin.event_policy import EventDecision, decide
 from dot_plugin.events import Events
 from dot_plugin.network import DeliveryError, signed_headers
 from dot_plugin.storage import State
@@ -183,6 +184,7 @@ def plugin(tmp_path):
         return 200, b"{}"
 
     app = create_app(config, source, verifier=verify, sender=send, worker=False)
+    enable_events(app.state.store, source, "room-a", "room-b")
     with TestClient(app, base_url=BASE) as client:
         registration, form = link(client)
         tokens = client.post("/token", data=form).json()
@@ -214,6 +216,20 @@ def subscription(consumer="dot", **args):
         },
         "cursor": None,
     }
+
+
+def enable_events(state, source, *conversations):
+    checkpoint = source.checkpoint()
+    for ref in conversations:
+        decide(
+            state,
+            EventDecision(
+                conversation_ref=ref,
+                enabled=True,
+                cursor_epoch=checkpoint["cursor_epoch"],
+                after_cursor=checkpoint["cursor"],
+            ),
+        )
 
 
 def test_discovery_401_oauth_metadata_and_complete_results(plugin):

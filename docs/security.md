@@ -9,12 +9,12 @@ This setup assumes a personal server with one owner. Because redroid is a privil
 | Route | Default access | Authentication |
 | --- | --- | --- |
 | ADB | Host loopback / internal Docker network | Preseeded collector RSA keys (`ro.adb.secure=1`) |
-| `/admin/` | Private HTTPS | Passkey login, persistent revocable cookies, Origin and CSRF checks |
+| `/admin/` | Loopback HTTP via localhost/SSH, or configured HTTPS | Passkey login, persistent revocable cookies, Origin and CSRF checks |
 | `/v1/*` | Private HTTPS | Read token |
 | `/mcp` | Separately configured public HTTPS proxy | OAuth |
 | Private tunnel `/mcp` | Docker-internal listener; no published port | Locally injected service credential and owner-approved grant |
 
-The public proxy must connect **only to the dot-ingress port** (`127.0.0.1:18787` by default). Do not bypass this cookie-filtering proxy with a direct dot-plugin route. Do not expose the API gateway or ADB alongside it. Tailscale Funnel provides a public internet address, so OAuth protects MCP access rather than Tailscale user ACLs. The default shared HTTPS origin also serves `/admin/`, protected by passkeys. The admin login page is publicly reachable. To retain a tailnet-only admin in an advanced split-origin deployment, explicitly deny `/admin` and `/admin/*` at the public reverse proxy.
+The public proxy must connect **only to the dot-ingress port** (`127.0.0.1:18787` by default). Do not bypass this cookie-filtering proxy with a direct dot-plugin route. Do not expose the API gateway or ADB alongside it. Tailscale Funnel provides a public internet address, so OAuth protects MCP access rather than Tailscale user ACLs. An optional shared HTTPS origin also serves `/admin/`, protected by passkeys. The admin login page is publicly reachable. To retain a tailnet-only admin in an advanced split-origin deployment, explicitly deny `/admin` and `/admin/*` at the public reverse proxy.
 
 ## What is stored?
 
@@ -86,7 +86,11 @@ grants. Outbound webhook delivery still requires a reachable destination.
 
 Each WebAuthn challenge binds the browser, purpose, exact origin and pending OAuth request and can be verified once. Registration and authentication require user verification. Cross-origin/iframe ceremonies are rejected. One passkey works on the shared admin/MCP origin and also across ports of the same hostname. Ports do not isolate cookies.
 
-A successful assertion opens a separate consent page. No MCP code is issued until a same-origin POST explicitly allows the listed permissions. Cancel returns `access_denied`. The client, callback, scope, resource and PKCE challenge remain bound throughout. Client names are self-reported, so the page also shows the client ID and callback origin. The MCP application has no admin routes or admin volume; the separate ingress routes `/admin/*` to the admin service. Admin sessions use a `/admin` cookie. A separate Caddy ingress strips all private admin cookies from requests and private `Set-Cookie` values from responses before forwarding public traffic. Keep this ingress outside the public application container with a read-only configuration. Only ingress and admin join `admin-ingress-net`; ingress never joins the device, API or control networks. Cookie filtering prevents the MCP upstream from receiving or overwriting admin cookies, but the default shared port means both frontends share a browser origin. A compromised frontend or same-origin script can act through a signed-in browser; this setup does not claim browser-origin isolation. Use a separate admin origin and deny admin paths at the public proxy when that isolation is required.
+A successful assertion opens a separate consent page. No MCP code is issued until a same-origin POST explicitly allows the listed permissions. Cancel returns `access_denied`. The client, callback, scope, resource and PKCE challenge remain bound throughout. Client names are self-reported, so the page also shows the client ID and callback origin. The MCP application has no admin routes or admin volume; the separate ingress routes `/admin/*` to the admin service. Admin sessions use a `/admin` cookie. A separate Caddy ingress strips all private admin cookies from requests and private `Set-Cookie` values from responses before forwarding public traffic. Keep this ingress outside the public application container with a read-only configuration. Only ingress and admin join `admin-ingress-net`; ingress never joins the device, API or control networks. Cookie filtering prevents the MCP upstream from receiving or overwriting admin cookies, but a configured shared HTTPS port means both frontends share a browser origin. A compromised frontend or same-origin script can act through a signed-in browser; this setup does not claim browser-origin isolation. Use a separate admin origin and deny admin paths at the public proxy when that isolation is required.
+
+Fresh installs publish a separate admin-only HTTP listener on `127.0.0.1`. It accepts only the configured `localhost:<port>` Host and denies MCP, collector and passkey-control routes. Remote owners reach it through SSH forwarding. HTTP is never enabled for LAN or public hosts. Local sessions use distinct HttpOnly, SameSite=Strict cookies with server-side origin/port binding; HTTPS sessions retain Secure cookies. Neither session type can be replayed as the other. The local exception does not trust forwarded scheme headers.
+
+With separate admin and public MCP hosts, OAuth uses code approval in admin. New grants are bound to the admin passkey policy and invalidated by recovery/removal; no public assertion of a localhost passkey is attempted.
 
 Browser cookie IDs and emergency pairing values are stored as digests. Private session records are encrypted and checked for revocation on every request. Sessions last 30 minutes, or seven days when explicitly remembered; emergency access is limited to 30 minutes. Passwords use salted scrypt only in explicit `ADMIN_AUTH_MODE=local`. Password/key login is disabled in passkey mode.
 
@@ -147,3 +151,48 @@ Raw reports, build output and deployment checks are retained in ignored `artifac
 Before migration, a full AES-GCM snapshot including Android, all seven state volumes, configuration and secrets was authenticated without extracting plaintext. It is kept on the deployment host at `backups/security-20261005-r1/snapshot.kcs` with mode 0600. The initial backup verification hit a permissions error before service changes; the corrected retry passed. Both Iris migrations checked old/new APK hashes and retained the prior binary. Passkey identities, MCP grants and profile identity were compared before and after. Secure ADB required one Android restart; the final dependency/ingress rollout did not restart Android. The owner must sign in to admin once again with the existing passkey. Phone session continuity still requires the owner's manual check.
 
 The first ingress rollout briefly returned 502: its copied configuration had mode 0600, and Docker did not publish ports when its only network was internal. The configuration is now readable by its non-root UID, with private writable tmpfs directories. A separate edge network enables host-loopback publishing without joining any admin/device/control network. A health check and an actual published-port smoke test cover this deployment failure; final public-route and existing MCP calls passed.
+
+## Web connection setup
+
+The authenticated admin UI can request a finite set of connection operations:
+keep current setup, generate stdio configuration, configure HTTPS/OAuth, configure
+Tailscale Funnel, configure/approve a personal OpenAI tunnel, or check services.
+Requests require an admin session, same-origin checks and the session’s CSRF token.
+The shared input contract rejects arbitrary commands, paths, extra fields and
+implicit approval. Tunnel approval and Tailscale installation/public exposure each
+require an explicit checkbox.
+
+`bridge up` installs a root systemd service in the installation host (inside the
+managed Linux VM on Mac). It listens only on a mode-0600 Unix socket in a
+mode-0700 directory. Only that directory is mounted into the admin container,
+read-only; the Docker socket and installation directory are not mounted there.
+Treat the admin console and installation source as trusted administration
+surfaces: approved setup operations can install Tailscale and change MCP access.
+The agent exposes no TCP listener or general shell/Docker proxy. Other MCP and
+public ingress services do not receive its socket mount.
+
+Workers receive keys through stdin, use mode-0600 temporary key files and remove
+them after provisioning. The persistent tunnel credential uses the existing
+protected secrets directory. HTTP responses and job history contain no keys;
+provider errors are replaced with fixed, stage-specific recovery messages.
+Progress files contain only a matching request ID, an allowed stage and its fixed
+message. The saved preferred method contains no credential and changes only after
+a successful non-check job. Tailscale approval links are kept in memory, not job
+history. Setup status survives page refresh; interrupted jobs retain their method
+for review and require a retry. A process-group timeout stops a worker and its descendants.
+This does not promise transactional rollback after a machine crash. Existing
+tunnel rollback behavior still applies to ordinary provisioning failures.
+
+## Connection activity metadata
+
+Successful remote MCP tool calls store a `last_tool_at` timestamp per grant in
+encrypted `dot-state`, separately from the grant. No tool arguments or returned
+message content are added to this record. Metadata discovery and failed calls do
+not count. The admin API returns activity for active approvals; revoking and
+reapproving creates a new grant without the prior activity display. Local stdio
+calls are not recorded here, and older calls are not backfilled.
+
+An activity timestamp is not an authentication decision, a live connectivity
+probe or proof of event delivery. Each request still validates its current grant.
+The overview's phone timestamp remains a manual observation; refreshing the
+tablet inspection does not confirm the phone session.

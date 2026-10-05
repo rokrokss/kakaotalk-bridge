@@ -1,6 +1,6 @@
 # Linux installation
 
-For the new installer, Kakao admin login, Aurora setup and full encrypted snapshots, see [Set up a personal bridge](onboarding.md). The commands below describe the existing manual deployment path.
+For automatic installation, passkey admin login, optional web-based AI setup and full encrypted snapshots, start with [one-command setup](quickstart.md). It requires neither Tailscale nor an OpenAI tunnel. The commands below describe the existing manual deployment path with a configured HTTPS admin address.
 
 [README](../README.md) · [Mac installation](local-redroid.md)
 
@@ -50,21 +50,38 @@ Python, the JDK, and the Android SDK are prepared inside the images. Android bui
 
 ## 4. Open the admin console
 
-Expose a stable, trusted HTTPS hostname using private Tailscale Serve or your reverse proxy, then register a [passkey](passkeys.md). If Tailscale is available, the managed CLI can configure both endpoints:
+Configure a stable, trusted HTTPS hostname using private Tailscale Serve or your
+reverse proxy, then register a [passkey](passkeys.md). For local/SSH admin without
+Tailscale, use the [automatic setup path](quickstart.md#local-and-ssh-admin-access).
+
+If you explicitly want public MCP through Tailscale Funnel, the CLI can prepare
+it and configure approval while preserving an existing admin origin:
 
 ```bash
 ./bridge expose
 ./bridge passkey-login
 ```
 
-Open the private `https://<node>.ts.net:8443/admin/` address and confirm with your passkey. Keep the same hostname for admin and public MCP so the credential works for both. A localhost SSH tunnel is useful for diagnostics, but a passkey registered at the server hostname will not work at localhost.
+Open the admin address printed by `passkey-login` and confirm with your passkey.
+Existing private addresses such as `https://<node>.ts.net:8443/admin/` remain
+separate from public MCP; new shared HTTPS configurations use `/admin/` and
+`/mcp` on port 443. A localhost passkey cannot be used at a public hostname:
+split-origin setup uses code approval in admin instead. Keep your configured
+admin origin stable.
 
-Follow **Set up your bridge**, use Aurora or import an APK set, then choose **Set up collection components**.
+Follow **KakaoTalk setup**, using the screen under **Tablet & settings** to install
+KakaoTalk through Aurora or importing an APK set. Component setup continues
+automatically; **Installation → Set up collection components** remains available
+for manual recovery.
 
 Follow the [first login procedure](web-ui.md#first-login). The new setup action preserves existing enrollment. The legacy CLI `bootstrap` still resets collection approval and is not a routine recovery step.
 
 ## 5. Verify collection and connect
 
 After confirming both login sessions, select **Start collecting messages** in the admin console. Send yourself a message from your phone and verify that it appears through the [API](api.md) or [ChatGPT](dot-plugin.md).
+
+AI access is optional. The [web connection setup service](operations.md#web-connection-setup)
+enables **AI connections → Add or change a connection** on this manual install;
+otherwise use `./bridge setup-connection`. Keep the existing admin origin and keys.
 
 See [Operations](operations.md) for management commands and backups.

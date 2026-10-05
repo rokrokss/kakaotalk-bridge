@@ -12,7 +12,7 @@ from dot_plugin.config import Config
 from dot_plugin.control import create_app as control_app
 from dot_plugin.storage import State
 from dot_plugin.tunnel import create_app as tunnel_app
-from tests.test_dot_plugin import BASE, Source, call, link, rpc, subscription
+from tests.test_dot_plugin import BASE, Source, call, enable_events, link, rpc, subscription
 
 TUNNEL = "tunnel_" + "a" * 32
 AUTHORIZATION = "Bearer " + "t" * 43
@@ -78,6 +78,44 @@ def bridge(tmp_path):
 def approve(control, allow=True):
     response = control.post("/tunnel/decision", json={"tunnel_id": TUNNEL, "approve": allow})
     assert response.status_code == 200, response.text
+
+
+def test_actual_tool_activity_is_separate_from_approval_and_discovery(bridge):
+    private, public, control, state, _, source, *_ = bridge
+    approve(control)
+    for method in ("initialize", "tools/list", "ping"):
+        assert "result" in rpc(private, method)
+    assert control.get("/connections").json()["tunnel"]["last_tool_at"] is None
+    assert state.all("connection_activity") == []
+    assert "error" in call(private, "unknown_tool")
+    assert state.all("connection_activity") == []
+    assert "result" in call(private, "get_collector_status")
+    observed = control.get("/connections").json()["tunnel"]["last_tool_at"]
+    assert observed > 0
+    assert "error" in call(private, "get_collector_status", unexpected="private-value")
+    assert control.get("/connections").json()["tunnel"]["last_tool_at"] == observed
+    original_get = source.get
+
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("private collector error")
+
+    source.get = unavailable
+    assert "error" in call(private, "get_collector_status")
+    assert control.get("/connections").json()["tunnel"]["last_tool_at"] == observed
+    source.get = original_get
+    assert list(state.all("connection_activity")[0][1]) == ["last_tool_at"]
+    approve(control, False)
+    assert control.get("/connections").json()["tunnel"]["last_tool_at"] is None
+    approve(control)
+    assert control.get("/connections").json()["tunnel"]["last_tool_at"] is None
+
+    _, form = link(public)
+    access = public.post("/token", data=form).json()["access_token"]
+    public.headers["Authorization"] = "Bearer " + access
+    assert control.get("/connections").json()["grants"][0]["last_tool_at"] is None
+    assert "result" in call(public, "get_collector_status")
+    assert control.get("/connections").json()["grants"][0]["last_tool_at"] > 0
+    assert control.get("/connections").json()["tunnel"]["last_tool_at"] is None
 
 
 def test_private_credential_is_not_public_oauth_and_browser_routes_are_absent(bridge):
@@ -211,6 +249,7 @@ def test_allow_is_idempotent_and_scopes_are_enforced(bridge):
 def test_permanent_approval_survives_time_cleanup_and_restart(bridge, monkeypatch):
     _, public, control, state, keys, source, delivered, config = bridge
     approve(control)
+    enable_events(state, source, "room-a")
     identity = state.get("settings", "tunnel_grant")
     assert state.get("grant", identity)["expires"] is None
     _, form = link(public)
@@ -289,6 +328,7 @@ def test_missing_oauth_expiry_never_becomes_permanent(bridge):
 def test_event_worker_preserves_pending_ack_and_stops_after_revoke(bridge):
     private, public, control, state, _, source, delivered, _ = bridge
     approve(control)
+    enable_events(state, source, "room-a")
     assert state.all("subscription") == []  # Approval never auto-subscribes.
     assert "result" in rpc(private, "events/subscribe", subscription())
     source.add("after subscription")
@@ -310,10 +350,55 @@ def test_event_worker_preserves_pending_ack_and_stops_after_revoke(bridge):
     assert state.all("subscription")[0][1]["stopped_reason"] == "expired_or_revoked"
 
 
+def test_admin_conversation_switch_applies_to_tunnel_events(bridge):
+    private, public, control, _state, _, source, delivered, _ = bridge
+    approve(control)
+    assert "result" in rpc(private, "events/subscribe", subscription())
+    source.add("default off")
+    public.app.state.events.tick()
+    assert delivered == []
+    assert (
+        control.post(
+            "/events/settings",
+            json={
+                "conversation_ref": "room-a",
+                "enabled": True,
+                "cursor_epoch": source.epoch,
+                "after_cursor": len(source.rows),
+            },
+        ).status_code
+        == 200
+    )
+    source.add("allowed")
+    source.add("blocked", "room-b")
+    public.app.state.events.tick()
+    assert len(delivered) == 1
+    page = call(private, "get_pending_messages")["result"]["structuredContent"]
+    assert [r["body"] for r in page["items"]] == ["allowed"]
+    assert (
+        control.post(
+            "/events/settings",
+            json={
+                "conversation_ref": "room-a",
+                "enabled": False,
+            },
+        ).status_code
+        == 200
+    )
+    assert call(private, "get_pending_messages")["result"]["structuredContent"]["items"] == []
+    assert len(call(private, "get_recent_messages")["result"]["structuredContent"]["items"]) == 3
+
+
 def test_status_contains_only_metadata_and_wrong_tunnel_cannot_be_approved(bridge):
     _, _, control, _, *_ = bridge
     before = control.get("/connections").json()["tunnel"]
-    assert before == {"configured": True, "approved": False, "tunnel_id": TUNNEL, "expires": None}
+    assert before == {
+        "configured": True,
+        "approved": False,
+        "tunnel_id": TUNNEL,
+        "expires": None,
+        "last_tool_at": None,
+    }
     assert (
         control.post(
             "/tunnel/decision", json={"tunnel_id": "tunnel_" + "b" * 32, "approve": True}

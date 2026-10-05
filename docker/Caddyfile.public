@@ -18,10 +18,10 @@
     }
     handle {
         # Only the admin upstream may receive or set admin browser cookies.
-        request_header Cookie "(^|;)[[:space:]]*(__Host-kakao-admin|__Secure-kakao-admin-v2|__Host-passkey-admin-flow)=[^;]*" ""
+        request_header Cookie "(^|;)[[:space:]]*(__Host-kakao-admin|__Secure-kakao-admin-v2|__Host-passkey-admin-flow|kakao-admin-local-[0-9]+|passkey-admin-local-[0-9]+)=[^;]*" ""
         reverse_proxy dot-plugin:8787 {
             # A public response must not overwrite a private browser cookie either.
-            header_down Set-Cookie "^[[:space:]]*(__Host-kakao-admin|__Secure-kakao-admin-v2|__Host-passkey-admin-flow)=.*$" ""
+            header_down Set-Cookie "^[[:space:]]*(__Host-kakao-admin|__Secure-kakao-admin-v2|__Host-passkey-admin-flow|kakao-admin-local-[0-9]+|passkey-admin-local-[0-9]+)=.*$" ""
         }
     }
 }

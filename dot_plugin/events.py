@@ -7,7 +7,7 @@ import threading
 import time
 from datetime import UTC, datetime
 
-from dot_plugin import network
+from dot_plugin import event_policy, network
 from dot_plugin.config import EVENT
 from dot_plugin.storage import canonical
 
@@ -223,7 +223,14 @@ class Events:
         page = self.collector.messages(after, limit)
         if page["coverage"]["cursor_epoch"] != consumer["epoch"]:
             raise RpcError("collector_epoch_changed_use_a_new_consumer_id")
-        rows = [row for row in page["items"] if match(row, consumer["args"])]
+        rows = [
+            row
+            for row in page["items"]
+            if match(row, consumer["args"])
+            and event_policy.allows(
+                self.state, row["conversation_ref"], consumer["epoch"], row["id"]
+            )
+        ]
         through = page["next_cursor"]
         with self.state.transaction() as db:
             current = self.state.get("consumer", key, db=db)
@@ -310,8 +317,11 @@ class Events:
             if page["coverage"]["cursor_epoch"] != sub["epoch"]:
                 continue
             with self.state.transaction() as db:
+                db.execute("BEGIN IMMEDIATE")
                 for row in page["items"]:
-                    if not match(row, sub["args"]):
+                    if not match(row, sub["args"]) or not event_policy.allows(
+                        self.state, row["conversation_ref"], sub["epoch"], row["id"], db=db
+                    ):
                         continue
                     event_id = (
                         "evt_" + hashlib.sha256(f"{sub['epoch']}:{row['id']}".encode()).hexdigest()
@@ -353,11 +363,15 @@ class Events:
             if sent >= 20 or self.stop.is_set():
                 break
             sub = self.state.get("subscription", delivery["subscription_id"])
+            data = delivery["event"]["data"]
             if (
                 not sub
                 or not sub["active"]
                 or sub["expires"] <= time.time()
                 or not self.auth.active_grant(sub["grant_id"])
+                or not event_policy.allows(
+                    self.state, data["conversation_ref"], data["cursor_epoch"], data["message_id"]
+                )
             ):
                 self.state.delete("delivery", item_id)
                 continue

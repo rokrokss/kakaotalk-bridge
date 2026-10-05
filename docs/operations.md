@@ -8,6 +8,13 @@ The commands below run on a Linux host. On a Mac, the containers run inside Lima
 
 ## Check status
 
+Start with **Your bridge** in admin. Collection, remote AI activity and manual
+phone confirmation are independent. Open **AI connections → Add or change a
+connection → Check server connection** for service verification; **Refresh
+connections** reloads approvals and activity. A successful tool-call timestamp
+records past use, not current reachability. Ask your connected client for
+collector status to test the complete request path.
+
 ```bash
 docker compose --profile dot ps
 ./scripts/status.sh
@@ -23,10 +30,42 @@ docker compose logs --tail 30 iris-collector
 | Collection stops after an app update | A changed versionCode requires new login confirmation |
 | Decryption or JSON error | Iris logs; collection stops rather than skipping invalid rows |
 | Database replaced or IDs move backwards | Android restore or database recreation; investigate before registering a new epoch |
-| ChatGPT connection fails | dot-ingress, dot-plugin and dot-control status, public HTTPS, the configured passkey hostname and a registered passkey. Ensure the ingress config is readable by UID 10001. Matching approval codes apply only in explicit admin approval mode. See [Connection setup](dot-plugin.md) |
+| HTTPS/OAuth connection fails | dot-ingress, dot-plugin and dot-control status, public HTTPS and consent. Shared HTTPS uses passkeys; localhost/private admin uses matching-code approval. Ensure the ingress config is readable by UID 10001. See [Connection setup](dot-plugin.md) |
+| OpenAI tunnel connection fails | Tunnel readiness, runtime key permission, configured ID and admin approval. See [Tunnel checks](openai-tunnel.md#check-revoke-and-restore) |
+| AI access is allowed but no successful call is recorded | Finish client setup and ask for collector status. Discovery does not count, and earlier calls are not backfilled |
+| Inspection out of date | Run **Check status** in **Tablet & settings**. Stale screen inspection does not itself revoke approval |
+| Phone says Recheck needed | Check the phone manually, then update **Phone confirmation**. Refresh tablet inspection if the button asks for it |
+| Event room says Allowed but no alert arrives | Check the room's client subscription, expiry and receiving client's execution. Permission alone creates no subscription; see [Events](events.md) |
 | ADB reports unauthorized | Preserve the original device-state and iris-state keys. Stop Android, rerun adb-init and start Android through Compose to provision those keys; do not disable ADB authentication |
 
 By default, Iris reads up to 50 rows every 3 seconds and continues fetching while a backlog remains. Delivery latency depends on the KakaoTalk and redroid connection state.
+
+## Web connection setup
+
+For installer-managed deployments, update the source and application images,
+then run `./bridge up` from the existing installation. It installs/restarts the
+private setup agent under systemd and retains the admin origin. `up` alone does
+not upgrade existing images. Use the matching update procedure and keep existing
+keys, volumes and deployment identifiers.
+
+On Mac, the agent runs inside the managed Linux VM. An older manual VM is not
+adopted by the Mac installer: operate inside that VM's existing installation.
+Without systemd, run `./bridge --local setup-agent serve` under your service
+manager as root from the installation directory. The agent needs Docker access;
+the admin container receives only its protected Unix socket directory.
+
+If the web form reports that setup is unavailable, follow its recovery message.
+For a running job, the stage and elapsed time can be checked after reopening the
+page. Only one job runs at a time. A page reload does not cancel it; a setup-agent
+restart marks in-flight work interrupted. Use **Review and retry** to review and
+resubmit after fixing the displayed problem. Use **Check again** for a failed
+server check. Repeated failures can be diagnosed with `./bridge doctor`.
+
+Setup history and the last successful method selection are stored separately
+under `.bridge/`; they do not contain runtime keys. Checks and failed jobs do not
+replace that selection. Saved HTTPS/tunnel instructions are derived from the
+current configuration, not the last job. Unsaved form edits are not restored.
+See [web setup security](security.md#web-connection-setup).
 
 ## Upgrading to the security update
 
@@ -52,7 +91,12 @@ docker compose up -d --no-build
 
 `down` preserves volumes. **`down -v` deletes the login state and database.** Do not use it for routine shutdown.
 
-For installations with remote MCP, include `--profile dot` when stopping or starting the complete stack. Public traffic must pass through the separate `dot-ingress` service. Its read-only `docker/Caddyfile.public` mount contains no secrets and must be readable by UID 10001 (normally mode 0644).
+For installations with remote MCP, include `--profile dot`; include
+`--profile tunnel` as well when the personal OpenAI tunnel is configured. The
+installer's `./bridge stop` and `./bridge start` use the saved connection modes.
+Public HTTPS traffic must pass through the separate `dot-ingress` service. Its
+read-only `docker/Caddyfile.public` mount contains no secrets and must be readable
+by UID 10001 (normally mode 0644).
 
 `adb-init` runs before Android creation and provisions only the two collector public keys. An authorized collector can still request root ADB. Back up and restore Android, device-state and iris-state together; do not replace keys in a running deployment. The Iris credential file is managed automatically and rotates with enrollment.
 
@@ -70,7 +114,7 @@ KakaoTalk Bridge retains existing deployment identifiers for compatibility: `kak
 | `iris-state` | Iris collector ADB keys |
 | `admin-state` | Encrypted optional local password and revocable browser sessions |
 | `passkey-state` | Encrypted public credentials, RP/origin configuration and temporary authentication state |
-| `dot-state` | OAuth, subscriptions, acknowledged cursors, and webhook queue |
+| `dot-state` | OAuth/tunnel grants, successful remote tool-call timestamps, conversation event permissions, subscriptions, acknowledged cursors, and webhook queue |
 
 The server prunes observations older than 30 days every hour. Adjust this period with `RETENTION_DAYS`. Retransmission deduplication also applies within this retention window. The Android database, legacy notification quarantine, and backup files are excluded from this cleanup. Container logs are limited to three 10 MB files each.
 

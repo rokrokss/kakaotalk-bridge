@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from webauthn.helpers.exceptions import WebAuthnException
 
+from dot_plugin import event_policy
 from dot_plugin.auth import digest, grant_unexpired, redirect_origin
 from dot_plugin.config import SCOPES, Config
 from dot_plugin.storage import State
@@ -62,7 +63,8 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
         return info["policy"]
 
     def tunnel_status():
-        row = state.get("grant", state.get("settings", "tunnel_grant", ""))
+        identity = state.get("settings", "tunnel_grant", "")
+        row = state.get("grant", identity)
         active = bool(
             config.tunnel_id
             and row
@@ -77,6 +79,9 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
             "tunnel_id": config.tunnel_id,
             "approved": active,
             "expires": row["expires"] if active else None,
+            "last_tool_at": state.get("connection_activity", identity, {}).get("last_tool_at")
+            if active
+            else None,
         }
 
     @app.post("/tunnel/decision")
@@ -130,6 +135,35 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
                 state.put("settings", "tunnel_grant", identity, db=db)
         return {"ok": True}
 
+    @app.get("/events/settings")
+    def event_settings():
+        now = time.time()
+        subscriptions = []
+        for _, sub in state.all("subscription"):
+            grant = state.get("grant", sub["grant_id"])
+            if (
+                sub["active"]
+                and sub["expires"] > now
+                and grant
+                and not grant["revoked"]
+                and grant_unexpired(grant, now=now)
+            ):
+                subscriptions.append(
+                    {
+                        "conversation_ref": sub["args"].get("conversation_ref"),
+                        "cursor_epoch": sub["epoch"],
+                    }
+                )
+        return {"conversations": dict(state.all(event_policy.KIND)), "subscriptions": subscriptions}
+
+    @app.post("/events/settings")
+    def event_decide(body: event_policy.EventDecision):
+        try:
+            event_policy.decide(state, body)
+        except ValueError:
+            raise HTTPException(422, "collection_checkpoint_required") from None
+        return {"ok": True}
+
     @app.post("/passkeys/{role}/{operation}")
     def passkey_call(role: str, operation: str, body: dict):
         nonlocal passkeys
@@ -169,6 +203,7 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
                 "client_id": row["client_id"],
                 "scope": row["scope"],
                 "expires": row["expires"],
+                "last_tool_at": state.get("connection_activity", identity, {}).get("last_tool_at"),
             }
             for identity, row in state.all("grant")
             if row.get("transport", "oauth") == "oauth"

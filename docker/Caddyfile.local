@@ -1,0 +1,22 @@
+{
+    admin off
+    auto_https off
+}
+:8785 {
+    request_body {
+        max_size 1MB
+    }
+    handle /health/live {
+        respond "alive" 200
+    }
+    @browser expression `{http.request.hostport} == "{$ADMIN_LOCAL_HOST}"`
+    handle @browser {
+        redir / /admin/ 302
+        redir /admin /admin/ 302
+        handle /admin/* {
+            reverse_proxy admin:8080
+        }
+        respond 404
+    }
+    respond 403
+}

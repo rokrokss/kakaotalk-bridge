@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/admin/style.css">
   <script src="/admin/passkey.js" defer></script>
   <script src="/admin/setup-flow.js" defer></script>
+  <script src="/admin/connection-setup.js" defer></script>
   <script src="/admin/app.js" defer></script>
 </head>
 <body>
@@ -49,17 +50,122 @@
     </section>
     <section id="console" hidden aria-labelledby="console-title">
       <div class="page-heading">
-        <h1 id="console-title">Tablet</h1>
+        <h1 id="console-title">Your bridge</h1>
         <span id="collector-status" class="collector-state" role="status">Checking collection status</span>
       </div>
-      <section class="setup-guide" aria-labelledby="guide-title">
+      <section class="overview" aria-label="Bridge overview">
+        <article><h2>Message collection</h2><strong id="overview-collection">Checking…</strong><p id="overview-last" class="hint"></p></article>
+        <article><h2>Remote AI activity</h2><strong id="overview-ai">Checking…</strong><p id="overview-ai-detail" class="hint">AI connections are optional.</p><button id="overview-connect" class="quiet">Manage AI connections</button></article>
+        <article><h2>Your phone</h2><strong id="overview-phone">Checking…</strong><p id="overview-phone-detail" class="hint">Confirmed by you, never monitored automatically.</p><button id="overview-phone-action" class="quiet">Review phone confirmation</button></article>
+      </section>
+      <nav class="section-nav" aria-label="Bridge sections"><button data-panel="connections-panel">AI connections</button><button data-panel="events-panel">Conversation events</button><button data-panel="tablet-workspace">Tablet &amp; settings</button></nav>
+      <details id="setup-guide" class="setup-guide" open>
+        <summary>KakaoTalk setup <span id="guide-summary">Checking…</span></summary><div class="section-body">
         <div class="section-heading"><h2 id="guide-title">Connect your KakaoTalk</h2><button data-action="setup-check" class="quiet">Check again</button></div>
         <ol id="setup-progress" class="setup-progress" aria-label="Setup progress"></ol>
         <p id="setup-next">Checking the server and tablet…</p>
         <p class="hint">Device preparation runs automatically. You complete store installation and KakaoTalk sign-in on the screen below.</p>
         <button id="setup-next-button" class="primary" hidden>Continue</button>
         <p class="hint">The phone session is confirmed by you. Tablet settings alone do not guarantee it stays signed in.</p>
-      </section>
+        </div>
+      </details>
+          <details class="management-panel" id="connections-panel">
+            <summary>AI connections <span id="pending-count"></span></summary>
+            <div class="section-body">
+              <button id="open-ai-setup">Add or change a connection</button>
+              <p id="connection-help">Add the MCP address below in ChatGPT and choose OAuth. Confirm with your passkey and review access in the connecting browser.</p>
+              <code id="mcp-address" class="endpoint">No public AI connection configured.</code>
+              <div id="tunnel-connection" hidden aria-live="polite"></div>
+              <button id="refresh-connections" class="quiet">Refresh connections</button>
+              <div id="connections-list" aria-live="polite"></div>
+              <p class="hint">Connecting does not subscribe to events automatically.</p>
+      <details id="ai-setup" class="ai-setup">
+        <summary>Add or change a connection <span>Optional · existing connections stay available</span></summary>
+        <div class="ai-setup-body">
+          <ol class="ai-steps" aria-label="AI connection steps"><li>Choose a connection</li><li>Set up the server</li><li>Finish in your AI client</li></ol>
+          <p id="ai-agent-status" class="hint" role="status">Checking web setup availability…</p>
+          <form id="ai-setup-form" autocomplete="off">
+            <fieldset id="ai-setup-fields" disabled>
+              <div class="ai-setup-grid">
+                <div>
+                  <label for="ai-destination">Where will you use your messages?</label>
+                  <select id="ai-destination"><option value="none">Decide later</option><option value="chatgpt">ChatGPT</option><option value="desktop">An AI app on my computer</option><option value="remote">Another remote AI client</option><option value="advanced">All connection options</option></select>
+                  <label for="ai-method">Connection option</label>
+                  <select id="ai-method">
+                    <option value="none">Decide later</option>
+                    <option value="openai-tunnel">Personal tunnel · no public address</option>
+                    <option value="https">Use my existing HTTPS address</option>
+                    <option value="tailscale">Create an HTTPS address with Tailscale</option>
+                    <option value="stdio">Run Bridge from my AI app · local or SSH</option>
+                  </select>
+                  <p id="ai-method-help" class="hint"></p>
+                  <p class="hint">Methods can coexist. Choosing another method keeps your existing connections.</p>
+                </div>
+                <details id="ai-edit" class="ai-method-fields" open><summary>Connection settings</summary>
+                  <div data-ai-method="none"><h3>Connect whenever you’re ready</h3><p>Collection and the admin console work without an AI connection.</p></div>
+                  <div data-ai-method="openai-tunnel" hidden>
+                    <p><a href="https://platform.openai.com/settings/organization/tunnels" target="_blank" rel="noopener noreferrer">Create a tunnel in OpenAI ↗</a>, then paste its ID and runtime API key here. The key needs Read and Use access to this tunnel.</p>
+                    <label for="ai-tunnel-id">Tunnel ID</label><input id="ai-tunnel-id" placeholder="tunnel_…" maxlength="39" spellcheck="false" autocapitalize="off">
+                    <label for="ai-api-key">Runtime API key</label><input id="ai-api-key" type="password" autocomplete="new-password" maxlength="512" spellcheck="false" autocapitalize="off" aria-describedby="ai-key-help">
+                    <p id="ai-key-help" class="hint">Saved on your server. The key is never returned to this page.</p>
+                    <label class="check"><input id="ai-tunnel-approve" type="checkbox">Allow this personal tunnel to read collected messages and manage event subscriptions. Access stays allowed until I disconnect it.</label>
+                    <p class="hint">Use a tunnel only you can access. Conversation events remain off unless enabled separately.</p>
+                  </div>
+                  <div data-ai-method="https" hidden>
+                    <label for="ai-public-url">Your existing HTTPS address</label><input id="ai-public-url" type="url" placeholder="https://kakao.example.com" maxlength="253" autocapitalize="off" spellcheck="false">
+                    <p class="hint">Use this if your HTTPS address already routes to Bridge. You can paste the full /mcp URL. Bridge configures OAuth and keeps your current admin address.</p>
+                  </div>
+                  <div data-ai-method="tailscale" hidden>
+                    <h3>Let Tailscale provide the HTTPS address</h3><p>Bridge installs Tailscale if needed, then configures Funnel and OAuth. If sign-in or Funnel approval is needed, a link appears here.</p>
+                    <p id="ai-tailscale-location" class="hint"></p>
+                    <label class="check"><input id="ai-tailscale-allow" type="checkbox">Install or use Tailscale on this server and publish its MCP endpoint with Funnel.</label>
+                  </div>
+                  <div data-ai-method="stdio" hidden>
+                    <h3>Copy configuration into your AI client</h3><p>No public address, OAuth or tunnel is required. The client must be able to run Bridge on the installation machine.</p>
+                    <label for="ai-ssh-target">Remote server? SSH destination (optional)</label><input id="ai-ssh-target" placeholder="user@your-server" maxlength="253" autocapitalize="off" spellcheck="false">
+                    <p class="hint">Use an existing SSH host alias or user@host for the installation machine. That account must already be able to run Bridge with its configuration and Docker access, without an interactive prompt.</p>
+                    <pre id="ai-stdio-config" class="ai-copy-block"></pre><button id="ai-copy-stdio" type="button">Copy client configuration</button>
+                  </div>
+                </details>
+              </div>
+              <p id="ai-form-error" role="alert" hidden></p><div class="ai-setup-actions"><button id="ai-setup-submit" type="submit" class="primary">Keep current setup</button><button id="ai-check" type="button">Check server connection</button></div>
+            </fieldset>
+          </form>
+          <div id="ai-job" class="ai-job" hidden aria-live="polite">
+            <h3 id="ai-job-title"></h3><p id="ai-job-message"></p><p id="ai-job-time" class="hint"></p><button id="ai-retry" type="button" hidden>Retry setup</button>
+            <a id="ai-provider-action" target="_blank" rel="noopener noreferrer" hidden>Open Tailscale approval ↗</a>
+            <button id="ai-continue" type="button" hidden>Continue setup</button>
+          </div>
+          <div id="ai-finish" class="ai-finish" hidden>
+            <h3>Connection instructions</h3><p id="ai-finish-help"></p>
+            <code id="ai-client-value" class="endpoint"></code>
+            <div class="ai-setup-actions"><button id="ai-copy-value" type="button">Copy</button><a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">Open ChatGPT apps ↗</a></div>
+            <p class="hint">Then ask your AI: “Check my KakaoTalk collector status.” Server checks alone do not verify the complete AI connection.</p>
+          </div>
+          <p class="hint">Prefer the terminal? <code>./bridge setup-connection</code> is also available.</p>
+        </div>
+      </details>
+            </div>
+          </details>
+          <details id="events-panel" class="management-panel">
+            <summary>Conversation events</summary>
+            <div class="section-body">
+              <p>Choose which conversations can send new-message events to your connected AI. All conversations start off. Collection and message search are unchanged.</p>
+              <p class="hint">Turning on allows newly collected messages from this point forward. Your AI client must also subscribe to MCP Events. Turning off cancels queued events; a delivery already in progress may finish.</p>
+              <form id="event-search-form">
+                <label for="event-search">Find a conversation</label>
+                <div class="input-row">
+                  <input id="event-search" type="search" maxlength="256" placeholder="Conversation name" autocomplete="off">
+                  <button type="submit" id="event-search-button">Search</button>
+                </div>
+              </form>
+              <button id="refresh-events" class="quiet">Refresh conversations</button>
+              <p id="event-list-status" class="hint" role="status"></p>
+              <div id="event-conversations"></div>
+              <button id="more-events" class="quiet" hidden>Load more conversations</button>
+            </div>
+          </details>
+      <details id="tablet-workspace" class="management-panel"><summary>Tablet &amp; settings <span>Login, installation and recovery</span></summary>
       <div class="workspace">
         <section class="device-panel" aria-label="Remote tablet screen">
           <div class="screen-toolbar">
@@ -139,12 +245,12 @@
               </ol>
             </div>
           </details>
-          <details class="settings-section">
+          <details id="phone-panel" class="settings-section">
             <summary>Phone confirmation</summary>
             <div class="section-body">
               <p>Open KakaoTalk on your phone to check. This server does not monitor the phone session automatically.</p>
               <label class="check"><input id="phone-rechecked" type="checkbox">My phone session is still active.</label>
-              <button id="phone-recheck" class="wide" disabled>Update confirmation time</button>
+              <button id="phone-recheck" class="wide" disabled>Update confirmation time</button><p id="phone-recheck-help" class="hint"></p><button id="phone-inspect" class="quiet" data-action="session-check" hidden>Refresh tablet inspection</button>
               <p class="hint">Available after collection is approved. A reminder to recheck appears after 24 hours.</p>
               <button data-action="phone-lost" class="danger wide">Signed out · Stop collection</button>
             </div>
@@ -159,17 +265,6 @@
               <button id="install" class="wide">Set up collection components…</button>
               <details><summary>Install from APK files instead</summary><p>Run <code>./bridge import-apks /path/to/apk-folder</code> on the server, then set up collection components. Include the base APK and all matching splits. Publisher signatures are verified.</p></details>
               <p class="hint">Existing enrollment and collection approval are preserved. These actions do not sign in for you.</p>
-            </div>
-          </details>
-          <details class="settings-section" id="connections-panel">
-            <summary>Connections <span id="pending-count"></span></summary>
-            <div class="section-body">
-              <p id="connection-help">Add the MCP address below in ChatGPT and choose OAuth. Confirm with your passkey and review access in the connecting browser.</p>
-              <code id="mcp-address" class="endpoint">Start the dot profile to connect.</code>
-              <div id="tunnel-connection" hidden aria-live="polite"></div>
-              <button id="refresh-connections" class="quiet">Refresh connections</button>
-              <div id="connections-list" aria-live="polite"></div>
-              <p class="hint">Connecting does not subscribe to events automatically.</p>
             </div>
           </details>
           <details id="passkeys-panel" class="settings-section" hidden>
@@ -197,6 +292,7 @@
           <div id="job" class="job" role="status" hidden></div>
         </aside>
       </div>
+      </details>
     </section>
     <div id="feedback" role="alert" hidden></div>
   </main>

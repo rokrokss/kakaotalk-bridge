@@ -4,9 +4,11 @@ Passkeys authenticate admin and MCP connection approvals without a Kakao Develop
 
 ## Set up
 
-Choose one stable HTTPS hostname before registration. For example, use `https://your-node.ts.net/admin/` and `https://your-node.ts.net/mcp` through Funnel on the same HTTPS port 443. Run `./bridge expose` or configure the reverse proxies yourself. Never publish the admin gateway through Funnel.
+New installs use `http://localhost:18789` (Mac can choose another free port). On a remote server use [SSH forwarding](quickstart.md#local-and-ssh-admin-access). No certificate or Tailscale account is needed for localhost. Existing HTTPS origins are retained.
 
-A trusted certificate and the same hostname let one passkey work on both ports. A passkey registered on `localhost` cannot be used at your public hostname. Setup rejects IP addresses and mismatched hostnames.
+For shared HTTPS admin and MCP, choose one stable hostname before registration. For example, use `https://your-node.ts.net/admin/` and `https://your-node.ts.net/mcp` through Funnel on the same HTTPS port 443. Run `./bridge expose` or configure the reverse proxies yourself. Never publish the admin gateway through Funnel.
+
+A trusted certificate and the same hostname let one passkey work on both ports. A passkey registered on `localhost` cannot be used at your public hostname. Setup rejects IP addresses and non-local HTTP. If admin and MCP use different hosts, web/CLI connection setup keeps the admin passkey and configures code approval in admin instead of public passkey login.
 
 Route public traffic through `dot-ingress`, never directly to `dot-plugin`. The shared ingress forwards admin routes to the authenticated admin service and removes admin cookies from requests and responses on OAuth/MCP routes. Its dedicated admin network does not connect the public MCP process to admin. Both web applications share a browser origin; this is not browser-origin isolation.
 
@@ -24,13 +26,13 @@ The public MCP endpoint cannot register an owner. A fresh installation can only 
 
 Bookmark the configured admin address. Choose **Sign in with a passkey** when asked. **Keep me signed in** creates a revocable seven-day session; otherwise it lasts thirty minutes. The headless server needs no fingerprint reader: the browser's device, phone or security key performs authentication.
 
-Add the public `/mcp` URL to your MCP client with OAuth authentication. Confirm with your passkey, inspect the client and permissions, then choose **Allow connection**. Cancelling issues no authorization code. PKCE, refresh-token rotation, revocation and explicit event-subscription rules remain in place.
+Add the public `/mcp` URL to your MCP client with OAuth authentication. For a shared HTTPS hostname, confirm with your passkey, inspect the client and permissions, then choose **Allow connection**. For localhost/private admin, match the connecting browser’s code in admin **AI connections** and approve there. Cancelling issues no authorization code. PKCE, refresh-token rotation, revocation and explicit event-subscription rules remain in place.
 
 Some embedded browsers do not support third-party passkeys. Restart the connection in a supported system browser. Copying a partially completed approval URL to another browser does not transfer the browser-bound request.
 
 ## Recover
 
-In admin, open **Passkeys and recovery** and add a passkey on another device or security key. Adding or removing a credential requires fresh passkey confirmation. At least one credential must remain. Removing a credential invalidates existing passkey admin sessions and MCP grants; reconnect clients afterward.
+In admin, open **Tablet & settings → Passkeys and recovery** and add a passkey on another device or security key. Adding or removing a credential requires fresh passkey confirmation. At least one credential must remain. Removing a credential invalidates existing passkey admin sessions and MCP grants; reconnect clients afterward.
 
 If every passkey is unavailable, run this on the server:
 
@@ -61,7 +63,7 @@ Configure the shared HTTPS route first. Once registration is complete, use the h
 
 `dot-control` owns encrypted SQLite credentials in `passkey-state`, reachable only on the internal network. Admin uses the existing private control token. The public process receives a separate `mcp_passkey_token` restricted to assertions and setup status. It cannot enroll, remove, configure or enumerate credentials, and has neither the credential volume nor its encryption key.
 
-Every ceremony is single-use, short-lived, bound to a browser, exact origin, purpose and (for MCP) pending OAuth ticket. User presence and verification are required; counters are updated centrally. Configuration and initial/recovery link issuance are CLI-only. Admin and MCP keep distinct sessions; ports alone do not isolate cookies.
+Every ceremony is single-use, short-lived, bound to a browser, exact origin, purpose and (for MCP) pending OAuth ticket. User presence and verification are required; counters are updated centrally. Configuration and initial/recovery link issuance are CLI-only. Admin and MCP keep distinct sessions; ports alone do not isolate cookies. Local admin cookies have separate names, are HttpOnly and SameSite=Strict, and their stored sessions are bound to the configured localhost origin and port. HTTPS cookies retain their Secure prefixes and attributes. HTTP is accepted only for the explicitly configured localhost origin.
 
 ```bash
 uv run pytest -q

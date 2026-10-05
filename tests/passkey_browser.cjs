@@ -2,7 +2,8 @@
 // Native browser WebAuthn + a virtual CTAP2 authenticator, with real server verification.
 const assert = require('node:assert/strict');
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
-const admin = 'https://localhost:19446', publicOrigin = 'https://localhost:19447';
+const local = process.env.LOCAL_ADMIN === '1';
+const admin = (local ? 'http' : 'https') + '://localhost:19446', publicOrigin = 'https://localhost:19447';
 const redirect = 'https://chatgpt.com/connector_platform_oauth_redirect';
 (async () => {
   const browser = await chromium.launch({headless: true,
@@ -31,11 +32,22 @@ const redirect = 'https://chatgpt.com/connector_platform_oauth_redirect';
     await page.locator('#passkey-remember').check();
     await page.locator('#passkey-submit').click();
     await page.locator('#console:not([hidden])').waitFor();
-    assert((await context.cookies(admin + '/admin/')).some(c => c.name === '__Secure-kakao-admin-v2' && c.path === '/admin' && c.httpOnly && c.secure && c.expires > Date.now()/1000 + 6*86400));
+    assert((await context.cookies(admin + '/admin/')).some(c => c.name === (local ? 'kakao-admin-local-19446' : '__Secure-kakao-admin-v2') && c.path === '/admin' && c.httpOnly && c.secure === !local && c.expires > Date.now()/1000 + 6*86400));
     assert(!(await context.cookies(publicOrigin + '/authorize')).some(c => c.name === '__Secure-kakao-admin-v2'));
     await page.reload();
     await page.locator('#console:not([hidden])').waitFor();
 
+    if (local) {
+      assert(await page.evaluate(() => window.isSecureContext));
+      const denied = await context.request.post(admin + '/admin/api/logout', {headers:{Origin:'http://localhost:19448'}});
+      assert.equal(denied.status(), 403);
+      await page.locator('#logout').click();
+      await page.locator('#passkey-panel:not([hidden])').waitFor();
+      assert(!(await context.cookies(admin + '/admin/')).some(c => c.name === 'kakao-admin-local-19446'));
+      assert.deepEqual(errors, []);
+      console.log('PASS: localhost HTTP native WebAuthn registration, login, persistent session, reload, Origin rejection and logout');
+      return;
+    }
     cdp.on('Fetch.requestPaused', async event => {
       await cdp.send('Fetch.fulfillRequest', {requestId: event.requestId, responseCode: 200,
         responseHeaders: [{name:'Content-Type', value:'text/html'}],

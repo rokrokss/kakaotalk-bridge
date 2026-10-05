@@ -1,7 +1,8 @@
 # Install and open KakaoTalk Bridge
 
 Run one command again whenever you want to start Bridge. It prepares the runtime,
-starts the services, configures a secure browser address and opens setup. Your
+starts the services and opens a local admin setup page. No external AI connection
+is configured by default. Your
 existing installation, keys and KakaoTalk session are reused. It does not update
 an existing installation's images or move an older deployment into a new VM.
 
@@ -32,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 The first run downloads source and builds the server images. This can take a
 while. Later runs reuse the installed copy. Downloads use HTTPS and official
 dependency installers; your OS may ask for administrator approval. The installer
-may prepare Python through uv, Homebrew/Lima on Mac, Docker on Linux, and Tailscale.
+may prepare Python through uv, Homebrew/Lima on Mac, and Docker on Linux. Tailscale is installed only when explicitly selected.
 It does not change your shell startup files.
 
 The default location is `~/Library/Application Support/KakaoTalk Bridge` on Mac
@@ -47,10 +48,8 @@ Unpublished release images are not assumed to exist.
 
 ## What you do in the browser
 
-1. On first use, sign in to Tailscale when prompted. It supplies the trusted HTTPS
-   address. Enable HTTPS/Funnel if its permission link asks you to do so. Both
-   `/admin/` and `/mcp` use this address on HTTPS port 443. The admin login page is
-   public; management requires your passkey, and MCP requires OAuth.
+1. Open the printed localhost link. On a remote server, first establish the SSH
+   forwarding session described below. Existing installations keep their admin address.
 2. Save a passkey to protect your bridge. Returning users use the saved passkey.
 3. Device preparation starts automatically after admin sign-in. If KakaoTalk is
    not installed, choose anonymous sign-in in the on-screen Aurora store and
@@ -59,7 +58,10 @@ Unpublished release images are not assumed to exist.
 4. Select **다른 기기와 함께 사용**, run **Check login options**, and complete
    KakaoTalk sign-in. Confirm that your phone is still signed in, check both boxes,
    and start collection. These confirmations are never automated.
-5. Use **Connections** to connect your AI client and send yourself a test message.
+5. Send yourself a test message to check collection. When ready, open **AI
+   connections → Add or change a connection** in admin. Choose where you will use
+   your messages, or leave AI connections for later. The terminal alternative is
+   `./bridge setup-connection`.
 
 Store consent, app installation, passkey creation and account verification cannot
 be silently completed on the user's behalf. If you already have the complete
@@ -71,6 +73,33 @@ Preparation stops after a failed operation instead of retrying mutations in a
 loop. Use **Retry preparation** or **Check again** after resolving it. Existing
 enrollment and collection approval are preserved. [Login details](web-ui.md#first-login)
 
+Once collecting, the **Your bridge** overview replaces the expanded setup view.
+It shows collection, remote AI activity and your manual phone confirmation.
+Open **Tablet & settings** when you need the screen, installation, passkeys or
+recovery controls. A phone recheck reminder does not mean a sign-out was detected.
+
+## Connect an AI when ready
+
+Open **AI connections → Add or change a connection** and choose where you will
+use your messages. **ChatGPT** offers a personal OpenAI tunnel or HTTPS;
+**An AI app on my computer** offers stdio, including SSH; **Another remote AI
+client** offers your existing HTTPS address or Tailscale Funnel. **Decide later**
+keeps your current setup. Both Tailscale and OpenAI tunnels are optional, and
+multiple connection methods can coexist.
+
+Enter the requested settings and follow the progress shown in admin. HTTPS accepts
+the origin or a full `/mcp` URL. Tunnel setup takes its ID and runtime key and
+includes explicit access approval. Tailscale may require a provider sign-in and
+**Continue setup**. Finish adding the connection in your AI client using the
+displayed instructions.
+
+Server setup/check completion and access approval are separate from a successful
+AI request. Ask your AI for collector status, then retrieve your test message.
+The overview records successful remote tool calls; it does not track local stdio
+activity or promise ongoing reachability. Saved instructions survive checks and
+reloads. Use **Connection settings** to edit or **Review and retry** after a
+failure. [Detailed admin workflow](web-ui.md#ai-connections)
+
 ## Platforms
 
 | Environment | Execution path | Current validation |
@@ -79,7 +108,7 @@ enrollment and collection approval are preserved. [Login details](web-ui.md#firs
 | Intel Mac | Lima with QEMU, installed when missing | Code path provided; real installation unverified |
 | Ubuntu/Debian Linux | Local Docker Engine; attempt to load/install Binder modules | `bridge up` tested inside the prepared Ubuntu VM; fresh standalone host still unverified |
 | Other Linux | Reuse compatible installed tools and Binder | Missing unsupported prerequisites produce an actionable error |
-| Windows with a Linux server | PowerShell starts setup over SSH; HTTPS opens in the Windows browser | Script provided; Windows execution unverified |
+| Windows with a Linux server | PowerShell starts setup over SSH and keeps localhost forwarding open | Script provided; Windows execution unverified |
 | Windows WSL2 | Existing distribution with Binder already loaded | Explicit compatibility check; stock WSL2 is not claimed to work |
 
 Validation on 2026-10-05 used an isolated Apple Silicon Lima VM with source-built
@@ -106,9 +135,11 @@ From a source checkout on Windows, use an existing Linux server:
 .\install.ps1 -Remote user@linux-host
 ```
 
-Open the setup link it prints in the Windows browser. Tailscale supplies the
-server’s shared HTTPS address. Windows OpenSSH is required;
-no Windows Tailscale client is required for the shared public HTTPS address. Windows execution policy may require you to
+Open the setup link it prints in the Windows browser. After setup, the script
+keeps an SSH forwarding session open on port 18789; Ctrl+C closes forwarding
+without stopping the server. Windows OpenSSH is required. If that local port is
+occupied, close the other forwarding session before retrying. Existing HTTPS
+admin addresses still work directly. Windows execution policy may require you to
 unblock a downloaded script under your organization's policy.
 
 For an already configured Binder-enabled WSL2 distribution:
@@ -146,21 +177,47 @@ shared ingress (`127.0.0.1:18787` by default), then skip Tailscale preparation:
 
 The root address redirects to `/admin/`; AI clients use `/mcp` on the same port.
 
-For OpenAI access without a public MCP address, see [personal tunnel setup](openai-tunnel.md).
-Use `--connection openai-tunnel --admin-url https://your-private-admin-host`
-with `--tunnel-id` and `--api-key-file` on first setup. This skips Tailscale
-installation and Funnel configuration. Your browser still needs trusted HTTPS
-access to the admin console; an existing private Tailscale Serve address also works.
+For OpenAI access without a public MCP address, choose **ChatGPT → Personal
+tunnel · no public address** in admin. The CLI alternative is
+`./bridge setup-connection --method openai-tunnel`; it reads the runtime key
+without echoing it, saves credentials and starts services. CLI provisioning
+requires a separate approval in admin. Finish by selecting the tunnel in ChatGPT.
+See [personal tunnel setup](openai-tunnel.md).
 
-The collector API, ADB and passkey control service remain internal. Keep using the
-same hostname so saved passkeys remain valid. Advanced deployments may still use
-`--admin-url` and `--public-url` with the same hostname and different ports; to keep
-admin tailnet-only, their public proxy must explicitly reject `/admin` and `/admin/*`.
+Admin and MCP addresses can differ. A localhost/private admin keeps its passkey;
+a public OAuth connection is approved by matching its code in admin. A shared
+HTTPS hostname can use direct passkey consent. To keep the public login page
+private too, reject `/admin` and `/admin/*` at your public HTTPS proxy.
 
-The VM retains separate internal maintenance and ingress listeners. Users access
-one HTTPS port. On a fresh Mac installation, Bridge chooses free local ports and
-saves them before the VM starts. Retries and subsequent launches reuse those
-ports. Explicitly requested ports fail with a clear error if already occupied.
+The VM retains separate maintenance, public ingress and local admin listeners.
+On a fresh Mac installation Bridge chooses free local ports and saves them
+before starting the VM. Retries reuse those ports.
+
+## Local and SSH admin access
+
+Fresh installs use `http://localhost:18789/admin/` (Mac can choose a free port).
+Only the loopback interface is published. The local entry point serves admin,
+not MCP, ADB or the collection API. Browsers allow passkeys on localhost without
+a TLS certificate. Do not replace `localhost` with a LAN address.
+
+On a headless Linux server, run `./bridge up --no-browser`. On your own computer,
+keep this command running and open the printed setup link:
+
+```bash
+ssh -N -L 127.0.0.1:18789:127.0.0.1:18789 user@your-server
+```
+
+The server keeps running after SSH closes; reconnect SSH to administer it later.
+`./bridge passkey-login --link-only` prints a fresh link when needed. If the local
+port is occupied, use a different browser origin, for example
+`./bridge passkey-login --url http://localhost:19789`, and forward local 19789 to
+server 18789. Keep that chosen origin stable for returning sessions.
+
+Use **AI connections → Add or change a connection**, or the CLI alternative
+`./bridge setup-connection`, to add stdio, public HTTPS/OAuth, optional Tailscale
+Funnel, or an optional OpenAI tunnel. **Decide later** keeps existing connections.
+**Disconnect tunnel** revokes access; `./bridge tunnel disable` also stops its
+services.
 
 For image changes and encrypted backups, follow [operations](operations.md).
 `up` does not upgrade running images. Automated host tests do not establish that

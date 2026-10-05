@@ -84,6 +84,11 @@ class OAuth:
             raise AuthError("passkey_unavailable", 503) from None
 
     def policy(self):
+        if self.config.approval_mode == "admin":
+            info = self.passkey_call("info")
+            # Local admin consent must be revoked on passkey recovery/removal too.
+            # Keep the legacy policy only for an unconfigured password/key owner.
+            return "admin:" + info["policy"] if info["configured"] else "legacy:admin"
         return (
             self.passkey_call("info")["policy"]
             if self.config.approval_mode == "passkey"
@@ -297,6 +302,7 @@ class OAuth:
                     "display_code": secrets.token_hex(4).upper(),
                     "status": "pending",
                     "mode": self.config.approval_mode,
+                    "policy": self.policy() if self.config.approval_mode == "admin" else None,
                     "cookie": digest(cookie),
                     "expires": time.time() + 600,
                 },
@@ -376,7 +382,9 @@ class OAuth:
         with self.state.transaction() as db:
             db.execute("BEGIN IMMEDIATE")
             record = self.approval(ticket, cookie, db=db)
-            if self.config.approval_mode == "admin" and record.get("status") != "approved":
+            if self.config.approval_mode == "admin" and (
+                record.get("status") != "approved" or record.get("policy") != self.policy()
+            ):
                 raise AuthError("approval_required", 403)
             if self.config.approval_mode == "passkey":
                 if record.get("status") != "authenticated" or record.get("policy") != self.policy():

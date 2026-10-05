@@ -1,158 +1,205 @@
 <div align="center">
 
-<img src="assets/logo.svg" width="120" height="120" alt="KakaoTalk Bridge logo">
+<img src="assets/logo.svg" width="88" height="88" alt="KakaoTalk Bridge logo">
 
 <h1>KakaoTalk Bridge</h1>
 
-**Connect your KakaoTalk messages to AI agents.**
+**Your conversations. Answers from your AI.**
 
-KakaoTalk Bridge runs KakaoTalk headlessly on your server using redroid as a virtual Android tablet.<br>It collects messages from this secondary device and makes them available to AI agents through MCP.
+Find a plan, catch up on a conversation, or ask what changed.<br>
+Connect the KakaoTalk messages you collect to ChatGPT or another MCP-compatible AI.
 
-[Get started](#getting-started) · [Connect your AI](#connect-your-ai) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md)
+Self-hosted · Browser setup · Read-only message access
+
+[Get started](#getting-started) · [Try a question](#try-your-first-question) · [Choose your AI](#connect-your-ai) · [Guides](#documentation)
 
 </div>
 
-Iris reads the tablet's local message database and stores the collected messages on your server. Run the stack with Docker Compose, use the web admin console to install and sign in, then connect your AI client.
-
-Use a [passkey](docs/passkeys.md) for admin and MCP connection approval. The default HTTPS/OAuth connection needs no developer account, client secret or separate authentication server. The optional OpenAI tunnel needs an OpenAI tunnel ID and runtime API key.
-
-## See it in action
-
-An illustrative conversation using synthetic messages:
-
-```text
-Collected messages
-  “Friday meetup is at 7 PM.”
-  “Friday meetup moved to 7:30 PM.”
-
-You
-  Find my collected messages mentioning "Friday" and summarize the plan.
-
-Your AI
-  Friday's meetup is now at 7:30 PM, updated from 7 PM.
-```
-
-The AI client searches through MCP and writes the summary from the retrieved messages. The bridge supplies the data. You can also ask it to retrieve recent collected messages or check collection status.
-
-- **No physical tablet.** redroid runs the secondary Android device on your server.
-- **Storage you control.** Messages are stored on your infrastructure, with a default 30-day retention period.
-- **Read-only KakaoTalk access through MCP.** Agents can retrieve and search messages; no message-sending or tablet-control tools are exposed.
-
-## Where does it run?
-
-<p align="center">
-  <img src="docs/assets/message-flow.svg" width="960" alt="Iris reads messages on a secondary tablet on your server and stores them locally. Your AI retrieves them through OAuth and MCP.">
-</p>
-
-Messages and the KakaoTalk session are stored in server volumes. Retrieved content is sent to your connected AI client. Admin and MCP share one HTTPS address on port 443: `/admin/` requires passkey sign-in and `/mcp` requires OAuth. See [Architecture](docs/design.md) and [Security](docs/security.md).
-
-Run Redroid in a dedicated VM. Its available official images have old Android security patches; authenticated ADB and service isolation reduce exposure but do not remove that [remaining risk](docs/security.md#dependency-results-and-remaining-android-risk).
-
 ## Getting started
 
-From the downloaded project folder, run:
+Run Bridge on your Apple Silicon Mac or a compatible Linux server. A virtual
+Android tablet runs on that machine; you keep using KakaoTalk on your phone.
+No physical tablet is needed. [Platform requirements](#requirements-and-validation)
+
+From the downloaded project folder:
 
 ```bash
 bash install.sh
 ```
 
-The installer prepares the execution environment, starts your bridge and opens the
-setup page. Run the same command again to resume or reopen it. See the
-[one-command setup guide](docs/quickstart.md) for download installation, Windows
-entry points, supported environments and the remaining first-use confirmations.
+The installer prepares the environment, starts Bridge and opens the setup page.
+Run the same command again to resume or reopen it.
+[Full installation guide, including Windows and remote servers →](docs/quickstart.md)
 
-1. **Open your bridge.** Follow the installer's browser sign-in and save a [passkey](docs/passkeys.md). Device preparation runs automatically. Install KakaoTalk through the on-screen store; collection components are then configured automatically.
-2. **Sign in through the admin console.** Follow the [first login procedure](docs/web-ui.md#first-login). Select the secondary-device option and manually confirm that your phone's existing session remains active before starting collection.
-3. **Connect your AI client.** Choose an [MCP connection method](#connect-your-ai) below.
-4. **Try your first query.** Send yourself the two sample messages above from your phone, then ask your connected agent to find messages mentioning `Friday`. Confirm that both messages appear before asking for a summary.
+<p align="center">
+  <picture>
+    <source media="(max-width: 600px)" srcset="docs/assets/readme-journey-mobile.svg">
+    <img src="docs/assets/readme-journey.svg" width="1120" alt="Three steps: open Bridge in your browser, sign in to KakaoTalk and confirm both sessions, then connect an AI and try a message you sent.">
+  </picture>
+</p>
 
-> **Before signing in:** the login check currently recognizes the Korean KakaoTalk UI. Do not proceed if “Use with other devices” (“다른 기기와 함께 사용”) is missing or KakaoTalk asks to transfer the primary device. Phone sessions are not monitored automatically.
+1. **Open your bridge.** Save a passkey when prompted. Bridge prepares the virtual
+   tablet automatically. Install **KakaoTalk by Kakao Corp.** in the on-screen
+   store; Bridge finishes preparing collection for you.
+2. **Sign in with your phone still connected.** In KakaoTalk, select **다른 기기와
+   함께 사용** (“Use with other devices”), then run **Check login options** in
+   admin. Finish signing in, check that your phone's existing session still works,
+   and confirm both sessions to **Start collecting messages**.
+3. **Connect the AI you use.** Open **AI connections → Add or change a connection**,
+   choose where you will use your messages and follow the instructions. You can
+   also choose **Decide later** and keep collecting.
 
-**Updating an existing server?** The security update requires one admin sign-in with your existing passkey. Registered passkeys and MCP connections are retained. Follow the [upgrade notes](docs/operations.md#upgrading-to-the-security-update) for the Iris migration and public proxy change.
+The login check currently recognizes the Korean KakaoTalk UI. Stop if the
+secondary-device option is missing or the app asks to transfer your primary
+account. [Step-by-step sign-in help →](docs/web-ui.md#first-login)
+
+## Try your first question
+
+Send yourself these two messages from your phone after collection starts:
+
+> Friday meetup is at 7 PM. Same café as last time.
+>
+> Friday meetup moved to 7:30 PM. Same place.
+
+Ask your connected AI: **“Find my messages about Friday's meetup. What time is it,
+and did the place change?”** Check that it found both messages.
+
+<p align="center">
+  <picture>
+    <source media="(max-width: 600px)" srcset="docs/assets/readme-example-mobile.svg">
+    <img src="docs/assets/readme-example.svg" width="1120" alt="Illustrative example with synthetic messages: a meetup moves from 7 PM to 7:30 PM at the same café. Your AI retrieves both messages and explains what changed.">
+  </picture>
+</p>
+
+Bridge supplies the collected messages; your AI writes the answer. You can also
+ask it to **summarize recent messages in a conversation**, **find a message by
+keyword or date**, or **check whether collection is running**.
 
 ## Connect your AI
 
-| Connection | Setup | Validation |
+Start with **Where will you use your messages?** in the admin connection form.
+You can keep multiple methods enabled. **Tailscale and OpenAI tunnels are both
+optional.**
+
+| Where you want to use it | Choose in admin | What you need |
 | --- | --- | --- |
-| Remote MCP over HTTPS with OAuth | [Server deployment and ChatGPT connection](docs/dot-plugin.md) | Passkey connection and profile/status calls verified; message retrieval confirmed by user testing. Event execution remains unverified |
-| Personal OpenAI Secure MCP Tunnel | [Outbound-only MCP setup](docs/openai-tunnel.md); keep admin HTTPS reachable by your browser | Local auth, protocol, tools and event tests; live OpenAI connection unverified |
-| stdio MCP launched by your client | [Configuration example](docs/api.md#stdio-mcp) | Automated protocol tests; verify compatibility with your client |
+| ChatGPT, without a public server address | **Personal tunnel · no public address** | An OpenAI tunnel ID and runtime API key. [Tunnel guide](docs/openai-tunnel.md) |
+| ChatGPT or another remote AI, through HTTPS | **Use my existing HTTPS address** or **Create an HTTPS address with Tailscale** | A configured HTTPS proxy, or Tailscale Funnel. [HTTPS guide](docs/dot-plugin.md) |
+| An AI app on your computer | **Run Bridge from my AI app · local or SSH** | A client that can launch an MCP command; SSH access for a remote server. [Client configuration](docs/api.md#stdio-mcp) |
 
-### HTTPS with OAuth
+Enter the requested details, follow setup progress, then finish adding the
+connection in your AI client. Creating an OpenAI tunnel and selecting it in
+ChatGPT are still provider-side steps. Tunnel access approval is included in the
+web form and has no automatic expiration; disconnect it whenever you want.
 
-Your AI client connects to a public MCP URL provided by Tailscale Funnel or your
-HTTPS proxy. You approve the OAuth connection with your passkey; subsequent
-requests carry the client's OAuth access token.
+**Verify the connection:** ask your AI to check collector status. Admin shows
+access approval separately from the last successful remote tool call. A server
+check alone does not confirm that your AI can use the connection.
 
-<p align="center">
-  <img src="docs/assets/connection-https.svg" width="960" alt="AI clients connect through public HTTPS with OAuth. The owner approves with a passkey, and the server returns collected messages through MCP.">
-</p>
+Saved connection instructions survive checks and reloads. Use **Connection
+settings** to edit them or **Review and retry** after a setup failure.
+[Detailed connection workflow →](docs/web-ui.md#ai-connections)
+
+<details>
+<summary><strong>How the connection methods work</strong></summary>
 
 ### Personal OpenAI tunnel
 
-Your server opens an outbound connection to OpenAI. ChatGPT sends MCP requests
-back through that connection, so MCP needs no public HTTPS address or inbound
-port. The admin console has its own HTTPS access, which can stay private through
-Tailscale Serve or your VPN.
+Your server opens an outbound connection to OpenAI. MCP requests return through
+it, so you need no inbound MCP port or public HTTPS address. Admin uses its own
+localhost, SSH or HTTPS address.
+
+<img src="docs/assets/connection-tunnel.svg" width="960" alt="An outbound OpenAI connection carries MCP requests to your server. Admin access and personal tunnel approval are separate.">
+
+### HTTPS with OAuth
+
+Your client connects to a public MCP address. Approve with your passkey for a
+shared HTTPS hostname, or match its code in your private admin console.
+
+<img src="docs/assets/connection-https.svg" width="960" alt="Shared-HTTPS example: a client reaches MCP through Funnel or a reverse proxy. The owner approves with a passkey, then the client uses OAuth.">
+
+### stdio, locally or over SSH
+
+Your AI app starts the Bridge adapter and reads messages through it. The adapter
+can run on your computer or on a server reached through SSH.
+
+<img src="docs/assets/connection-stdio.svg" width="960" alt="Your AI app starts a local or SSH stdio adapter, which reads collected messages from the server.">
+
+[Editable connection diagrams](docs/assets/connection-methods.drawio) ·
+[Architecture](docs/design.md) · [Terminal setup](docs/onboarding.md#connect-an-ai-client-optional)
+
+</details>
+
+## Your everyday view
+
+Open your bookmarked admin page to see collection status, the last successful
+remote AI call and your last manual phone confirmation. Installation and tablet
+controls stay out of the way until you need them.
 
 <p align="center">
-  <img src="docs/assets/connection-tunnel.svg" width="960" alt="The server opens an outbound connection to OpenAI. ChatGPT uses that connection to reach private MCP, while the owner separately approves access through the private admin console.">
+  <img src="docs/assets/admin-overview.png" width="1120" alt="KakaoTalk Bridge admin overview showing message collection, recorded remote AI activity and manual phone confirmation, with links to AI connections, conversation events and tablet settings. Synthetic demo data.">
 </p>
 
-Approve the personal tunnel in admin once. Approval has no automatic expiration
-and survives normal restarts; you can disconnect it in **Connections**. The
-local credential authenticates the tunnel
-client to the private MCP listener. [Tunnel setup](docs/openai-tunnel.md)
+*Actual admin UI with synthetic demo data.* The phone status is your manual
+confirmation, not automatic monitoring. AI activity is a past success, not a
+live availability check; local stdio calls are not included.
 
-### stdio launched by your client
+Want new-message events for certain conversations? In **Conversation events**,
+change a room from **Off** to **Allowed**, then ask your AI to subscribe. A room's
+permission and the AI's subscription are separate. Events are optional; normal
+collection and search work without them. [Event setup and limits →](docs/events.md)
 
-A client that supports local MCP commands starts the adapter and communicates
-over stdin/stdout. The adapter reads the collection API using the server's read
-token. For a remote server, run the same command over SSH.
-
-<p align="center">
-  <img src="docs/assets/connection-stdio.svg" width="960" alt="The MCP client starts a stdio adapter, locally or over SSH. The adapter queries the server collection API using its read token.">
-</p>
-
-HTTPS/OAuth and the OpenAI tunnel share the same eight tools. The stdio adapter
-provides the five query tools listed in its [configuration guide](docs/api.md#stdio-mcp).
-
-[MCP Events](docs/events.md) are optional and require a separate subscription. Connecting a client does not create subscriptions or automated tasks.
-
-Editable diagram source: [draw.io · three pages](docs/assets/connection-methods.drawio).
+[Admin guide](docs/web-ui.md) · [Restart, update or recover](docs/operations.md) ·
+[Passkeys and recovery](docs/passkeys.md)
 
 ## Requirements and validation
 
-| Environment | Requirements | Validation |
-| --- | --- | --- |
-| Apple Silicon Mac | Lima Ubuntu VM; Docker Engine inside the VM | Secondary login and Iris collection verified end to end |
-| Linux amd64 | Docker Engine, Compose v2, Android binder kernel support | Image builds and API startup verified; KakaoTalk/redroid flow unverified |
-| Other Linux arm64 hosts | Docker Engine, Compose v2, Android binder kernel support | Not verified outside the Apple Silicon Lima setup |
+| Where Bridge runs | What to expect |
+| --- | --- |
+| Apple Silicon Mac | Best-tested path. The installer manages a dedicated Lima Linux VM; Docker Desktop is not required. Real secondary login, collection and AI access have been verified. |
+| Linux amd64 / arm64 | Docker Engine, Compose v2 and Android Binder support required. Use a dedicated host or VM. KakaoTalk/redroid compatibility outside the tested Apple Silicon Lima environment remains unverified. |
+| Windows | Use an existing Linux server or a Binder-enabled WSL2 distribution. The entry point is provided; Windows execution remains unverified. |
 
-The Linux guide suggests starting with 4 vCPUs and 8 GB RAM; these are not measured minimums. The supplied Lima VM uses 6 CPUs and 8 GiB RAM. See [Validation scope](docs/implementation.md) for the tested environment and remaining checks.
+The supplied Mac VM uses 6 CPUs and 8 GiB RAM. These are configured resources,
+not measured minimums. [Installation scope and prerequisites](docs/quickstart.md#platforms)
 
-The installer has isolated tests. A fresh installation through the CLI and the release publishing workflow still need end-to-end validation; `bridge up` builds source until you supply a verified prebuilt release manifest. Windows currently uses an existing Linux server or a Binder-enabled WSL2 distribution; it is not a verified native Android host.
+Real HTTPS/OAuth and OpenAI tunnel message access have been tested. stdio has
+protocol tests; verify your chosen client. End-to-end AI event execution and a
+complete fresh install across every host remain unverified.
+[Detailed validation scope →](docs/implementation.md)
 
-## Collection scope
+## Your data and collection scope
 
-- Reads message bodies, types, times and conversation/sender IDs still present in the tablet database. [Message queries](docs/mcp-queries.md) add supported local display names, time filters and surrounding conversation context. Resumes from the last stored position after an interruption.
-- Does not restore the phone's entire chat history, retrieve original attachments, or synchronize edits and deletions.
-- Opening a conversation manually in the web admin console may change its KakaoTalk read status.
+- **Stored on your infrastructure.** Collected messages are kept for 30 days by
+  default. Requested results are shared with the AI client you connect.
+- **Read-only access to KakaoTalk.** MCP can search and retrieve collected
+  messages; it cannot send KakaoTalk messages or control the tablet.
+- **A partial history.** Bridge reads what is available on its secondary tablet.
+  It does not restore your phone's entire history, retrieve original attachments,
+  or synchronize edits and deletions.
+- **Manual controls have effects.** Opening a conversation on the admin tablet
+  can change its KakaoTalk read status. Your phone session needs manual checks.
+
+Redroid requires a dedicated host or VM and its available official images have
+old Android security patches. See the [security boundaries and remaining risk](docs/security.md)
+before deployment. [How messages are collected →](docs/iris.md)
 
 ## Documentation
 
-| Task | Documentation |
+| I want to… | Start here |
 | --- | --- |
-| Install and sign in | [One-command setup](docs/quickstart.md), [Advanced installer](docs/onboarding.md), [Linux](docs/install.md), [Mac](docs/local-redroid.md), [Admin console](docs/web-ui.md) |
-| Configure administrator access | [Passkey setup and recovery](docs/passkeys.md) |
-| Connect an AI client or use the API | [OAuth MCP](docs/dot-plugin.md), [Personal OpenAI tunnel](docs/openai-tunnel.md), [HTTP API and stdio MCP](docs/api.md), [Events](docs/events.md) |
-| Check status, restart, and back up | [Operations](docs/operations.md), [Security](docs/security.md) |
-| Understand, change, and verify the implementation | [Architecture](docs/design.md), [Iris](docs/iris.md), [Development](docs/development.md), [Validation scope](docs/implementation.md) |
+| Install and sign in | [Quick start](docs/quickstart.md) · [Admin guide](docs/web-ui.md) |
+| Connect my AI | [OpenAI tunnel](docs/openai-tunnel.md) · [HTTPS/OAuth](docs/dot-plugin.md) · [Local/SSH client](docs/api.md#stdio-mcp) |
+| Choose conversations for events | [MCP Events](docs/events.md) |
+| Manage access, update or recover | [Passkeys](docs/passkeys.md) · [Operations](docs/operations.md) |
+| Deploy or develop the internals | [Advanced setup](docs/onboarding.md) · [Architecture](docs/design.md) · [Development](docs/development.md) |
 
-## Contributing
-
-Bug reports, documentation improvements, and compatibility results are welcome. See [Contributing](CONTRIBUTING.md) for reporting guidelines and [Development](docs/development.md) for local checks and previews.
+For an existing deployment crossing the security migration, read the
+[upgrade notes](docs/operations.md#upgrading-to-the-security-update) before updating.
+Bug reports and contributions are welcome: [Contributing](CONTRIBUTING.md).
 
 ## License and attribution
 
-A project-wide license has not yet been specified. The modified Iris build has its own licensing and source-distribution requirements; see [NOTICE](iris/NOTICE.md). This project is not an official Kakao service.
+A project-wide license has not yet been specified. The modified Iris build has
+its own [license and source-distribution requirements](iris/NOTICE.md).
+KakaoTalk Bridge is not an official Kakao service.

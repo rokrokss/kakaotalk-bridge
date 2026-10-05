@@ -1,6 +1,6 @@
 # Running on an Apple Silicon Mac
 
-For the new installer, Kakao admin login, Aurora setup and full encrypted snapshots, see [Set up a personal bridge](onboarding.md). The commands below describe the existing manual deployment path.
+For automatic installation, passkey admin login, optional web-based AI setup and full encrypted snapshots, start with [one-command setup](quickstart.md). It requires neither Tailscale nor an OpenAI tunnel. The commands below describe the existing manual deployment path.
 
 [README](../README.md) · [Admin console](web-ui.md) · [Connect ChatGPT](dot-plugin.md)
 
@@ -55,6 +55,13 @@ docker save kakaotalk-collector/device:0.1.0 kakaotalk-collector/server:0.1.0 ka
 Configure private HTTPS at your stable server hostname and register a [passkey inside the existing VM](passkeys.md#existing-deployments). Open the configured private admin address and select **Sign in with a passkey**. Follow the [KakaoTalk login procedure](web-ui.md#first-login) after administrator sign-in.
 
 The new installer does not adopt `kakaotalk-test` automatically. Its Mac-side `./bridge` command manages a separate VM; use the manual deployment commands for this installation.
+
+The admin overview links to **AI connections**, **Conversation events** and
+**Tablet & settings**. To enable connection provisioning in this manual VM, follow
+the [web setup service guide](operations.md#web-connection-setup) inside its
+existing installation. Updating the Mac checkout alone does not update VM source
+or running images. The setup agent must use the original VM directory, keys and
+Compose project.
 
 `lima-compose.sh` runs Compose in `/srv/kakaotalk-collector` inside the VM. Running plain `docker ps` on the Mac shows Docker Desktop's state instead.
 

@@ -16,17 +16,23 @@ from typing import Annotated, Literal
 from urllib.request import Request as URLRequest
 from urllib.request import urlopen
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from webauthn.helpers.exceptions import WebAuthnException
 
+from dot_plugin.collector import QueryError
+from dot_plugin.event_policy import ConversationDecision
+from dot_plugin.event_policy import enabled as events_enabled
 from server.app import BodyLimit
 from server.config import secret
+from server.connection_setup import validate as validate_connection_setup
 from webui.auth import OwnerAuth, digest
 from webui.connections import Connections, RequestChanged
 from webui.device import Android
+from webui.event_settings import EventSource
+from webui.setup import SetupBusy, SetupClient
 
 COOKIE = "__Secure-kakao-admin-v2"
 LEGACY_COOKIE = "__Host-kakao-admin"
@@ -129,7 +135,32 @@ def create_app(
     connections=None,
     auth_mode=None,
     passkeys=None,
+    local_origin=None,
+    event_source=None,
+    setup_client=None,
 ):
+    from urllib.parse import urlsplit
+
+    from server.origins import validate_admin_origin
+
+    local_origin = local_origin or os.getenv("ADMIN_LOCAL_ORIGIN", "")
+    if local_origin:
+        validate_admin_origin(local_origin)
+        if not local_origin.startswith("http://localhost:"):
+            raise ValueError("Local admin requires http://localhost:<port>")
+    local_host = urlsplit(local_origin).netloc
+
+    def is_local(request):
+        return bool(local_origin and request.headers.get("host") == local_host)
+
+    def request_origin(request):
+        return local_origin if is_local(request) else "https://" + request.headers.get("host", "")
+
+    def cookie_name(request):
+        return (
+            "kakao-admin-local-" + str(urlsplit(local_origin).port) if is_local(request) else COOKIE
+        )
+
     auth_mode = auth_mode or os.getenv("ADMIN_AUTH_MODE", "passkey")
     if auth_mode not in {"local", "passkey"}:
         raise ValueError(
@@ -149,6 +180,8 @@ def create_app(
         token,
     )
     connections = connections or Connections()
+    setup_client = setup_client or SetupClient()
+    event_source = event_source or EventSource()
     from server.passkey_client import PasskeyClient
 
     passkeys = passkeys or PasskeyClient("admin")
@@ -185,8 +218,8 @@ def create_app(
     @app.middleware("http")
     async def security(request, call_next):
         if request.method not in ("GET", "HEAD"):
-            # Caddy preserves Host. HTTPS is mandatory externally; forwarded headers are not trusted.
-            expected = "https://" + request.headers.get("host", "")
+            # Only the explicitly configured localhost origin may use HTTP.
+            expected = request_origin(request)
             if request.headers.get("origin") != expected:
                 return JSONResponse({"detail": "invalid_origin"}, status_code=403)
         response = await call_next(request)
@@ -207,10 +240,12 @@ def create_app(
         return response
 
     def authenticated(request: Request):
-        key = request.cookies.get(COOKIE, "")
+        key = request.cookies.get(cookie_name(request), "")
         with session_lock:
             stored = owner.session(key)
             if stored and stored.get("cookie_scope") != "admin-v2":
+                stored = None
+            if stored and stored.get("origin", "") != (local_origin if is_local(request) else ""):
                 stored = None
             policy = current_policy()
             if stored and stored.get("policy", "local") != policy:
@@ -266,12 +301,12 @@ def create_app(
             return FileResponse(STATIC.parent.parent / "dot_plugin/static/passkey.js")
         if asset == "logo.svg":
             return FileResponse(STATIC.parent.parent / "assets" / asset)
-        if asset not in {"app.js", "setup-flow.js", "style.css"}:
+        if asset not in {"app.js", "setup-flow.js", "connection-setup.js", "style.css"}:
             raise HTTPException(404)
         return FileResponse(STATIC / asset)
 
     @app.post("/admin/api/login")
-    def login(body: Login, response: Response):
+    def login(body: Login, request: Request, response: Response):
         if auth_mode != "local":
             raise HTTPException(
                 403, "Use passkey sign-in. Server recovery requires ./bridge admin --recovery."
@@ -285,19 +320,25 @@ def create_app(
             if not hmac.compare_digest(body.token.encode(), token.encode()):
                 failures.append(now)
                 raise HTTPException(401, "The admin key is incorrect.")
-        return issue_session(response, session_ttl, "Recovery key", exclusive=True)
+        return issue_session(request, response, session_ttl, "Recovery key", exclusive=True)
 
-    def issue_session(response, ttl, label, exclusive=False, policy="local"):
-        key, record = owner.create_session(ttl, label, exclusive=exclusive, policy=policy)
+    def issue_session(request, response, ttl, label, exclusive=False, policy="local"):
+        key, record = owner.create_session(
+            ttl,
+            label,
+            exclusive=exclusive,
+            policy=policy,
+            origin=local_origin if is_local(request) else "",
+        )
         with session_lock:
             if exclusive:
                 sessions.clear()
             sessions[key] = {**record, "expires": time.monotonic() + ttl, "frames": {}}
         response.set_cookie(
-            COOKIE,
+            cookie_name(request),
             key,
             max_age=ttl,
-            secure=True,
+            secure=not is_local(request),
             httponly=True,
             samesite="strict",
             path=COOKIE_PATH,
@@ -321,7 +362,7 @@ def create_app(
 
     def passkey_origin(request):
         info = passkey_call("info")
-        origin = "https://" + request.headers.get("host", "")
+        origin = request_origin(request)
         if auth_mode != "passkey" or not info["configured"] or origin != info["admin_origin"]:
             raise HTTPException(403, "Open the admin address configured for passkeys.")
         return origin
@@ -338,17 +379,22 @@ def create_app(
             "remove",
         }:
             raise HTTPException(404)
-        browser = request.cookies.get("__Host-passkey-admin-flow", "")
+        flow_cookie = (
+            "passkey-admin-local-" + str(urlsplit(local_origin).port)
+            if is_local(request)
+            else "__Host-passkey-admin-flow"
+        )
+        browser = request.cookies.get(flow_cookie, "")
         if not browser and operation.endswith("options"):
             browser = secrets.token_urlsafe(32)
         response.set_cookie(
-            "__Host-passkey-admin-flow",
+            flow_cookie,
             browser,
             max_age=600,
-            secure=True,
+            secure=not is_local(request),
             httponly=True,
             samesite="strict",
-            path="/",
+            path=COOKIE_PATH if is_local(request) else "/",
         )
         data = {"origin": origin, "browser": browser}
         if (
@@ -384,6 +430,7 @@ def create_app(
                 {**data, "flow": body.get("flow", ""), "credential": body.get("credential", {})},
             )
             return issue_session(
+                request,
                 response,
                 session_ttl,
                 "Passkey · " + request.headers.get("user-agent", "Browser"),
@@ -413,6 +460,7 @@ def create_app(
         if purpose == "manage":
             return result
         return issue_session(
+            request,
             response,
             7 * 86400 if context == "remember" else session_ttl,
             "Passkey · " + request.headers.get("user-agent", "Browser"),
@@ -457,6 +505,7 @@ def create_app(
                 raise HTTPException(401, "Password or pairing link is invalid or expired.")
             failures.pop()
         return issue_session(
+            request,
             response,
             7 * 86400 if body.remember and auth_mode == "local" else session_ttl,
             request.headers.get("user-agent", "Browser"),
@@ -465,7 +514,7 @@ def create_app(
 
     @app.get("/admin/api/browsers")
     def browsers(request: Request, current: Annotated[dict, Depends(authenticated)]):
-        return {"items": owner.sessions(request.cookies.get(COOKIE, ""))}
+        return {"items": owner.sessions(request.cookies.get(cookie_name(request), ""))}
 
     @app.post("/admin/api/browsers/{identity}/revoke")
     def revoke_browser(identity: Identity, current: Annotated[dict, Depends(authenticated)]):
@@ -487,6 +536,90 @@ def create_app(
     @app.get("/admin/api/connections")
     def connection_list(current: Annotated[dict, Depends(authenticated)]):
         return connection_call("GET", "/connections")
+
+    def setup_call(method="GET", data=None):
+        try:
+            return setup_client.call(method, data)
+        except SetupBusy:
+            raise HTTPException(
+                409, "Connection setup is already running. Wait for it to finish."
+            ) from None
+        except (OSError, ValueError):
+            if method == "GET":
+                return {
+                    "available": False,
+                    "message": "Web setup service is unavailable. On the installation machine, update Bridge and run ./bridge up, or ./bridge setup-agent install. CLI setup remains available.",
+                }
+            raise HTTPException(
+                503,
+                "Setup service is unavailable. Reopen Connections to check its status before retrying.",
+            ) from None
+
+    @app.get("/admin/api/connection-setup")
+    def setup_status(current: Annotated[dict, Depends(authenticated)]):
+        return setup_call()
+
+    @app.post("/admin/api/connection-setup", status_code=202)
+    def setup_connection(data: dict, current: Annotated[dict, Depends(authenticated)]):
+        try:
+            validated = validate_connection_setup(data)
+        except ValueError:
+            raise HTTPException(
+                422, "Check the connection settings and required permissions."
+            ) from None
+        return setup_call("POST", validated)
+
+    @app.get("/admin/api/events/conversations")
+    def event_conversations(
+        current: Annotated[dict, Depends(authenticated)],
+        q: Annotated[str | None, Query(min_length=1, max_length=256)] = None,
+        cursor: Annotated[str | None, Query(min_length=1, max_length=2048)] = None,
+    ):
+        settings = connection_call("GET", "/events/settings")
+        try:
+            checkpoint = event_source.checkpoint()
+            page = event_source.conversations(q=q, cursor=cursor)
+        except QueryError:
+            raise HTTPException(400, "Refresh the conversation list and try again.") from None
+        except (OSError, ValueError, RuntimeError):
+            raise HTTPException(
+                503, "Conversation list unavailable. Check collection status."
+            ) from None
+        epoch = checkpoint["cursor_epoch"]
+        items = []
+        for room in page["items"]:
+            if not room.get("ref"):
+                continue
+            subscriptions = sum(
+                sub["cursor_epoch"] == epoch and sub["conversation_ref"] in (None, room["ref"])
+                for sub in settings["subscriptions"]
+            )
+            items.append(
+                {
+                    **{
+                        key: room.get(key)
+                        for key in ("ref", "name", "name_status", "kind", "last_message_at")
+                    },
+                    "enabled": events_enabled(settings["conversations"].get(room["ref"]), epoch),
+                    "subscriptions": subscriptions,
+                }
+            )
+        return {"items": items, "next_cursor": page["next_cursor"], "has_more": page["has_more"]}
+
+    @app.post("/admin/api/events/conversations")
+    def event_decision(
+        body: ConversationDecision, current: Annotated[dict, Depends(authenticated)]
+    ):
+        data = body.model_dump()
+        if body.enabled:
+            try:
+                checkpoint = event_source.checkpoint()
+            except (OSError, ValueError, RuntimeError):
+                raise HTTPException(
+                    503, "Cannot enable events until collection is available."
+                ) from None
+            data.update(cursor_epoch=checkpoint["cursor_epoch"], after_cursor=checkpoint["cursor"])
+        return connection_call("POST", "/events/settings", data)
 
     from dot_plugin.control import TunnelDecision
 
@@ -516,10 +649,14 @@ def create_app(
         request: Request, response: Response, current: Annotated[dict, Depends(authenticated)]
     ):
         with session_lock:
-            owner.revoke(digest(request.cookies.get(COOKIE, "")))
-            sessions.pop(request.cookies.get(COOKIE), None)
+            owner.revoke(digest(request.cookies.get(cookie_name(request), "")))
+            sessions.pop(request.cookies.get(cookie_name(request)), None)
         response.delete_cookie(
-            COOKIE, secure=True, httponly=True, samesite="strict", path=COOKIE_PATH
+            cookie_name(request),
+            secure=not is_local(request),
+            httponly=True,
+            samesite="strict",
+            path=COOKIE_PATH,
         )
         return {"ok": True}
 

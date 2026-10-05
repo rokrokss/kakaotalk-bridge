@@ -69,7 +69,7 @@ class OwnerAuth:
         hashed = self.hash_password(password, salt)
         return bool(owner and hmac.compare_digest(hashed, owner["hash"]))
 
-    def create_session(self, ttl, label, *, exclusive=False, policy="local"):
+    def create_session(self, ttl, label, *, exclusive=False, policy="local", origin=""):
         key, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
         now = time.time()
         record = {
@@ -79,6 +79,7 @@ class OwnerAuth:
             "expires": now + ttl,
             "label": label[:120],
             "policy": policy,
+            "origin": origin,
         }
         with self.state.transaction() as db:
             db.execute("BEGIN IMMEDIATE")
