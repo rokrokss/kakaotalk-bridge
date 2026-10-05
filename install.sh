@@ -18,6 +18,32 @@ if ! command -v curl >/dev/null; then
   exit 1
 fi
 
+bridge_verbose=0
+bridge_bootstrap_log=''
+for bridge_argument in "$@"; do
+  if [[ "$bridge_argument" == '--verbose' ]]; then bridge_verbose=1; fi
+done
+
+# Keep dependency/download chatter out of the progress display. Logs are private
+# and retained on failure; the Python setup creates its own log after launch.
+bridge_run() {
+  if [[ "$bridge_verbose" == 1 ]]; then
+    "$@"
+  else
+    if [[ -z "$bridge_bootstrap_log" ]]; then
+      bridge_bootstrap_log="$(mktemp "${TMPDIR:-/tmp}/kakaotalk-bridge-setup.XXXXXX")"
+      echo "Installer log: $bridge_bootstrap_log"
+    fi
+    if "$@" >>"$bridge_bootstrap_log" 2>&1; then
+      return 0
+    else
+      bridge_status=$?
+      echo "Installer preparation failed. Details: $bridge_bootstrap_log" >&2
+      return "$bridge_status"
+    fi
+  fi
+}
+
 # Redirect only when replacing this shell. Changing fd 0 while bash is still
 # reading a curl pipe can discard the rest of the installer itself.
 bridge_launch() {
@@ -41,14 +67,15 @@ if [[ -z "$bridge_python" ]]; then
   if [[ -z "$bridge_uv" ]]; then
     bridge_tmp="$(mktemp -d)"
     trap 'rm -rf "$bridge_tmp"' EXIT
-    curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 https://astral.sh/uv/install.sh -o "$bridge_tmp/uv-install.sh"
-    UV_NO_MODIFY_PATH=1 sh "$bridge_tmp/uv-install.sh"
+    bridge_run curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 https://astral.sh/uv/install.sh -o "$bridge_tmp/uv-install.sh"
+    UV_NO_MODIFY_PATH=1 bridge_run sh "$bridge_tmp/uv-install.sh"
     bridge_uv="$HOME/.local/bin/uv"
     rm -rf "$bridge_tmp"
     trap - EXIT
   fi
-  "$bridge_uv" python install 3.12
+  bridge_run "$bridge_uv" python install 3.12
   bridge_python="$("$bridge_uv" python find --managed-python 3.12)"
+  echo 'Installer runtime ready.'
 fi
 
 if [[ -f "${BASH_SOURCE[0]:-}" ]]; then
@@ -60,7 +87,7 @@ fi
 
 if [[ ! -f "$bridge_install_home/bridge" ]]; then
   echo 'Installing KakaoTalk Bridge…'
-  "$bridge_python" - "$bridge_install_home" "$bridge_version" <<'PY'
+  bridge_run "$bridge_python" - "$bridge_install_home" "$bridge_version" <<'PY'
 import os, pathlib, shutil, sys, tarfile, tempfile, urllib.request
 target, version = pathlib.Path(sys.argv[1]).expanduser().absolute(), sys.argv[2]
 if target.exists():
@@ -83,6 +110,7 @@ with tempfile.TemporaryDirectory(prefix='.bridge-download-', dir=target.parent) 
         raise SystemExit('This source version does not include the one-command installer.')
     roots[0].rename(target)
 PY
+  echo 'KakaoTalk Bridge downloaded.'
 fi
 echo "Bridge location: $bridge_install_home"
 bridge_launch "$bridge_install_home" "$@"

@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from ops import cli
+from ops.setup_output import SetupOutput, run
 
 STEPS = (
     ("environment", "Preparing the execution environment"),
@@ -54,6 +55,7 @@ def add_arguments(parser):
     mode.add_argument("--source", action="store_true", help="Build this checkout")
     mode.add_argument("--manifest", help="Use a verified release manifest")
     parser.add_argument("--plan", action="store_true", help="Show steps without changing anything")
+    parser.add_argument("--verbose", action="store_true", help="Show detailed installation output")
     parser.add_argument(
         "--no-install", action="store_true", help="Do not install host dependencies"
     )
@@ -164,10 +166,10 @@ def privileged(command, *, capture=False):
     command = [shutil.which(command[0]) or command[0], *command[1:]]
     if os.geteuid() != 0:
         command = ["sudo", *command]
-    return cli.run(command, capture=capture)
+    return run(command, capture=capture)
 
 
-def install_script(url):
+def install_script(url, *, interactive=False):
     # Only fixed official dependency installers call this. No user-controlled URL.
     with urlopen(url, timeout=60) as response:
         content = response.read(2 * 1024 * 1024 + 1)
@@ -176,7 +178,7 @@ def install_script(url):
     with tempfile.TemporaryDirectory() as folder:
         script = Path(folder) / "install.sh"
         script.write_bytes(content)
-        cli.run(["/bin/bash", str(script)])
+        run(["/bin/bash", str(script)], interactive=interactive)
 
 
 def require_install(args, description):
@@ -195,18 +197,24 @@ def prepare_mac(args):
     if not shutil.which("limactl"):
         require_install(args, "the Mac execution environment")
         if not shutil.which("brew"):
-            install_script("https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")
-        cli.run(["brew", "install", "lima"])
+            install_script(
+                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh", interactive=True
+            )
+        run(["brew", "install", "lima"])
     if platform.machine() == "x86_64" and not shutil.which("qemu-system-x86_64"):
         require_install(args, "the Intel Mac virtual machine driver")
         if not shutil.which("brew"):
-            install_script("https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")
-        cli.run(["brew", "install", "qemu"])
+            install_script(
+                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh", interactive=True
+            )
+        run(["brew", "install", "qemu"])
     if args.connection == "tailscale" and not cli.tailscale_binary():
         require_install(args, "Tailscale for your secure browser connection")
         if not shutil.which("brew"):
-            install_script("https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")
-        cli.run(["brew", "install", "--formula", "tailscale"])
+            install_script(
+                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh", interactive=True
+            )
+        run(["brew", "install", "--formula", "tailscale"])
         privileged(["brew", "services", "start", "tailscale"])
 
 
@@ -231,11 +239,11 @@ def prepare_linux(args):
         install_script("https://get.docker.com")
     else:
         try:
-            cli.run(["docker", "compose", "version"], capture=True)
+            run(["docker", "compose", "version"], capture=True)
         except RuntimeError:
             for package in ("docker-compose-v2", "docker-compose-plugin"):
                 try:
-                    cli.run(["apt-cache", "show", package], capture=True)
+                    run(["apt-cache", "show", package], capture=True)
                     packages.append(package)
                     break
                 except (OSError, RuntimeError):
@@ -282,12 +290,12 @@ class Runtime:
         self.prefix = []
         if platform.system() == "Linux":
             try:
-                cli.run(["docker", "info"], capture=True)
+                run(["docker", "info"], capture=True)
             except (OSError, RuntimeError):
                 privileged(["docker", "info"], capture=True)
                 if os.geteuid() != 0:
                     self.prefix = ["sudo"]
-            context = cli.run([*self.prefix, "docker", "context", "inspect"], capture=True)
+            context = run([*self.prefix, "docker", "context", "inspect"], capture=True)
             endpoint = json.loads(context)[0]["Endpoints"]["docker"]["Host"]
             host = (
                 endpoint
@@ -300,9 +308,11 @@ class Runtime:
                     "elsewhere; Bridge has not changed it. Rerun with DOCKER_HOST=unix:///var/run/docker.sock."
                 )
 
-    def call(self, *arguments, capture=False):
-        return cli.run(
-            [*self.prefix, sys.executable, str(cli.ROOT / "bridge"), *arguments], capture=capture
+    def call(self, *arguments, capture=False, interactive=False):
+        return run(
+            [*self.prefix, sys.executable, str(cli.ROOT / "bridge"), *arguments],
+            capture=capture,
+            interactive=interactive,
         )
 
     def installed(self):
@@ -312,9 +322,9 @@ class Runtime:
         if not config_path.exists():
             return False
         config = json.loads(config_path.read_text())
-        cli.run(["limactl", "start", "--tty=false", config["vm"]])
+        run(["limactl", "start", "--tty=false", config["vm"]])
         try:
-            cli.run(
+            run(
                 [
                     "limactl",
                     "shell",
@@ -384,7 +394,7 @@ def connect_network(args, runtime):
         status = network_status([*prefix, tailscale, "status", "--json"])
     except (RuntimeError, subprocess.TimeoutExpired):
         if platform.system() == "Darwin" and "/Applications/" in tailscale:
-            cli.run(["open", "-a", "Tailscale"])
+            run(["open", "-a", "Tailscale"])
             raise RuntimeError(
                 "Finish enabling Tailscale in macOS, then run bridge up again."
             ) from None
@@ -418,7 +428,7 @@ def connect_network(args, runtime):
                 proc.wait()
                 raise
     # Keep provider permission/HTTPS/Funnel approval links visible to the user.
-    runtime.call("expose")
+    runtime.call("expose", interactive=True)
 
 
 def open_setup(args, runtime):
@@ -476,9 +486,10 @@ def up(args):
         )
         print("First use requires an admin passkey and KakaoTalk installation/login.")
         return
-    with installation_lock():
+    with installation_lock(), SetupOutput(verbose=args.verbose) as output:
         current = "environment"
 
+        @contextlib.contextmanager
         def progress(key):
             nonlocal current
             current = key
@@ -488,36 +499,37 @@ def up(args):
             cli.atomic(
                 cli.ROOT / ".bridge/onboarding.json", json.dumps({"step": key, "state": "running"})
             )
-            print(f"\n[{index}/{len(STEPS)}] {label}…", flush=True)
+            with output.step(f"[{index}/{len(STEPS)}] {label}"):
+                yield
 
         try:
-            progress("environment")
-            (prepare_mac if platform.system() == "Darwin" else prepare_linux)(args)
-            runtime = Runtime()
-            progress("runtime")
-            if runtime.installed():
-                runtime.call("start")
-            else:
-                selection = (
-                    ["--manifest", str(Path(args.manifest).resolve())]
-                    if args.manifest
-                    else ["--source"]
-                )
-                ports = []
-                for name in ("admin_port", "mcp_port"):
-                    if getattr(args, name) is not None:
-                        ports += ["--" + name.replace("_", "-"), str(getattr(args, name))]
-                runtime.call("install", *selection, "--vm", args.vm, *ports)
-            if args.apk_folder:
-                # Identical imports are resumable; different sets are never mixed.
-                runtime.call("import-apks", str(Path(args.apk_folder).resolve()))
-            runtime.wait_ready()
-            progress("network")
-            connect_network(args, runtime)
-            runtime.wait_ready()
-            runtime.call("setup-agent", "install")
-            progress("browser")
-            open_setup(args, runtime)
+            with progress("environment"):
+                (prepare_mac if platform.system() == "Darwin" else prepare_linux)(args)
+                runtime = Runtime()
+            with progress("runtime"):
+                if runtime.installed():
+                    runtime.call("start")
+                else:
+                    selection = (
+                        ["--manifest", str(Path(args.manifest).resolve())]
+                        if args.manifest
+                        else ["--source"]
+                    )
+                    ports = []
+                    for name in ("admin_port", "mcp_port"):
+                        if getattr(args, name) is not None:
+                            ports += ["--" + name.replace("_", "-"), str(getattr(args, name))]
+                    runtime.call("install", *selection, "--vm", args.vm, *ports)
+                if args.apk_folder:
+                    # Identical imports are resumable; different sets are never mixed.
+                    runtime.call("import-apks", str(Path(args.apk_folder).resolve()))
+                runtime.wait_ready()
+            with progress("network"):
+                connect_network(args, runtime)
+                runtime.wait_ready()
+                runtime.call("setup-agent", "install")
+            with progress("browser"):
+                open_setup(args, runtime)
         except BaseException:
             cli.atomic(
                 cli.ROOT / ".bridge/onboarding.json",
@@ -527,6 +539,8 @@ def up(args):
                 f"\nStopped during {current}. Run the same command to continue; your data is preserved.",
                 file=sys.stderr,
             )
+            if output.path:
+                print(f"Details: {output.path}", file=sys.stderr)
             raise
         cli.atomic(
             cli.ROOT / ".bridge/onboarding.json", json.dumps({"step": "browser", "state": "ready"})

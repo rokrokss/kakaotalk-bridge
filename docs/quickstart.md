@@ -21,6 +21,22 @@ dependency installers; your OS may ask for administrator approval. The installer
 may prepare Python through uv, Homebrew/Lima on Mac, and Docker on Linux. Tailscale is installed only when explicitly selected.
 It does not change your shell startup files.
 
+The terminal shows short English progress messages and confirms each completed
+step. Long setup steps print an elapsed-time update every 30 seconds. Detailed
+command output goes to a private log in `.bridge/logs/` inside the installation;
+early Python/download preparation uses a separate temporary log. Log paths are
+printed, including when a step fails. Password prompts, dependency installer
+confirmations and browser sign-in instructions remain visible. One-time setup
+and sign-in links are not written to these logs.
+
+To show detailed command output directly while troubleshooting:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/install.sh | bash -s -- --verbose
+# Or, from a downloaded source checkout:
+./bridge up --verbose
+```
+
 The default location is `~/Library/Application Support/KakaoTalk Bridge` on Mac
 and `${XDG_DATA_HOME:-~/.local/share}/kakaotalk-bridge` on Linux. Set `BRIDGE_HOME`
 to choose another location. `BRIDGE_VERSION` selects a source tag or commit for a

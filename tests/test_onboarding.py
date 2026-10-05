@@ -46,7 +46,7 @@ def fake_runtime(monkeypatch, *, installed=False):
     return runtime
 
 
-def test_first_run_installs_then_waits_before_browser(home, monkeypatch):
+def test_first_run_installs_then_waits_before_browser(home, monkeypatch, capsys):
     runtime = fake_runtime(monkeypatch)
     opened = Mock()
     monkeypatch.setattr(onboarding.webbrowser, "open", opened)
@@ -62,6 +62,10 @@ def test_first_run_installs_then_waits_before_browser(home, monkeypatch):
     opened.assert_called_once_with(runtime.call.return_value)
     assert json.loads((home / ".bridge/onboarding.json").read_text())["state"] == "ready"
     assert "passkey" not in (home / ".bridge/onboarding.json").read_text()
+    output = capsys.readouterr().out
+    assert output.count("— done.") == 4
+    assert runtime.call.return_value in output
+    assert all("passkey" not in log.read_text() for log in (home / ".bridge/logs").iterdir())
 
 
 def test_returning_user_starts_without_reinstall_or_new_registration(home, monkeypatch):
@@ -77,7 +81,7 @@ def test_returning_user_starts_without_reinstall_or_new_registration(home, monke
     opened.assert_not_called()
 
 
-def test_failure_is_resumable_without_persisting_auth_links(home, monkeypatch):
+def test_failure_is_resumable_without_persisting_auth_links(home, monkeypatch, capsys):
     runtime = fake_runtime(monkeypatch)
     runtime.wait_ready.side_effect = RuntimeError("not ready")
     opened = Mock()
@@ -89,6 +93,10 @@ def test_failure_is_resumable_without_persisting_auth_links(home, monkeypatch):
         "state": "interrupted",
     }
     opened.assert_not_called()
+    output = capsys.readouterr()
+    assert output.out.count("— done.") == 1
+    assert "Stopped during runtime" in output.err
+    assert str(next((home / ".bridge/logs").iterdir())) in output.err
     runtime.installed.return_value = True
     runtime.wait_ready.side_effect = None
     runtime.call.reset_mock()
@@ -294,6 +302,60 @@ def test_shell_entry_reuses_installation_with_spaces_and_forwards_arguments(tmp_
         "/a path/apks",
     ]
     assert sentinel.read_text() == "identity unchanged"
+
+
+@pytest.mark.parametrize("verbose", [False, True])
+@pytest.mark.parametrize("failed", [False, True])
+def test_piped_installer_summarizes_bootstrap_and_preserves_failures(tmp_path, verbose, failed):
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "install.sh"
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    target = tmp_path / "bridge home"
+    target.mkdir()
+    (target / "bridge").write_text("import json, sys; print(json.dumps(sys.argv[1:]))")
+    # An isolated PATH forces Python preparation without downloading or installing anything.
+    for command in ("uname", "mktemp"):
+        (binaries / command).symlink_to("/usr/bin/" + command)
+    (binaries / "curl").write_text("#!/bin/sh\nexit 99\n")
+    uv = binaries / "uv"
+    uv.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$2\" = install ]; then\n"
+        "  echo 'runtime download detail'\n"
+        "  echo 'runtime warning' >&2\n"
+        f"  exit {7 if failed else 0}\n"
+        "fi\n"
+        f"printf '%s\\n' '{sys.executable}'\n"
+    )
+    uv.chmod(0o755)
+    (binaries / "curl").chmod(0o755)
+    flags = ["--verbose"] if verbose else []
+    result = subprocess.run(
+        ["/bin/bash", "-s", "--", *flags],
+        input=script.read_text(),
+        env={**os.environ, "PATH": str(binaries), "BRIDGE_HOME": str(target), "TMPDIR": str(tmp_path)},
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == (7 if failed else 0), result.stderr
+    if verbose:
+        assert "runtime download detail" in result.stdout
+        assert "runtime warning" in result.stderr
+    else:
+        assert "runtime download detail" not in result.stdout
+        assert "runtime warning" not in result.stderr
+        log = next(tmp_path.glob("kakaotalk-bridge-setup.*"))
+        assert "runtime download detail" in log.read_text()
+        assert "runtime warning" in log.read_text()
+        if failed:
+            assert str(log) in result.stderr
+    if not failed:
+        assert "Installer runtime ready." in result.stdout
+        assert json.loads(result.stdout.splitlines()[-1]) == ["up", *flags]
 
 
 def test_signed_out_network_status_is_not_treated_as_a_daemon_failure(monkeypatch):
