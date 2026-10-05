@@ -66,6 +66,18 @@
         <p id="setup-next">Checking the server and tablet…</p>
         <p class="hint">Device preparation runs automatically. You complete store installation and KakaoTalk sign-in on the screen below.</p>
         <button id="setup-next-button" class="primary" hidden>Continue</button>
+        <section id="setup-store-guide" class="manual-guide" aria-labelledby="store-guide-title" hidden>
+          <h3 id="store-guide-title">Install KakaoTalk on the tablet below</h3>
+          <ol class="manual-steps">
+            <li>Choose <strong>Open store</strong>. In Aurora, review the welcome screens and terms, then continue. If asked for an installation method, use <strong>Session Installer</strong>.</li>
+            <li>If Android asks to let Aurora install apps, open its settings, enable <strong>Allow from this source</strong> (<span lang="ko">이 출처 허용</span>), then use the tablet’s <strong>Back</strong> button to return to Aurora.</li>
+            <li>Choose <strong>Anonymous</strong> sign-in. Search for <strong>KakaoTalk</strong> or <strong lang="ko">카카오톡</strong>, and select the app by <strong>Kakao Corp.</strong></li>
+            <li>Select <strong>Install</strong> and confirm the Android installation prompt if shown. Keep this admin page open while the download finishes.</li>
+            <li>Bridge detects the installed app and finishes preparation. Continue when this guide changes to <strong>Sign in</strong> and KakaoTalk opens.</li>
+          </ol>
+          <p class="hint">For store search, click the tablet’s search field and type <strong>KakaoTalk</strong> using its on-screen keyboard. Bridge’s <strong>Text input</strong> becomes available after collection components are prepared.</p>
+          <details><summary>Store sign-in or download is stuck?</summary><p>Read Aurora’s error, then retry anonymous sign-in or the download in the store. If installation has finished but this guide has not changed, choose <strong>Check again</strong> above. For a preparation error, use <strong>Retry preparation</strong>.</p><p><a href="https://auroraoss.gitbook.io/wiki/troubleshooting-and-faqs/faqs/aurora-store" target="_blank" rel="noopener noreferrer">Aurora troubleshooting ↗</a></p></details>
+        </section>
         <p class="hint">The phone session is confirmed by you. Tablet settings alone do not guarantee it stays signed in.</p>
         </div>
       </details>
@@ -104,7 +116,13 @@
                 <details id="ai-edit" class="ai-method-fields" open><summary>Connection settings</summary>
                   <div data-ai-method="none"><h3>Connect whenever you’re ready</h3><p>Collection and the admin console work without an AI connection.</p></div>
                   <div data-ai-method="openai-tunnel" hidden>
-                    <p><a href="https://platform.openai.com/settings/organization/tunnels" target="_blank" rel="noopener noreferrer">Create a tunnel in OpenAI ↗</a>, then paste its ID and runtime API key here. The key needs Read and Use access to this tunnel.</p>
+                    <h3>Get your tunnel details from OpenAI</h3>
+                    <ol class="manual-steps">
+                      <li>Open <a href="https://platform.openai.com/settings/organization/tunnels" target="_blank" rel="noopener noreferrer">OpenAI tunnel settings ↗</a> and create a tunnel. Associate it with the ChatGPT workspace you will use.</li>
+                      <li>Copy its <strong>tunnel ID</strong> and obtain a runtime API key with <strong>Tunnels Read + Use</strong> permission.</li>
+                      <li>Return here, fill in both fields, review the access checkbox and select <strong>Set up and allow tunnel</strong>. Then follow <strong>Connection instructions</strong> below.</li>
+                    </ol>
+                    <details><summary>Cannot create or find your tunnel?</summary><p>Creating a tunnel requires Tunnels Read + Manage. Selecting it requires Read + Use and access from your ChatGPT workspace. Ask the organization or workspace administrator if these controls are missing. <a href="https://developers.openai.com/api/docs/guides/secure-mcp-tunnels" target="_blank" rel="noopener noreferrer">OpenAI tunnel guide ↗</a></p></details>
                     <label for="ai-tunnel-id">Tunnel ID</label><input id="ai-tunnel-id" placeholder="tunnel_…" maxlength="39" spellcheck="false" autocapitalize="off">
                     <label for="ai-api-key">Runtime API key</label><input id="ai-api-key" type="password" autocomplete="new-password" maxlength="512" spellcheck="false" autocapitalize="off" aria-describedby="ai-key-help">
                     <p id="ai-key-help" class="hint">Saved on your server. The key is never returned to this page.</p>
@@ -117,6 +135,11 @@
                   </div>
                   <div data-ai-method="tailscale" hidden>
                     <h3>Let Tailscale provide the HTTPS address</h3><p>Bridge installs Tailscale if needed, then configures Funnel and OAuth. If sign-in or Funnel approval is needed, a link appears here.</p>
+                    <ol class="manual-steps">
+                      <li>Review the checkbox below and select <strong>Set up Tailscale and OAuth</strong>.</li>
+                      <li>If <strong>Your approval is needed</strong> appears, open the Tailscale approval link and complete the requested sign-in or approval.</li>
+                      <li>Return to this page and select <strong>Continue setup</strong>. Follow any further approval request, then use the saved MCP URL under <strong>Connection instructions</strong>.</li>
+                    </ol>
                     <p id="ai-tailscale-location" class="hint"></p>
                     <label class="check"><input id="ai-tailscale-allow" type="checkbox">Install or use Tailscale on this server and publish its MCP endpoint with Funnel.</label>
                   </div>
@@ -125,6 +148,12 @@
                     <label for="ai-ssh-target">Remote server? SSH destination (optional)</label><input id="ai-ssh-target" placeholder="user@your-server" maxlength="253" autocapitalize="off" spellcheck="false">
                     <p class="hint">Use an existing SSH host alias or user@host for the installation machine. That account must already be able to run Bridge with its configuration and Docker access, without an interactive prompt.</p>
                     <pre id="ai-stdio-config" class="ai-copy-block"></pre><button id="ai-copy-stdio" type="button">Copy client configuration</button>
+                    <ol class="manual-steps">
+                      <li>Use <strong>Copy client configuration</strong>, then open your AI app’s MCP server settings or configuration file.</li>
+                      <li>Add the <code>kakaotalk</code> entry to its <code>mcpServers</code> settings, keeping any existing servers. If the app uses form fields, copy the displayed command and arguments into those fields.</li>
+                      <li>Save and reload the AI app’s MCP connections, or restart the app. Enable KakaoTalk Bridge and ask it to check collector status.</li>
+                    </ol>
+                    <p class="hint">If the command cannot start, check that the installation path is reachable from the AI app. For SSH, confirm that the destination works without an interactive password prompt.</p>
                   </div>
                 </details>
               </div>
@@ -138,9 +167,22 @@
           </div>
           <div id="ai-finish" class="ai-finish" hidden>
             <h3>Connection instructions</h3><p id="ai-finish-help"></p>
-            <code id="ai-client-value" class="endpoint"></code>
-            <div class="ai-setup-actions"><button id="ai-copy-value" type="button">Copy</button><a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">Open ChatGPT apps ↗</a></div>
-            <p class="hint">Then ask your AI: “Check my KakaoTalk collector status.” Server checks alone do not verify the complete AI connection.</p>
+            <strong id="ai-client-label"></strong><code id="ai-client-value" class="endpoint"></code>
+            <div class="ai-setup-actions"><button id="ai-copy-value" type="button">Copy</button><a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">Open ChatGPT plugins ↗</a></div>
+            <ol id="ai-finish-tunnel" class="manual-steps" hidden>
+              <li>In ChatGPT on the web, open <strong>Plugins → + → Create custom MCP server</strong>. Name it <strong>KakaoTalk Bridge</strong>.</li>
+              <li>Under <strong>Connection</strong>, choose <strong>Tunnel</strong> and select or paste the ID above. For this approved personal tunnel, choose <strong>No authentication</strong>.</li>
+              <li>Review the notice and create the plugin. Install it in your workspace, then select <strong>@KakaoTalk Bridge</strong> in a conversation.</li>
+            </ol>
+            <ol id="ai-finish-https" class="manual-steps" hidden>
+              <li>Add a remote MCP server in your AI client. In ChatGPT on the web, use <strong>Plugins → + → Create custom MCP server</strong> and name it <strong>KakaoTalk Bridge</strong>.</li>
+              <li>Paste the URL above into <strong>Server URL</strong> and choose <strong>OAuth</strong>. In ChatGPT, use CIMD if a registration method is requested; leave optional static client credentials blank. Review the notice and create the plugin.</li>
+              <li>Complete the connection: approve with your passkey, or match the displayed code in this admin page’s <strong>AI connections</strong> and choose <strong>Approve connection</strong>. Return to the client to finish.</li>
+              <li>Install or enable the connection. In ChatGPT, select <strong>@KakaoTalk Bridge</strong> in a conversation.</li>
+            </ol>
+            <details><summary>Connection option missing or approval unfinished?</summary><p>Check your ChatGPT workspace permissions. For a missing tunnel, check its workspace association and your Read + Use access. For an expired OAuth request, start the connection again in your AI client and approve the new matching code. <a href="https://developers.openai.com/api/docs/guides/custom-mcp-server" target="_blank" rel="noopener noreferrer">ChatGPT connection guide ↗</a></p></details>
+            <p><strong>Verify:</strong> ask your AI to check collector status. Then send yourself a distinctive message from your phone, such as “Bridge check 14:32”, and ask the AI to find that exact text.</p>
+            <p class="hint">Server setup and access approval are separate from a successful AI request. Check <strong>Remote AI activity</strong> in the overview after your request.</p>
           </div>
           <p class="hint">Prefer the terminal? <code>./bridge setup-connection</code> is also available.</p>
         </div>
@@ -235,6 +277,10 @@
                   <button id="login-check" data-action="login-check" class="wide" aria-describedby="login-check-help">Check login options</button>
                   <p id="login-check-help" class="hint">Use only before signing in. Sign in on the tablet within 30 minutes of a successful check.</p>
                   <p id="login-check-result" class="job" role="status" hidden></p>
+                </li>
+                <li>
+                  <h3>Finish signing in on the tablet</h3>
+                  <p>After the check succeeds, complete KakaoTalk sign-in on the tablet, including any verification requested on your phone. Open KakaoTalk on your phone and check that its existing session still works.</p>
                 </li>
                 <li>
                   <h3>Confirm both sessions</h3>

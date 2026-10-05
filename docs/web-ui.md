@@ -36,7 +36,7 @@ retry; login and both-session confirmations always require your input.
 The **KakaoTalk setup** guide has three steps: **Prepare → Sign in → Collect**.
 AI connection is optional and is configured separately.
 
-1. Let automatic preparation finish, then install **KakaoTalk by Kakao Corp.** in the on-screen Aurora store. Bridge detects installation and configures collection components automatically. Alternatively import a complete official APK set.
+1. Let automatic preparation finish, then [install **KakaoTalk by Kakao Corp.** in Aurora](#install-kakaotalk-in-aurora). Bridge detects installation and configures collection components automatically. Alternatively import a complete official APK set.
 2. Use the tablet under **Tablet & settings**; **Open KakaoTalk** is available if needed. To enter text, select **Connect keyboard**, focus an input field on the tablet, then send a value through **Text input**.
 3. In KakaoTalk, select **“Use with other devices” (“다른 기기와 함께 사용” in the Korean UI)**. In the console, select **KakaoTalk login → Check login options**. The check currently recognizes the Korean KakaoTalk UI. Stop if the option is missing or KakaoTalk asks to transfer the primary device.
 4. After the check passes, finish signing in on the tablet. Manually verify that KakaoTalk still opens with the existing session on your phone.
@@ -45,6 +45,38 @@ AI connection is optional and is configured separately.
 Starting collection records your manual confirmation. The program does not control KakaoTalk's login behavior or prevent your phone from being signed out.
 
 Use **Check login options** only on the screen before signing in. Once collection is approved, the button is disabled; use **Check status** for the current state. Check progress and results appear below the button. A failed check preserves existing approval and precheck records.
+
+### Install KakaoTalk in Aurora
+
+Use the virtual tablet shown in **Tablet & settings**. The **KakaoTalk setup**
+guide displays these instructions while it is waiting for installation.
+
+1. Select **Open store**. Review Aurora's welcome screens and terms and continue.
+   If it asks for an installation method, choose **Session Installer**.
+2. When prompted to allow app installation, open the Android settings for Aurora,
+   enable **Allow from this source** (**이 출처 허용**), and use the tablet's
+   **Back** button to return. This setting belongs to the virtual tablet.
+3. Choose **Anonymous** sign-in. This is the store session; KakaoTalk sign-in
+   comes later.
+4. Search for **KakaoTalk** or **카카오톡** and select the app by **Kakao Corp.**
+   Click the tablet's search field and use its on-screen keyboard to type
+   **KakaoTalk**. Bridge's **Text input** becomes available after collection
+   components are prepared.
+5. Select **Install** and confirm Android's installation prompt if shown. Keep
+   the admin page open while downloading and installing.
+6. Wait for Bridge to finish preparing collection components and open KakaoTalk.
+   The store instructions disappear and the next action becomes signing in.
+   Follow the login-option check above **before completing KakaoTalk sign-in**.
+
+| Where you are stuck | Next action |
+| --- | --- |
+| Anonymous sign-in or download fails | Read the store error and retry there. See [Aurora's troubleshooting guide](https://auroraoss.gitbook.io/wiki/troubleshooting-and-faqs/faqs/aurora-store). |
+| Android blocks installation | Allow Aurora to install apps, return with **Back**, and retry **Install**. |
+| App installed, but Bridge still shows store instructions | Select **Check again** in **KakaoTalk setup**. If preparation reports an error, follow it and select **Retry preparation**. |
+
+Already have the complete official APK set? Use the [APK import alternative](#installation).
+Aurora wording can vary by version and language; installation permission applies
+to Aurora, and the app being installed should be KakaoTalk by Kakao Corp.
 
 ## Installation
 
@@ -113,10 +145,9 @@ If your phone has been signed out, select **Signed out · Stop collection**. Thi
 3. Enter **Connection settings** and start setup. Existing methods can coexist;
    **Decide later** keeps existing connections. An existing connection's settings
    start collapsed; expand them when you want to make a change.
-4. Finish in your AI client using the saved address, tunnel ID or stdio
-   configuration. HTTPS uses OAuth; a personal tunnel uses its approved private
-   connection. See [HTTPS/OAuth](dot-plugin.md), [OpenAI tunnel](openai-tunnel.md)
-   and [stdio](api.md#stdio-mcp).
+4. [Finish in your AI client](#finish-in-your-ai-client) using the saved address,
+   tunnel ID or stdio configuration. HTTPS uses OAuth; a personal tunnel uses
+   its approved private connection.
 5. Ask the AI to check collector status, then retrieve a message you sent from
    your phone to verify the content.
 
@@ -130,6 +161,39 @@ key may be reused for the same ID; the browser never receives it back. Tailscale
 setup requires explicit installation/public-exposure consent. Follow the provider
 link if shown, then select **Continue setup**. The CLI alternative and web setup
 service requirements are in [onboarding](onboarding.md#connect-an-ai-client-optional).
+
+### Finish in your AI client
+
+Keep admin open beside your AI client. **Server setup complete** means you can
+continue with the saved **Connection instructions**; the client still needs its
+own connection setup.
+
+For ChatGPT, open [Plugins](https://chatgpt.com/plugins) in a web browser, select
+**+ → Create custom MCP server**, and name it **KakaoTalk Bridge**. Use the row
+matching the connection method you configured:
+
+| Method in Bridge | What to enter in the client | Complete access |
+| --- | --- | --- |
+| Personal tunnel | Choose **Tunnel**, use the saved tunnel ID, and choose **No authentication** for this approved personal connection. | Bridge must show tunnel access allowed. If the tunnel is missing, check its workspace association and your Tunnels Read + Use permission. [Tunnel preparation](openai-tunnel.md#before-setup) |
+| Existing HTTPS or Tailscale | Paste the saved **MCP server URL**, including `/mcp`, and select **OAuth**. In ChatGPT, choose CIMD if asked for registration and leave optional static client credentials blank. | Follow passkey consent, or match the code in admin **AI connections → Approve connection**. Return to the AI client to finish. |
+| Local or SSH app | Use **Copy client configuration** in Bridge. Add the `kakaotalk` entry to the app's `mcpServers` configuration, preserving other servers; for form-based clients, copy the command and arguments. | Save and reload MCP connections or restart the client, then enable KakaoTalk Bridge. For SSH, verify access without an interactive password prompt. [Client examples](api.md#stdio-mcp) |
+
+In ChatGPT, review the notice, create the plugin and install it. Select
+**@KakaoTalk Bridge** in a conversation. If creation is unavailable, check
+workspace permissions. The [official ChatGPT instructions](https://developers.openai.com/api/docs/guides/custom-mcp-server)
+describe the current menus.
+
+**Tailscale asks for approval:** open the link displayed by Bridge, finish the
+requested sign-in or approval, then return to admin and select **Continue
+setup**. Repeat if another approval is requested. Once the MCP URL is saved,
+follow the HTTPS row above.
+
+**Verify with your own message:** ask the connected AI to check collector status.
+After collection starts, send yourself a distinctive message from your phone,
+such as “Bridge check 14:32”, and ask the AI to find that exact text. Check the
+returned text and time. For remote connections, admin's **Remote AI activity**
+should record the successful request; local stdio activity is not recorded there.
+An expired OAuth request needs a new connection attempt and matching code.
 
 ### Progress and recovery
 

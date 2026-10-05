@@ -20,8 +20,16 @@ does not carry the admin UI, ADB or the collector's private API.
 
 ## Before setup
 
-Create a tunnel using the current [OpenAI Secure MCP Tunnel instructions](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
-Obtain its `tunnel_…` ID and a runtime API key permitted to connect that tunnel.
+1. Open [OpenAI tunnel settings](https://platform.openai.com/settings/organization/tunnels)
+   and create a tunnel using an account with **Tunnels Read + Manage**.
+2. Associate it with the ChatGPT workspace where you will use Bridge. Copy the
+   `tunnel_…` ID and obtain a runtime API key with **Tunnels Read + Use**.
+3. Return to Bridge's connection form with these two values. Bridge starts the
+   tunnel client for you; then follow the client completion steps below.
+
+If the controls or tunnel are missing, check organization permissions and the
+workspace association with your administrator. See the current
+[OpenAI Secure MCP Tunnel instructions](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
 Your OpenAI organization/workspace must support tunnel connections. Restrict
 tunnel access to yourself: everyone allowed to use it gets the same Bridge
 permissions. Bridge implements one owner, not per-workspace-user accounts.
@@ -47,9 +55,10 @@ enable the web setup service. Existing installations retain their admin address.
 3. Review the access checkbox and select **Set up and allow tunnel**. The page
    reports service startup, approval and server verification. You can leave and
    reopen the page while it runs. Approval is included in this web flow.
-4. In the OpenAI connection setup, choose **Tunnel** and select the same ID. Use
-   the no-OAuth option if prompted: the private service credential is injected
-   locally. Do not enter the public `/mcp` URL or a runtime key as an OAuth secret.
+4. Follow [Finish in your AI client](web-ui.md#finish-in-your-ai-client): create
+   a custom MCP plugin in ChatGPT, select **Tunnel** with the saved ID and
+   **No authentication**, then install it and select it in a conversation.
+   The runtime API key belongs in Bridge's setup form, not the client connection.
 5. Ask the connected client for collector status, then retrieve a message you
    sent from your phone. The overview records the successful tool call separately
    from approval. A running tunnel alone does not verify message collection.

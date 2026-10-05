@@ -385,7 +385,7 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) { refresh(); updateState(); }
 });
 const connectionSetup = BridgeConnectionSetup({api, isActive: () => active, onChange: refreshConnections, feedback});
-$('open-ai-setup').addEventListener('click', connectionSetup.open);
+$('open-ai-setup').addEventListener('click', () => connectionSetup.open());
 setInterval(() => refresh(), 1200);
 setInterval(updateState, 3000);
 setInterval(() => { if (active && !document.hidden) refreshConnections(); }, 15000);
@@ -511,6 +511,7 @@ function renderSetup() {
   const enrolled = !!s?.enrolled;
   const approved = session?.collection_approval === 'approved';
   const collecting = latestState?.collector.state === 'collecting_partial';
+  $('setup-store-guide').hidden = !ready || !!s.kakao_installed || !s.aurora_installed;
   const steps = [enrolled, approved, collecting];
   const labels = ['Prepare', 'Sign in', 'Collect'];
   $('guide-summary').textContent = collecting ? 'Collection is running' : 'Continue setup';

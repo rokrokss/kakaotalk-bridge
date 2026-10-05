@@ -6,30 +6,15 @@ is configured by default. Your
 existing installation, keys and KakaoTalk session are reused. It does not update
 an existing installation's images or move an older deployment into a new VM.
 
-## From a downloaded source checkout
-
-On macOS or Linux, run this in the project folder:
-
-```bash
-bash install.sh
-```
-
-The installer prepares Python if needed. Once Python is available, `./bridge up`
-does the same work. To inspect the steps without installing, starting or changing
-anything:
-
-```bash
-./bridge up --plan
-```
-
 ## Download and start
 
-After this installer has been published to the repository's main branch:
+On macOS or Linux, open Terminal on the machine that will run Bridge and paste:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/install.sh | bash
 ```
 
+You do not need to clone or download the project first.
 The first run downloads source and builds the server images. This can take a
 while. Later runs reuse the installed copy. Downloads use HTTPS and official
 dependency installers; your OS may ask for administrator approval. The installer
@@ -46,6 +31,22 @@ For a verified prebuilt release, use `./bridge up --manifest /path/to/release.js
 after verifying the manifest as described in [onboarding](onboarding.md).
 Unpublished release images are not assumed to exist.
 
+## From a downloaded source checkout
+
+On macOS or Linux, run this in the project folder:
+
+```bash
+bash install.sh
+```
+
+The installer prepares Python if needed. Once Python is available, `./bridge up`
+does the same work. To inspect the steps without installing, starting or changing
+anything:
+
+```bash
+./bridge up --plan
+```
+
 ## What you do in the browser
 
 1. Open the printed localhost link. On a remote server, first establish the SSH
@@ -55,6 +56,8 @@ Unpublished release images are not assumed to exist.
    not installed, choose anonymous sign-in in the on-screen Aurora store and
    install **KakaoTalk by Kakao Corp.** Bridge detects installation, verifies the
    publisher, installs collection components and opens KakaoTalk automatically.
+   Follow the on-page steps for store sign-in, Android installation permission
+   and search, or use the [detailed Aurora guide](web-ui.md#install-kakaotalk-in-aurora).
 4. Select **다른 기기와 함께 사용**, run **Check login options**, and complete
    KakaoTalk sign-in. Confirm that your phone is still signed in, check both boxes,
    and start collection. These confirmations are never automated.
@@ -91,7 +94,9 @@ Enter the requested settings and follow the progress shown in admin. HTTPS accep
 the origin or a full `/mcp` URL. Tunnel setup takes its ID and runtime key and
 includes explicit access approval. Tailscale may require a provider sign-in and
 **Continue setup**. Finish adding the connection in your AI client using the
-displayed instructions.
+displayed instructions. The [client completion guide](web-ui.md#finish-in-your-ai-client)
+walks through the tunnel, OAuth and local-app paths, including how to verify a
+message from your phone.
 
 Server setup/check completion and access approval are separate from a successful
 AI request. Ask your AI for collector status, then retrieve your test message.
@@ -150,8 +155,7 @@ For an already configured Binder-enabled WSL2 distribution:
 
 The script stops before changing anything if the distribution lacks loaded Binder
 support. It does not install WSL, replace its shared kernel or delete a distribution.
-The Windows entry point downloads the published Unix installer, so it is usable
-after this change is published.
+The Windows entry point downloads the published Unix installer.
 
 ## Reopen, retry, and advanced environments
 

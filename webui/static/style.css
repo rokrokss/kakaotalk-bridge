@@ -31,6 +31,10 @@
 .ai-job[data-state="failed"], .ai-job[data-state="interrupted"] { border-color: var(--danger); }
 .ai-job > a { margin-right: 14px; }
 .ai-finish { background: var(--background); }
+.manual-guide { margin: 18px 0; padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.manual-steps { padding-left: 22px; margin: 14px 0; }
+.manual-steps li { margin: 10px 0; overflow-wrap: anywhere; }
+.manual-guide summary, .ai-setup-body details > summary { cursor: pointer; }
 @media (max-width: 650px) {
   .ai-setup-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .ai-steps { gap: 12px; font-size: 11px; }

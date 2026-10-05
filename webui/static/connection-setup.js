@@ -93,13 +93,16 @@ function BridgeConnectionSetup({api, isActive, onChange, feedback}) {
     el('ai-continue').hidden = job.state !== 'action_required' || job.method !== 'tailscale';
     const guide = connectionGuidance(state, el('ai-method').value);
     el('ai-finish').hidden = !guide;
+    el('ai-finish-tunnel').hidden = guide?.kind !== 'tunnel' || !connections?.tunnel?.approved;
+    el('ai-finish-https').hidden = guide?.kind !== 'https';
     if (guide) {
       el('ai-finish-help').textContent = guide.kind === 'tunnel'
         && !connections?.tunnel?.approved
         ? 'This tunnel is configured but access is not allowed. Review and allow it in AI connections above before adding it to ChatGPT.'
         : guide.kind === 'tunnel'
-        ? 'In ChatGPT apps, create an app, choose Tunnel and select or paste this ID. Choose no authentication: access is already approved for this personal tunnel. Your ChatGPT workspace must have access to it.'
-        : 'Add this MCP URL in your AI client and choose OAuth. Follow the consent screen. If it displays a code, approve the matching request under Connections below.';
+        ? 'Bridge has allowed this personal tunnel. Complete these steps in ChatGPT to use it.'
+        : 'Keep this admin page open while you add the connection in your AI client.';
+      el('ai-client-label').textContent = guide.kind === 'tunnel' ? 'Tunnel ID' : 'MCP server URL';
       el('ai-client-value').textContent = guide.value;
     }
   }

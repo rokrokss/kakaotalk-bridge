@@ -21,14 +21,17 @@ Run Bridge on your Apple Silicon Mac or a compatible Linux server. A virtual
 Android tablet runs on that machine; you keep using KakaoTalk on your phone.
 No physical tablet is needed. [Platform requirements](#requirements-and-validation)
 
-From the downloaded project folder:
+Open Terminal on that machine and run:
 
 ```bash
-bash install.sh
+curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/install.sh | bash
 ```
 
-The installer prepares the environment, starts Bridge and opens the setup page.
+The installer downloads Bridge, prepares the environment, starts Bridge and opens
+the setup page. You do not need to clone or download the project first.
 Run the same command again to resume or reopen it.
+
+Already downloaded the project? Run `bash install.sh` from its folder.
 [Full installation guide, including Windows and remote servers →](docs/quickstart.md)
 
 <p align="center">

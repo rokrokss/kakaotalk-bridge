@@ -12,9 +12,9 @@ Tailscale. The form accepts an origin or full `/mcp` URL, prepares OAuth and sho
 the client address. You keep the existing admin/passkey origin. For manually
 managed deployments, use the instructions below.
 
-1. Add a custom MCP server in ChatGPT. Set its name to `KakaoTalk Bridge`, its URL to `https://<your-host>/mcp`, and authentication to OAuth.
+1. In ChatGPT on the web, open **Plugins → + → Create custom MCP server**. Set its name to `KakaoTalk Bridge`, paste the saved `https://<your-host>/mcp` URL, and choose **OAuth**. If asked for registration, choose CIMD and leave optional static client credentials blank. Review the notice and create the plugin.
 2. Follow the consent screen. With shared HTTPS admin/MCP, confirm with your passkey, review the client, callback and permissions, then choose **Allow connection**. With localhost/private admin, match the eight-character code in admin **AI connections** and choose **Approve connection**. Canceling creates no connection.
-3. Ask for collector status, then retrieve recent messages or search for a message you sent from your phone. For example: “Show my recent messages from KakaoTalk Bridge.”
+3. Install the plugin and select **@KakaoTalk Bridge** in a conversation. Ask for collector status, then send yourself a distinctive message from your phone and ask the AI to find its exact text. See [client completion and troubleshooting](web-ui.md#finish-in-your-ai-client).
 
 Tailscale is optional when you already have an HTTPS reverse proxy. Shared HTTPS
 consent needs no linking key or separate admin visit; split-origin setup selects
