@@ -161,18 +161,9 @@ def services():
 
 
 def manifest(path):
-    data = json.loads(Path(path).read_text())
-    if data.get("schema") != 1 or not re.fullmatch(
-        r"v\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?", data.get("version", "")
-    ):
-        raise ValueError("Unsupported release manifest")
-    refs = {}
-    for kind in ("server", "device", "gateway"):
-        ref = data.get("images", {}).get(kind, "")
-        if not re.fullmatch(re.escape(REGISTRY + kind) + r"@sha256:[a-f0-9]{64}", ref):
-            raise ValueError("Use the digest-pinned official release manifest")
-        refs[kind] = ref
-    return refs
+    from ops.releases import validate_manifest
+
+    return validate_manifest(json.loads(Path(path).read_text()))
 
 
 def init_secrets(source):
@@ -1328,6 +1319,8 @@ def main():
         cmd.add_argument("--vm", default="kakaotalk-bridge")
         cmd.add_argument("--admin-port", type=int)
         cmd.add_argument("--mcp-port", type=int)
+    cmd = sub.add_parser("upgrade", help="검증된 릴리스로 설치 파일과 이미지를 함께 업데이트")
+    cmd.add_argument("--version", default="latest", help="릴리스 버전 (기본값: 최신 정식 릴리스)")
     cmd = sub.add_parser("admin")
     cmd.add_argument("--url")
     cmd.add_argument("--recovery", action="store_true", help="일회용 긴급 복구 링크 발급")
@@ -1372,6 +1365,11 @@ def main():
 def execute(args):
     from ops.onboarding import up
 
+    if args.command == "upgrade":
+        from ops.releases import upgrade
+
+        upgrade(args)
+        return
     if args.command == "up":
         up(args)
         return

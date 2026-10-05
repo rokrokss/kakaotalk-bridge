@@ -134,4 +134,6 @@ limactl shell --workdir=/ kakaotalk-bridge sudo cat /srv/kakaotalk-bridge/secret
 
 인증 없이 설치하려면 GHCR 세 패키지를 공개해야 합니다. 설치 프로그램은 GHCR에 로그인하지 않습니다. 이미지는 `ghcr.io/rokrokss/kakaotalk-bridge-server`, `ghcr.io/rokrokss/kakaotalk-bridge-device`, `ghcr.io/rokrokss/kakaotalk-bridge-gateway`입니다.
 
-워크플로와 설치 프로그램은 구현되어 있지만 이미지를 내려받으려면 실제 릴리스가 공개되어야 합니다. 로컬 빌드·격리 테스트가 모든 지원 호스트의 신규 설치 성공을 입증하지는 않습니다.
+릴리스에는 `bridge-install.tar.gz`, `release.json`, `install.sh`, `install.ps1`, `SHA256SUMS`를 첨부합니다. 설치 번들에는 같은 커밋의 실행 코드·Compose 설정과 세 이미지의 고정 다이제스트가 함께 들어 있습니다. 익명 다운로드와 amd64·arm64 이미지가 확인되어야 정식 릴리스를 게시합니다. 첫 게시 때는 GitHub Packages의 각 패키지를 Public으로 바꾸세요. 공개 설정이 준비되지 않으면 워크플로가 중단되며 미완성 릴리스를 최신 버전으로 안내하지 않습니다.
+
+일반 사용자는 `./bridge upgrade`로 설치 코드와 이미지를 함께 갱신합니다. Git 작업 폴더에서는 기존처럼 `git pull`과 `./bridge update --source`를 사용하세요. 공개 릴리스 설치 프로그램은 이미지 다운로드 실패 시 로컬 소스 빌드로 전환하지 않습니다. 로컬 빌드·격리 테스트가 모든 지원 호스트의 신규 설치 성공을 입증하지는 않습니다.

@@ -11,7 +11,7 @@ Bridge를 실행할 macOS·Linux 컴퓨터의 터미널에 붙여 넣으세요.
 curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/install.sh | bash
 ```
 
-첫 실행은 소스를 내려받아 서버 이미지를 빌드하므로 시간이 걸릴 수 있습니다. 필요하면 Python과 Mac의 Homebrew·Lima, Linux의 Docker를 설치하며 관리자 승인을 요청할 수 있습니다. Tailscale은 선택한 경우에만 설치합니다.
+첫 실행은 최신 정식 릴리스의 설치 파일과 미리 빌드한 이미지를 내려받습니다. 설치 파일의 SHA-256을 확인하고 이미지 버전을 고정합니다. 사용자 컴퓨터에서 Android 앱이나 서버 이미지를 빌드하지 않습니다. 필요하면 Python과 Mac의 Homebrew·Lima, Linux의 Docker를 설치하며 관리자 승인을 요청할 수 있습니다. Tailscale은 선택한 경우에만 설치합니다.
 
 터미널에서 진행 상태를 확인할 수 있습니다. 실패하면 재시도 방법과 로그 위치가 표시됩니다.
 
@@ -23,9 +23,11 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 ./bridge up --verbose
 ```
 
-기본 설치 위치는 Mac의 `~/Library/Application Support/KakaoTalk Bridge`, Linux의 `${XDG_DATA_HOME:-~/.local/share}/kakaotalk-bridge`입니다. `BRIDGE_HOME`으로 바꿀 수 있습니다. `BRIDGE_VERSION`은 새 다운로드의 소스 태그·커밋을 선택하며 기존 사본을 업데이트하지 않습니다. 소스 폴더에서 `bash install.sh`를 실행하면 `BRIDGE_HOME`을 지정하지 않는 한 그 폴더를 사용합니다.
+기본 설치 위치는 Mac의 `~/Library/Application Support/KakaoTalk Bridge`, Linux의 `${XDG_DATA_HOME:-~/.local/share}/kakaotalk-bridge`입니다. `BRIDGE_HOME`으로 바꿀 수 있습니다. `BRIDGE_VERSION=v0.1.0`처럼 새 설치의 릴리스 버전을 지정할 수 있습니다. 기존 사본은 같은 설치 명령으로 업데이트되지 않습니다. 소스 폴더에서 `bash install.sh`를 실행하면 `BRIDGE_HOME`을 지정하지 않는 한 그 폴더를 사용합니다.
 
-사전 빌드 릴리스를 사용하는 경우 [고급 설치](onboarding.md)에 따라 매니페스트를 검증한 뒤 `./bridge up --manifest /path/to/release.json`을 실행하세요.
+[GitHub Releases](https://github.com/rokrokss/kakaotalk-bridge/releases)에서 `bridge-install.tar.gz`를 직접 내려받아 압축을 풀고 `bash install.sh`를 실행해도 됩니다. 자동 설치는 GitHub API가 제공하는 자산 해시와 비교하며, 공급망 출처 증명을 별도로 확인하려면 [고급 설치](onboarding.md)를 참고하세요.
+
+설치 폴더에서 `./bridge upgrade`를 실행하면 최신 정식 릴리스의 설치 파일과 이미지를 함께 업데이트합니다. 특정 버전은 `./bridge upgrade --version v0.1.0`으로 선택하세요. Linux에서는 필요한 경우 sudo를 요청합니다. 업데이트 전에 암호화 백업을 만들며, 지원하지 않는 Iris 구성 요소 변경은 적용 전에 중단합니다.
 
 <a id="from-a-downloaded-source-checkout"></a>
 ## 이미 내려받은 소스에서 실행
@@ -33,10 +35,10 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 macOS·Linux의 프로젝트 폴더에서 실행하세요.
 
 ```bash
-bash install.sh
+bash install.sh --source
 ```
 
-필요하면 Python을 준비합니다. Python이 있다면 `./bridge up`도 같은 작업을 수행합니다. 변경 없이 계획만 보려면 다음을 실행하세요.
+소스를 직접 개발할 때 사용하는 경로이며 로컬 빌드를 수행합니다. 필요하면 Python을 준비합니다. Python이 있다면 `./bridge up --source`도 같은 작업을 수행합니다. 변경 없이 계획만 보려면 다음을 실행하세요.
 
 ```bash
 ./bridge up --plan
@@ -128,7 +130,13 @@ Binder가 로드되지 않았으면 변경 전에 멈춥니다. WSL 설치·공�
 
 기본 주소는 `http://localhost:18789/admin/`이며 Mac에서는 빈 포트를 선택할 수 있습니다. 루프백에만 공개하고 관리 화면만 제공합니다. MCP·ADB·수집 API는 제공하지 않습니다. 브라우저는 localhost에서 인증서 없이 패스키를 허용합니다. localhost를 LAN 주소로 바꾸지 마세요.
 
-화면 없는 Linux 서버에서 `./bridge up --no-browser`를 실행하세요. 내 컴퓨터에서는 다음 명령을 유지하고 출력된 설정 링크를 여세요.
+화면 없는 Linux 서버에서는 다음 명령으로 설치하세요. 서버에 데스크톱이나 브라우저는 필요하지 않습니다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/install.sh | bash -s -- --no-browser
+```
+
+기존 설치 폴더에서는 `./bridge up --no-browser`를 실행하세요. SSH 세션과 디스플레이 없는 Linux에서는 브라우저 실행을 자동으로 생략합니다. systemd 환경에서는 재부팅 후 실행 서비스가 시작됩니다. 내 컴퓨터에서는 다음 명령을 유지하고 출력된 설정 링크를 여세요.
 
 ```bash
 ssh -N -L 127.0.0.1:18789:127.0.0.1:18789 user@your-server

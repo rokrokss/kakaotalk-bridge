@@ -9,7 +9,7 @@ case "$(uname -s)" in
   *) echo 'Windows에서는 install.ps1을 사용하세요. 이 설치 프로그램은 macOS/Linux용입니다.' >&2; exit 1 ;;
 esac
 bridge_install_home="${BRIDGE_HOME:-$bridge_default_home}"
-bridge_version="${BRIDGE_VERSION:-main}"
+bridge_version="${BRIDGE_VERSION:-latest}"
 if [[ ! "$bridge_version" =~ ^[A-Za-z0-9_.-]+$ ]]; then
   echo 'BRIDGE_VERSION에 릴리스 태그 또는 커밋 ID를 지정하세요.' >&2; exit 1
 fi
@@ -18,10 +18,12 @@ if ! command -v curl >/dev/null; then
   exit 1
 fi
 
+bridge_source=0
 bridge_verbose=0
 bridge_bootstrap_log=''
 for bridge_argument in "$@"; do
   if [[ "$bridge_argument" == '--verbose' ]]; then bridge_verbose=1; fi
+  if [[ "$bridge_argument" == '--source' ]]; then bridge_source=1; fi
 done
 
 # Keep dependency/download chatter out of the progress display. Logs are private
@@ -87,29 +89,20 @@ fi
 
 if [[ ! -f "$bridge_install_home/bridge" ]]; then
   echo 'KakaoTalk Bridge 다운로드 및 설치 중…'
-  bridge_run "$bridge_python" - "$bridge_install_home" "$bridge_version" <<'PY'
-import os, pathlib, shutil, sys, tarfile, tempfile, urllib.request
-target, version = pathlib.Path(sys.argv[1]).expanduser().absolute(), sys.argv[2]
-if target.exists():
-    raise SystemExit('Installation folder already exists but is incomplete. Choose another BRIDGE_HOME; existing files were preserved.')
-target.parent.mkdir(parents=True, exist_ok=True)
-with tempfile.TemporaryDirectory(prefix='.bridge-download-', dir=target.parent) as temporary:
-    scratch = pathlib.Path(temporary)
-    archive = scratch / 'source.tar.gz'
-    with urllib.request.urlopen('https://codeload.github.com/rokrokss/kakaotalk-bridge/tar.gz/' + version, timeout=120) as response, archive.open('wb') as output:
-        shutil.copyfileobj(response, output)
-    with tarfile.open(archive) as bundle:
-        members = bundle.getmembers()
-        for item in members:
-            path = pathlib.PurePosixPath(item.name)
-            if path.is_absolute() or '..' in path.parts or not (item.isfile() or item.isdir()):
-                raise SystemExit('Unexpected source archive; installation cancelled.')
-        bundle.extractall(scratch / 'source', filter='data')
-    roots = list((scratch / 'source').iterdir())
-    if len(roots) != 1 or not (roots[0] / 'ops/onboarding.py').is_file():
-        raise SystemExit('This source version does not include the one-command installer.')
-    roots[0].rename(target)
-PY
+  bridge_tmp="$(mktemp -d)"
+  trap 'rm -rf "$bridge_tmp"' EXIT
+  # The bootstrap helper, like this script, is trusted from the official HTTPS
+  # repository. It verifies the release bundle against GitHub's asset SHA-256.
+  bridge_run curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+    https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/ops/releases.py \
+    -o "$bridge_tmp/releases.py"
+  if [[ "$bridge_source" == 1 ]]; then
+    bridge_run "$bridge_python" "$bridge_tmp/releases.py" "$bridge_install_home" "$bridge_version" --source
+  else
+    bridge_run "$bridge_python" "$bridge_tmp/releases.py" "$bridge_install_home" "$bridge_version"
+  fi
+  rm -rf "$bridge_tmp"
+  trap - EXIT
   echo 'KakaoTalk Bridge 다운로드 완료'
 fi
 echo "Bridge 설치 위치: $bridge_install_home"

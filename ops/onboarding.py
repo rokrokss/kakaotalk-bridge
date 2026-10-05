@@ -81,6 +81,12 @@ def add_arguments(parser):
 
 
 def validate(args):
+    # A server session must never launch a browser on the remote host.
+    if os.environ.get("SSH_CONNECTION") or (
+        platform.system() == "Linux"
+        and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    ):
+        args.no_browser = True
     saved_tunnel = (cli.ROOT / ".bridge/tunnel.json").exists() or network_config().get(
         "OPENAI_TUNNEL_ENABLED"
     ) == "1"
@@ -285,7 +291,21 @@ def prepare_linux(args):
                 "linux-modules-extra installed, or a compatible dedicated Linux host."
             ) from None
     if shutil.which("systemctl"):
-        privileged(["systemctl", "start", "docker"])
+        # Load Binder before Docker on later boots. Do not overwrite host settings.
+        privileged(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from pathlib import Path; "
+                    "p=Path('/etc/modules-load.d/kakaotalk-bridge.conf'); "
+                    "p.exists() or p.write_text('binder_linux\\n'); "
+                    "p=Path('/etc/modprobe.d/kakaotalk-bridge.conf'); "
+                    "p.exists() or p.write_text('options binder_linux devices=binder,hwbinder,vndbinder\\n')"
+                ),
+            ]
+        )
+        privileged(["systemctl", "enable", "--now", "docker"])
     if args.connection == "tailscale" and not cli.tailscale_binary():
         require_install(args, "Tailscale for your secure browser connection")
         install_script("https://tailscale.com/install.sh")
@@ -478,7 +498,7 @@ def up(args):
         )
         for index, (_, label) in enumerate(STEPS, 1):
             print(f"{index}. {label}")
-        print("기존 설치와 로그인 정보를 재사용합니다. 이미지는 bridge update로만 변경됩니다.")
+        print("기존 설치와 로그인 정보를 재사용합니다. 릴리스 업데이트는 bridge upgrade로 실행합니다.")
         print(
             "연결: "
             + (args.connection or ("https" if args.public_url else "추가 없음 (기존 연결 유지)"))
@@ -513,11 +533,20 @@ def up(args):
                 if runtime.installed():
                     runtime.call("start")
                 else:
-                    selection = (
-                        ["--manifest", str(Path(args.manifest).resolve())]
-                        if args.manifest
-                        else ["--source"]
-                    )
+                    release = Path(args.manifest) if args.manifest else cli.ROOT / "release.json"
+                    if args.source:
+                        selection = ["--source"]
+                    elif release.is_file():
+                        cli.manifest(release)
+                        selection = ["--manifest", str(release.resolve())]
+                    else:
+                        print(
+                            "릴리스 설치 파일이 없습니다. 공식 설치 명령 또는 --source를 사용하세요.",
+                            file=sys.stderr,
+                        )
+                        raise RuntimeError(
+                            "No release manifest; source builds require explicit --source"
+                        )
                     ports = []
                     for name in ("admin_port", "mcp_port"):
                         if getattr(args, name) is not None:

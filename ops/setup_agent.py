@@ -430,9 +430,14 @@ def install():
         return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%") + '"'
 
     content = (
-        "[Unit]\nDescription=KakaoTalk Bridge connection setup\nAfter=docker.service\n"
+        "[Unit]\nDescription=KakaoTalk Bridge connection setup\nRequires=docker.service\nAfter=docker.service\n"
         # Paths are absolute; workers and CLI subprocesses set cwd explicitly.
-        "[Service]\nType=simple\n"
+        "[Service]\nType=simple\nTimeoutStartSec=300\n"
+        "ExecStartPre="
+        + quote(sys.executable).replace("$", "$$")
+        + " "
+        + quote(str(cli.ROOT / "bridge")).replace("$", "$$")
+        + " --local start\n"
         "ExecStart="
         + quote(sys.executable).replace("$", "$$")
         + " "

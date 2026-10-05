@@ -50,7 +50,7 @@ def test_first_run_installs_then_waits_before_browser(home, monkeypatch, capsys)
     runtime = fake_runtime(monkeypatch)
     opened = Mock()
     monkeypatch.setattr(onboarding.webbrowser, "open", opened)
-    onboarding.up(options())
+    onboarding.up(options("--source"))
     assert runtime.call.call_args_list[0].args == (
         "install",
         "--source",
@@ -81,13 +81,64 @@ def test_returning_user_starts_without_reinstall_or_new_registration(home, monke
     opened.assert_not_called()
 
 
+def test_missing_release_does_not_silently_build_source(home, monkeypatch):
+    runtime = fake_runtime(monkeypatch)
+    with pytest.raises(RuntimeError, match="explicit --source"):
+        onboarding.up(options())
+    runtime.call.assert_not_called()
+
+
+@pytest.mark.parametrize("source", [False, True])
+def test_fresh_shell_installer_passes_release_version_and_explicit_source(tmp_path, source):
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "install.sh"
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    target = tmp_path / "new bridge"
+    helper = tmp_path / "helper.py"
+    helper.write_text(
+        "import pathlib,sys,json\n"
+        "p=pathlib.Path(sys.argv[1]); p.mkdir()\n"
+        "(p/'download-args.json').write_text(json.dumps(sys.argv[2:]))\n"
+        "(p/'bridge').write_text('import json,sys; print(json.dumps(sys.argv[1:]))')\n"
+    )
+    curl = binaries / "curl"
+    curl.write_text(
+        f"#!{sys.executable}\nimport shutil,sys\n"
+        f"shutil.copyfile({str(helper)!r}, sys.argv[sys.argv.index('-o')+1])\n"
+    )
+    curl.chmod(0o755)
+    flags = ["--no-browser", *(["--source"] if source else [])]
+    result = subprocess.run(
+        ["/bin/bash", "-s", "--", *flags],
+        input=script.read_text(),
+        env={
+            **os.environ,
+            "PATH": str(binaries) + os.pathsep + os.environ["PATH"],
+            "BRIDGE_HOME": str(target),
+            "BRIDGE_VERSION": "v0.1.0",
+        },
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads((target / "download-args.json").read_text()) == [
+        "v0.1.0",
+        *(["--source"] if source else []),
+    ]
+    assert json.loads(result.stdout.splitlines()[-1]) == ["up", *flags]
+
+
 def test_failure_is_resumable_without_persisting_auth_links(home, monkeypatch, capsys):
     runtime = fake_runtime(monkeypatch)
     runtime.wait_ready.side_effect = RuntimeError("not ready")
     opened = Mock()
     monkeypatch.setattr(onboarding.webbrowser, "open", opened)
     with pytest.raises(RuntimeError, match="not ready"):
-        onboarding.up(options())
+        onboarding.up(options("--source"))
     assert json.loads((home / ".bridge/onboarding.json").read_text()) == {
         "step": "runtime",
         "state": "interrupted",
@@ -100,7 +151,7 @@ def test_failure_is_resumable_without_persisting_auth_links(home, monkeypatch, c
     runtime.installed.return_value = True
     runtime.wait_ready.side_effect = None
     runtime.call.reset_mock()
-    onboarding.up(options())
+    onboarding.up(options("--source"))
     assert runtime.call.call_args_list[0].args == ("start",)
 
 
@@ -322,7 +373,7 @@ def test_piped_installer_summarizes_bootstrap_and_preserves_failures(tmp_path, v
     uv = binaries / "uv"
     uv.write_text(
         "#!/bin/sh\n"
-        "if [ \"$2\" = install ]; then\n"
+        'if [ "$2" = install ]; then\n'
         "  echo 'runtime download detail'\n"
         "  echo 'runtime warning' >&2\n"
         f"  exit {7 if failed else 0}\n"
@@ -335,7 +386,12 @@ def test_piped_installer_summarizes_bootstrap_and_preserves_failures(tmp_path, v
     result = subprocess.run(
         ["/bin/bash", "-s", "--", *flags],
         input=script.read_text(),
-        env={**os.environ, "PATH": str(binaries), "BRIDGE_HOME": str(target), "TMPDIR": str(tmp_path)},
+        env={
+            **os.environ,
+            "PATH": str(binaries),
+            "BRIDGE_HOME": str(target),
+            "TMPDIR": str(tmp_path),
+        },
         text=True,
         capture_output=True,
         timeout=10,
