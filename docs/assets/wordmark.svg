@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="600" height="128" viewBox="0 0 600 128" role="img" aria-labelledby="title desc">
   <title id="title">KakaoTalk Bridge</title>
-  <desc id="desc">A black speech bubble logo and the KakaoTalk Bridge name.</desc>
+  <desc id="desc">검은 말풍선 로고와 KakaoTalk Bridge 이름</desc>
   <style>.word{fill:#242320}@media(prefers-color-scheme:dark){.word{fill:#edece6}}</style>
   <rect x="8" y="16" width="96" height="96" rx="21" fill="#f6df80"/>
   <g transform="translate(8 16) scale(.75)">

@@ -1,21 +1,22 @@
-# Set up a personal bridge
+# 개인 Bridge 설정
 
-For automatic preparation and a single launch command, start with [one-command setup](quickstart.md): `bash install.sh` or `./bridge up`. The individual commands below remain available for advanced deployments.
+자동 준비와 단일 실행 명령은 [빠른 시작](quickstart.md)의 `bash install.sh` 또는 `./bridge up`을 사용하세요. 아래 개별 명령은 고급 배포에도 사용할 수 있습니다.
 
-The installer manages one account on a Linux Docker host. On a Mac it creates a Lima VM with no home-directory mounts. The web console guides you through installing KakaoTalk, signing in as a secondary device, checking your phone, and connecting ChatGPT.
+Linux Docker 호스트에서 계정 하나를 관리합니다. Mac에서는 홈 폴더를 마운트하지 않는 Lima VM을 만듭니다. 웹 화면에서 카카오톡 설치, 보조 기기 로그인, 휴대폰 확인, ChatGPT 연결을 안내합니다.
 
-## Install
+<a id="install"></a>
+## 설치
 
-Clone the repository and run the commands from its root:
+저장소를 복제하고 루트에서 실행하세요.
 
 ```bash
 git clone https://github.com/rokrokss/kakaotalk-bridge.git
 cd kakaotalk-bridge
 ```
 
-Mac users need Lima (`brew install lima`); Linux users need Docker Engine, Compose v2, Bash, OpenSSL and Android binder support as described in [Linux installation](install.md). Use Python 3.12+ for the host CLI; it needs no third-party Python packages.
+Mac에는 Lima(`brew install lima`), Linux에는 Docker Engine·Compose v2·Bash·OpenSSL·Android binder가 필요합니다. [Linux 설치](install.md)를 참고하세요. 호스트 CLI는 Python 3.12 이상을 사용하고 별도 Python 패키지는 필요하지 않습니다.
 
-For a published release, download its `release.json` from this repository's GitHub Releases. Verify its provenance before installing:
+공개 릴리스는 이 저장소의 GitHub Releases에서 `release.json`을 내려받아 출처를 검증하세요.
 
 ```bash
 gh attestation verify release.json --repo rokrokss/kakaotalk-bridge
@@ -23,117 +24,80 @@ gh attestation verify release.json --repo rokrokss/kakaotalk-bridge
 ./bridge passkey-login
 ```
 
-The manifest selects immutable server, device and gateway image digests for Linux arm64 and amd64. The current installer requires all three; an older two-image manifest needs a new release. Until a release has been published, build the checkout instead:
+매니페스트는 Linux arm64·amd64의 서버·기기·게이트웨이 이미지 다이제스트를 고정합니다. 세 이미지가 모두 필요하므로 이전 두 이미지 매니페스트는 새 릴리스로 바꿔야 합니다. 아직 공개 릴리스가 없다면 소스를 빌드하세요.
 
 ```bash
 ./bridge install --source
 ./bridge passkey-login
 ```
 
-Source builds compile the Android components and take longer. On a Mac these builds run inside Lima; Docker Desktop is not required. First boot downloads Ubuntu and container dependencies. The default VM is `kakaotalk-bridge`; it is separate from the older `kakaotalk-test` development VM. To avoid an existing local HTTPS port, use `./bridge install --source --admin-port 19443` on the first install.
+Android 구성 요소도 컴파일하므로 시간이 더 걸립니다. Mac은 Lima 안에서 빌드하며 Docker Desktop이 필요하지 않습니다. 첫 시작에 Ubuntu와 컨테이너 의존성을 내려받습니다. 기본 VM `kakaotalk-bridge`는 이전 개발 VM `kakaotalk-test`와 별개입니다. 첫 설치에서 포트 충돌을 피하려면 `./bridge install --source --admin-port 19443` 등을 사용하세요.
 
-Running install again preserves existing keys and containers. Use `update` to change images. It does not import an existing deployment from a different VM or directory. Do not copy only Android data into a new installation: it must remain paired with the original enrollment, API data and keys.
+반복 설치는 기존 키·컨테이너를 유지합니다. 이미지 변경은 `update`로 수행하세요. 다른 VM·폴더의 배포를 자동 가져오지 않습니다. Android 데이터만 새 설치에 복사하지 마세요. 원래 등록·API 데이터·키와 함께 유지해야 합니다.
 
-## Register a passkey and open admin
+<a id="register-a-passkey-and-open-admin"></a>
+## 패스키 등록과 관리 화면
 
-After installation, run `./bridge passkey-login`. It opens a one-use registration link on localhost; use [SSH forwarding](quickstart.md#local-and-ssh-admin-access) for a remote server. Existing HTTPS admin origins are reused. Keep that link private. Choose **Create a passkey** and save it to your device or password manager. No developer account or admin password is required. See [passkey setup and recovery](passkeys.md) for other reverse proxies and existing deployments.
+`./bridge passkey-login`으로 localhost의 일회용 등록 링크를 여세요. 원격 서버는 [SSH 포워딩](quickstart.md#local-and-ssh-admin-access)을 사용합니다. 기존 HTTPS 출처는 재사용합니다. 링크를 비공개로 보관하고 **패스키 만들기**로 기기·비밀번호 관리자에 저장하세요. 개발자 계정이나 관리자 비밀번호는 필요하지 않습니다. [패스키 설정·복구](passkeys.md)
 
-Bookmark the admin address. Use **Keep me signed in** for seven days, or leave it unchecked for a 30-minute session. Sessions survive container restarts and can be revoked under **Tablet & settings → Admin browsers**. `./bridge admin` opens the same address as a convenience.
+관리 주소를 북마크하세요. **로그인 유지**는 7일, 선택하지 않으면 30분입니다. 컨테이너 재시작 후에도 유지되며 **태블릿 및 설정 → 관리 브라우저**에서 취소할 수 있습니다. `./bridge admin`으로 같은 주소를 엽니다.
 
-Optional shared HTTPS deployments can use one stable hostname and port 443:
+공용 HTTPS 구성은 고정 호스트와 443 포트를 사용할 수 있습니다.
 
-| Address | Access |
+| 주소 | 접근 |
 | --- | --- |
-| `https://<node>.ts.net/admin/` | Public login page; management requires passkey authentication |
-| `https://<node>.ts.net/mcp` | Public Funnel, with MCP OAuth and passkey approval |
+| `https://<node>.ts.net/admin/` | 로그인 화면은 공개, 관리는 패스키 인증 필요 |
+| `https://<node>.ts.net/mcp` | 공개 Funnel, MCP OAuth와 패스키 승인 필요 |
 
-`./bridge setup-connection --method tailscale` enables optional Tailscale Funnel, which supplies the trusted certificate. The wizard preserves an existing localhost admin origin and configures code approval there. For a shared HTTPS admin/MCP deployment, use the configured hostname rather than localhost; passkeys are bound to that hostname. Tailscale identity headers do not replace passkey authentication. Never point Funnel at the admin/API gateway.
+`./bridge setup-connection --method tailscale`은 신뢰 인증서를 제공하는 Funnel을 설정합니다. 기존 localhost 관리자 출처는 유지하고 코드 승인을 구성합니다. 공용 HTTPS에서는 패스키에 묶인 호스트 이름으로 접속하세요. Tailscale 인증 헤더가 패스키 인증을 대신하지 않습니다. Funnel을 관리·API 게이트웨이에 연결하지 마세요.
 
-`expose` refuses to overwrite unrelated Tailscale routes. For an existing setup with manually managed routes, point Funnel on port 443 at the shared `dot-ingress` HTTP port, then run `./bridge connect --url https://<node>.ts.net` and `./bridge passkey-login --url https://<node>.ts.net --public-url https://<node>.ts.net`. The automatic Mac installer forwards ingress to `127.0.0.1:18787`; the older development tunnel uses 18788. `expose` removes an older Bridge-owned 8443 route only after verifying ownership of the entire current configuration. Existing passkeys remain valid on the same hostname; the origin change invalidates previous browser sessions and pending authentication flows.
+`expose`는 다른 앱의 Tailscale 경로를 덮어쓰지 않습니다. 수동 경로가 있다면 443 Funnel을 공용 `dot-ingress` HTTP 포트에 연결하고 `./bridge connect --url https://<node>.ts.net`, `./bridge passkey-login --url https://<node>.ts.net --public-url https://<node>.ts.net`을 실행하세요. Mac 자동 설치의 진입점은 `127.0.0.1:18787`, 이전 개발 터널은 18788입니다. 기존 8443 경로는 전체 구성의 Bridge 소유권을 확인한 뒤에만 제거합니다. 같은 호스트의 패스키는 유지되지만 출처 변경은 이전 세션·진행 중 인증을 무효화합니다.
 
-Add a backup passkey under **Tablet & settings → Passkeys and recovery**. If every key is lost, run `./bridge passkey-login --enroll` on the server. `./bridge admin --recovery` can also issue a one-time link for a 30-minute emergency session. Password/key login is available only with explicit `ADMIN_AUTH_MODE=local`.
+**태블릿 및 설정 → 패스키 및 복구**에서 백업을 추가하세요. 모두 잃으면 서버에서 `./bridge passkey-login --enroll`을 실행하세요. `./bridge admin --recovery`도 30분 긴급 세션용 일회용 링크를 발급합니다. 비밀번호·키 로그인은 명시적 `ADMIN_AUTH_MODE=local`에서만 가능합니다.
 
-## Install KakaoTalk and verify both sessions
+<a id="install-kakaotalk-and-verify-both-sessions"></a>
+## 카카오톡 설치와 두 기기 확인
 
-1. After admin sign-in, let **KakaoTalk setup** prepare the device automatically. For a fresh device this sets Korean, restarts the Android framework and installs the pinned F-Droid Aurora release after checking its SHA-256. It skips an existing KakaoTalk or Bridge installation. Manual recovery actions remain under **Tablet & settings → Installation**.
-2. In Aurora, use anonymous sign-in, allow installation when Android asks, and install **KakaoTalk by Kakao Corp.** This step uses the tablet screen. Aurora is an unofficial Play client; service availability can change.
-3. Bridge detects installation and configures components automatically. The server verifies KakaoTalk's APK signatures, installs Bridge and Iris and creates enrollment. If enrollment already exists, it preserves the existing approval and app data. A failed operation stops for review; use **Retry preparation** after resolving the problem.
-4. Open KakaoTalk. Before signing in, select **다른 기기와 함께 사용** and run **Check login options**. Stop if that option is missing or a primary-device transfer is requested. Then complete the KakaoTalk login yourself.
-5. Open KakaoTalk on your phone and verify the existing session still works. Select both confirmation boxes in admin, then start collection. These are manual observations, not an automatic guarantee about the phone session.
-6. Under **Tablet & settings → Collection test and maintenance**, start a **Collection test**, then send yourself a message from your phone. Admin reports any newly received row without showing its content; it does not match a unique test message. Once an AI client is connected, retrieve the exact message to verify its content.
+1. 로그인 후 **카카오톡 설정**의 자동 준비를 기다리세요. 새 기기는 한국어 설정, Android 프레임워크 재시작, SHA-256으로 검증한 고정 F-Droid Aurora 설치를 진행합니다. 기존 카카오톡·Bridge가 있으면 건너뜁니다. 수동 복구는 **태블릿 및 설정 → 설치**에 있습니다.
+2. 태블릿의 Aurora에서 익명 로그인하고 Android 설치 요청을 허용한 뒤 **Kakao Corp.의 카카오톡**을 설치하세요. Aurora는 비공식 Play 클라이언트이며 서비스 가용성이 달라질 수 있습니다.
+3. Bridge가 설치를 감지해 APK 서명을 검증하고 Bridge·Iris와 등록을 준비합니다. 기존 등록이 있으면 승인·앱 데이터를 유지합니다. 실패하면 멈추며 문제 해결 후 **준비 다시 시도**를 누르세요.
+4. 로그인 전에 **다른 기기와 함께 사용**을 선택하고 **로그인 옵션 확인**을 실행하세요. 옵션이 없거나 주 기기 이전을 요구하면 중단하세요. 이후 직접 로그인하세요.
+5. 휴대폰의 기존 로그인이 유지되는지 확인하고 두 항목을 체크해 수집을 시작하세요. 직접 확인한 기록이며 자동 보장이 아닙니다.
+6. **태블릿 및 설정 → 수집 테스트 및 유지 관리**에서 테스트를 시작하고 휴대폰에서 나에게 메시지를 보내세요. 새 메시지 도착만 알리므로 다른 메시지로도 통과할 수 있습니다. AI 연결 후 정확한 내용을 조회해 확인하세요.
 
-The guide tracks **Prepare → Sign in → Collect**. Once collection is running,
-admin starts with the compact **Your bridge** overview; setup and tablet controls
-are collapsed. AI connections and events remain optional.
+**준비 → 로그인 → 수집**을 마치면 **내 Bridge** 현황을 표시하고 설정·태블릿은 접습니다. AI 연결과 이벤트는 선택 사항입니다.
 
-The pre-login check understands the Korean UI. Setting Korean before installation lets Play select the Korean language split. If you installed in English already, use Aurora's manual download for the same version with the Korean locale, or import the matching Korean APK split set. Do not uninstall an already signed-in app to change language.
+사전 로그인 점검은 한국어 화면을 인식합니다. 설치 전에 한국어를 설정하면 Play가 한국어 분할 APK를 선택합니다. 이미 영어로 설치했다면 같은 버전의 한국어를 Aurora 수동 다운로드 또는 일치하는 APK 세트로 가져오세요. 언어를 바꾸려고 로그인된 앱을 삭제하지 마세요.
 
-If Aurora is unavailable, export the official APKs from your phone or provide a complete matching set:
+Aurora를 사용할 수 없다면 휴대폰의 공식 APK 전체 세트를 가져오세요.
 
 ```bash
 ./bridge import-apks /path/to/apk-folder
 ```
 
-The command copies APKs into the runtime; automatic preparation or **Set up collection components** verifies and installs them. It refuses to mix with a previously imported set. The current trusted Kakao signer is pinned in `device/setup.py`. A legitimate signer rotation requires an independently verified code update; the check is not bypassed automatically. No Kakao APK or account credential is redistributed with this repository.
+자동 준비 또는 **수집 구성 요소 설치**에서 검증·설치합니다. 이전 세트와 혼합을 거부합니다. 신뢰하는 카카오 서명은 `device/setup.py`에 고정되어 있습니다. 정당한 서명 교체도 별도로 검증한 코드 업데이트가 필요하며 자동 우회하지 않습니다. APK·계정 인증 정보는 저장소에서 배포하지 않습니다.
 
-## Connect an AI client (optional)
+<a id="connect-an-ai-client-optional"></a>
+## AI 클라이언트 연결 (선택)
 
-In admin, open **AI connections → Add or change a connection**. First choose where
-you will use your messages: ChatGPT, a local AI app, another remote AI client, or
-**Decide later**. Then choose from the relevant connection methods. **All
-connection options** shows stdio, your own HTTPS proxy, optional Tailscale Funnel
-and optional personal OpenAI tunnel together. Existing connections are retained,
-and collecting messages does not require any of these providers.
+**AI 연결 → 연결 추가 또는 변경**에서 ChatGPT, 로컬 앱, 다른 원격 클라이언트, **나중에 결정**을 선택하세요. **모든 연결 방식**에는 stdio·기존 HTTPS·Tailscale Funnel·개인 OpenAI 터널이 표시됩니다. 기존 연결은 유지하고 수집에는 이 제공업체들이 필수가 아닙니다.
 
-The web wizard saves the settings, starts the required services, and reports the
-current stage and elapsed time. Reopening or refreshing the page resumes status
-monitoring and retains the last successfully saved method. Checks do not replace
-that choice. Existing settings start collapsed under **Connection settings**;
-saved connection instructions remain visible after checks and failures. Only one
-setup job runs at a time. For Tailscale, follow the displayed sign-in/approval link
-and choose **Continue setup**. On Mac, this uses Tailscale inside the managed
-Linux VM. Existing unrelated Funnel/Serve routes are preserved and block automatic
-setup if they conflict. Your own HTTPS reverse proxy must already route to the
-MCP ingress; the wizard does not configure DNS or a third-party proxy. The HTTPS
-field accepts the origin or its full `/mcp` URL and normalizes it for you.
+웹 설정은 필요한 서비스를 시작하고 한국어 단계·경과 시간을 표시합니다. 화면을 다시 열면 상태 조회와 마지막 성공 방식이 유지됩니다. 점검은 방식을 바꾸지 않습니다. 기존 **연결 설정**은 접혀 있으며 저장된 안내는 실패 후에도 유지됩니다. 작업은 한 번에 하나씩 실행합니다.
 
-The HTTPS choices start the OAuth services and configure consent automatically.
-Add the printed `/mcp` address in your AI client with OAuth authentication. For
-local/private admin, match the code in **AI connections** and approve the request.
-For shared HTTPS admin/MCP, confirm with your passkey and review permissions in
-the connecting browser. Requests expire in ten minutes. Disconnect clients from
-admin at any time. OAuth retains its browser binding, Origin checks, redirect
-validation and PKCE.
+Tailscale 링크에서 로그인·승인한 뒤 **설정 계속**을 누르세요. Mac은 전용 Linux VM의 Tailscale을 사용합니다. 다른 Funnel·Serve 경로는 유지하고 충돌하면 자동 설정을 중단합니다. 기존 HTTPS 프록시는 미리 MCP 진입점에 연결되어 있어야 하며 DNS·외부 프록시는 설정하지 않습니다. HTTPS 출처 또는 전체 `/mcp`를 입력하면 정규화합니다.
 
-The OpenAI web form takes the tunnel ID, a password-masked runtime key and an
-explicit permission checkbox. It configures the service and allows this personal
-tunnel until you disconnect it. A saved key can be reused for the same tunnel ID.
-Creating the tunnel in your OpenAI workspace
-and selecting it in ChatGPT remain provider steps. See [tunnel setup](openai-tunnel.md).
+HTTPS는 OAuth와 동의를 자동 구성합니다. AI에 `/mcp` 주소와 OAuth를 추가하세요. 비공개 관리 구성은 **AI 연결**의 코드로, 공용 HTTPS는 연결 브라우저의 패스키로 승인합니다. 요청은 10분 후 만료되며 언제든 관리 화면에서 해제할 수 있습니다. 브라우저 바인딩·Origin·리디렉션·PKCE 검증을 유지합니다.
 
-The stdio option provides copyable client configuration for `./bridge mcp`; it
-needs no OAuth or public URL. Enter an SSH destination for a remote installation.
-That SSH account needs noninteractive authentication and Docker access. The web
-check verifies running server services; confirm the complete connection by asking
-your AI for collector status and retrieving a test message. The overview and
-connection cards show approval separately from the last successful remote tool
-call. Earlier calls are not backfilled, and stdio activity is not recorded there.
-Connecting any client does not create an event subscription.
+OpenAI 폼에는 터널 ID, 가려진 실행용 키, 명시적 권한 체크가 있습니다. 설정 후 해제할 때까지 허용하며 같은 ID의 저장된 키는 재사용할 수 있습니다. OpenAI의 터널 생성과 ChatGPT 선택은 제공업체에서 완료해야 합니다. [터널 안내](openai-tunnel.md)
 
-On failure, read the stage-specific message and select **Review and retry** to
-review settings before submitting again. A failed server check offers **Check
-again**. An interrupted job reopens for review; it does not silently resume a
-mutation. See the [admin guide](web-ui.md#progress-and-recovery) for details.
+stdio는 `./bridge mcp` 설정을 복사하며 OAuth·공개 URL이 필요하지 않습니다. 원격 서버는 SSH 대상과 비대화형 인증·Docker 접근이 필요합니다. 웹 점검은 서버 서비스만 확인합니다. AI에 상태·테스트 메시지를 요청해 전체 연결을 확인하세요. 승인과 마지막 성공 호출은 별도로 표시하며 이전 호출은 소급하지 않고 stdio는 기록하지 않습니다. 연결만으로 이벤트를 구독하지 않습니다.
 
-The CLI wizard `./bridge setup-connection` remains available. `./bridge up`
-installs/restarts the private web setup agent under systemd. For an existing
-installation, update source and images first, then run `./bridge up`. On Linux
-without systemd, run `./bridge --local setup-agent serve` under your service
-manager as root. It needs the installation directory and Docker access. If the
-agent is unavailable, admin shows recovery instructions rather than claiming
-that setup succeeded.
+실패하면 단계별 안내와 **확인 후 다시 시도**, 점검 실패는 **다시 확인**을 사용하세요. 중단된 작업을 자동 재제출하지 않습니다. [진행과 복구](web-ui.md#progress-and-recovery)
 
-## Maintain and recover
+CLI는 `./bridge setup-connection`입니다. `./bridge up`이 systemd의 비공개 설정 에이전트를 설치·재시작합니다. 기존 설치는 먼저 소스·이미지를 갱신하세요. systemd가 없는 Linux에서는 설치 폴더와 Docker 접근 권한을 갖춘 root로 `./bridge --local setup-agent serve`를 서비스 관리자에서 실행하세요. 에이전트가 없으면 성공으로 표시하지 않고 복구를 안내합니다.
+
+<a id="maintain-and-recover"></a>
+## 유지 관리와 복구
 
 ```bash
 ./bridge doctor
@@ -141,16 +105,16 @@ that setup succeeded.
 ./bridge update --manifest release.json
 ```
 
-`doctor` prints service state and missing prerequisites without message bodies, tokens or raw logs. `backup` briefly stops the stack, encrypts an offline snapshot with AES-256-GCM, then starts the previously running services. The snapshot includes all seven state volumes, `.env` and `secrets/`, preserving Android ownership, permissions, links and extended attributes. Unix sockets are recreated by their processes. Keep enough disk space for both the archive and restored data.
+`doctor`는 본문·토큰·원문 로그 없이 서비스 상태와 없는 필수 항목을 출력합니다. `backup`은 잠시 스택을 멈추고 AES-256-GCM으로 오프라인 백업한 뒤 이전에 실행되던 서비스를 다시 시작합니다. 볼륨 7개·`.env`·`secrets/`와 Android 소유권·권한·링크·확장 속성을 보존합니다. Unix 소켓은 프로세스가 다시 만듭니다. 백업과 복원 데이터를 둘 다 담을 디스크가 필요합니다.
 
-Backups are written to `backups/*.kcs`; on a Mac they are copied out of Lima automatically. **Keep `secrets/backup_key` separately**: the copy inside the encrypted archive cannot unlock that archive. For the automatic Mac installation, export this one file privately:
+`backups/*.kcs`에 저장하고 Mac에서는 Lima 밖으로 자동 복사합니다. **`secrets/backup_key`는 별도 보관하세요.** 암호화된 백업 내부의 키로 그 백업을 열 수는 없습니다. Mac 자동 설치의 키는 다음처럼 비공개로 내보내세요.
 
 ```bash
 umask 077
 limactl shell --workdir=/ kakaotalk-bridge sudo cat /srv/kakaotalk-bridge/secrets/backup_key > /your/private/location/backup_key
 ```
 
-To restore into an initialized installation using the same code release:
+같은 코드 릴리스로 초기화한 설치에 복구하세요.
 
 ```bash
 ./bridge stop
@@ -159,14 +123,15 @@ To restore into an initialized installation using the same code release:
 ./bridge admin
 ```
 
-Authentication is verified before extraction. Restore writes new volumes and switches the configuration only after validation. The previous volumes and configuration remain available; nothing runs a `down -v`. Failed configuration activation is rolled back, including after a process interruption. Browser sessions, OAuth grants and event callbacks are cleared, while passkey credentials and configuration, any local password and profile identity are preserved. Reconnect ChatGPT, recreate explicitly requested event subscriptions and check both KakaoTalk sessions again. A saved Android session may still be rejected by Kakao's servers.
+압축 해제 전에 인증을 검증하고 새 볼륨에 쓴 뒤 검증 후 설정을 전환합니다. 이전 볼륨·설정은 남기며 `down -v`는 실행하지 않습니다. 프로세스 중단을 포함한 활성화 실패는 롤백합니다. 패스키·설정·로컬 비밀번호·프로필 식별자는 유지하고 브라우저 세션·OAuth·이벤트 콜백은 지웁니다. ChatGPT를 다시 연결하고 요청한 이벤트를 재구독하며 두 기기 로그인을 확인하세요. 저장된 Android 세션도 카카오 서버에서 거부될 수 있습니다.
 
-Update pulls/builds before stopping anything, makes an encrypted snapshot, then checks container health. A failed health check restores the previous image selection. It never reinstalls the signed-in KakaoTalk or Bridge app. If an image changes the bundled Iris APK, update stops before deployment: that requires a separate, tested component migration. Switching a personal Bridge signing key to a release signing key is not automated.
+업데이트는 중지 전에 다운로드·빌드하고 암호화 백업 후 컨테이너 상태를 점검합니다. 실패하면 이전 이미지를 선택합니다. 로그인된 카카오톡·Bridge를 재설치하지 않습니다. Iris APK가 바뀌면 배포 전에 멈추며 별도의 검증된 이전이 필요합니다. 개인 Bridge 서명 키를 릴리스 키로 바꾸는 작업은 자동화하지 않습니다.
 
-## Release maintainers
+<a id="release-maintainers"></a>
+## 릴리스 관리
 
-The release workflow runs on `vMAJOR.MINOR.PATCH` tags, builds both architectures, publishes SBOM/provenance metadata and attaches `release.json` to a versioned release. Configure the protected GitHub `release` environment with a stable `BRIDGE_RELEASE_KEYSTORE_BASE64` and `BRIDGE_RELEASE_KEY_PASSWORD` before publishing. Keep that signing identity across releases. Do not rotate it in an ordinary update.
+`vMAJOR.MINOR.PATCH` 태그에서 양쪽 아키텍처를 빌드하고 SBOM·출처 메타데이터와 `release.json`을 버전 릴리스에 첨부합니다. 배포 전 보호된 GitHub `release` 환경에 고정 `BRIDGE_RELEASE_KEYSTORE_BASE64`, `BRIDGE_RELEASE_KEY_PASSWORD`를 설정하세요. 일반 업데이트에서 서명 식별자를 교체하지 마세요.
 
-Publish all three GHCR image packages as public for installation without registry credentials. The installer does not log in to GHCR. Image names are `ghcr.io/rokrokss/kakaotalk-bridge-server`, `ghcr.io/rokrokss/kakaotalk-bridge-device` and `ghcr.io/rokrokss/kakaotalk-bridge-gateway`.
+인증 없이 설치하려면 GHCR 세 패키지를 공개해야 합니다. 설치 프로그램은 GHCR에 로그인하지 않습니다. 이미지는 `ghcr.io/rokrokss/kakaotalk-bridge-server`, `ghcr.io/rokrokss/kakaotalk-bridge-device`, `ghcr.io/rokrokss/kakaotalk-bridge-gateway`입니다.
 
-The workflow and installer are implemented; a release must actually be published before the prebuilt installation command can download those images. Local image builds and isolated tests do not establish a successful clean install on every supported host.
+워크플로와 설치 프로그램은 구현되어 있지만 이미지를 내려받으려면 실제 릴리스가 공개되어야 합니다. 로컬 빌드·격리 테스트가 모든 지원 호스트의 신규 설치 성공을 입증하지는 않습니다.

@@ -1,66 +1,66 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="772" viewBox="0 0 1120 772" role="img" aria-labelledby="title desc">
-  <title id="title">KakaoTalk Bridge architecture</title>
-  <desc id="desc">An administrator signs in with a passkey and controls redroid through dot-ingress and admin over shared HTTPS port 443 and authenticated ADB. iris-collector authenticates to Iris inside redroid and stores messages through the API in SQLite. Your AI connects over public HTTPS through dot-ingress, which filters private cookies before forwarding to dot-plugin. The plugin queries the API with the read token. dot-control verifies passkeys with separate public assertion and private administration permissions. Phone sessions are confirmed manually; events require a separate subscription.</desc>
+  <title id="title">KakaoTalk Bridge 구조</title>
+  <desc id="desc">관리자는 패스키로 로그인하고 공용 HTTPS 443의 dot-ingress와 관리 서비스를 거쳐 인증된 ADB로 redroid를 조작합니다. iris-collector가 Iris에 인증해 메시지를 API와 SQLite에 저장합니다. AI 요청은 비공개 쿠키를 제거하는 dot-ingress를 거쳐 dot-plugin에 전달되고 읽기 토큰으로 조회합니다. dot-control은 공개 인증 확인과 비공개 관리 권한을 분리합니다. 휴대폰 상태는 직접 확인하며 이벤트는 별도 구독합니다.</desc>
   <defs>
     <marker id="request" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#77766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
     <marker id="data" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#a1832e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
   </defs>
   <rect width="1120" height="772" rx="16" fill="#faf9f6"/>
   <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" fill="#242320">
-    <text x="32" y="45" font-size="24" font-weight="650">Access and message collection</text>
+    <text x="32" y="45" font-size="24" font-weight="650">접근과 메시지 수집</text>
     <path d="M726 38h34" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
-    <text x="772" y="44" font-size="13" fill="#717069">Read/control</text>
+    <text x="772" y="44" font-size="13" fill="#717069">조회·조작</text>
     <path d="M905 38h34" stroke="#a1832e" stroke-width="2" marker-end="url(#data)"/>
-    <text x="951" y="44" font-size="13" fill="#717069">Store messages</text>
+    <text x="951" y="44" font-size="13" fill="#717069">메시지 저장</text>
 
     <rect x="48" y="92" width="270" height="94" rx="10" fill="#fff" stroke="#dedad0"/>
-    <text x="72" y="130" font-size="22" font-weight="600">Admin browser</text>
-    <text x="72" y="159" font-size="15" fill="#717069">Passkey · Screen control</text>
+    <text x="72" y="130" font-size="22" font-weight="600">관리 브라우저</text>
+    <text x="72" y="159" font-size="15" fill="#717069">패스키 · 화면 조작</text>
     <rect x="790" y="92" width="282" height="94" rx="10" fill="#fff" stroke="#dedad0"/>
-    <text x="814" y="130" font-size="22" font-weight="600">Your AI</text>
-    <text x="814" y="159" font-size="15" fill="#717069">Read messages · Search</text>
+    <text x="814" y="130" font-size="22" font-weight="600">내 AI</text>
+    <text x="814" y="159" font-size="15" fill="#717069">메시지 조회 · 검색</text>
 
     <rect x="24" y="254" width="1072" height="464" rx="12" fill="#f1efe7" stroke="#dedad0"/>
-    <text x="370" y="284" font-size="14" fill="#717069">Your server · Docker Compose</text>
+    <text x="370" y="284" font-size="14" fill="#717069">내 서버 · Docker Compose</text>
     <path d="M183 186v126" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
     <text x="196" y="224" font-size="14" fill="#717069">HTTPS 443 · /admin/</text>
     <path d="M930 186v126" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
     <text x="765" y="224" font-size="14" fill="#717069">HTTPS 443 · /mcp + OAuth</text>
 
     <rect x="48" y="318" width="270" height="94" rx="8" fill="#fff" stroke="#dedad0"/>
-    <text x="72" y="356" font-size="22" font-weight="600">Admin console</text>
+    <text x="72" y="356" font-size="22" font-weight="600">관리 화면</text>
     <text x="72" y="385" font-size="15" fill="#717069">dot-ingress → admin</text>
     <rect x="810" y="318" width="238" height="94" rx="8" fill="#fff" stroke="#dedad0"/>
-    <text x="834" y="356" font-size="22" font-weight="600">MCP plugin</text>
+    <text x="834" y="356" font-size="22" font-weight="600">MCP 플러그인</text>
     <text x="834" y="383" font-size="13" fill="#717069">dot-ingress → dot-plugin</text>
-    <text x="834" y="401" font-size="12" fill="#717069">Private cookies filtered</text>
+    <text x="834" y="401" font-size="12" fill="#717069">비공개 쿠키 제거</text>
     <path d="M183 412v80" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
-    <text x="196" y="455" font-size="14" fill="#717069">Authenticated ADB</text>
+    <text x="196" y="455" font-size="14" fill="#717069">인증된 ADB</text>
     <path d="M930 412v138" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
-    <text x="945" y="478" font-size="14" fill="#717069">Read token</text>
+    <text x="945" y="478" font-size="14" fill="#717069">읽기 토큰</text>
 
     <rect x="48" y="498" width="270" height="178" rx="8" fill="#fff" stroke="#dedad0"/>
-    <text x="72" y="535" font-size="22" font-weight="600">Secondary tablet</text>
-    <text x="72" y="562" font-size="15" fill="#717069">redroid · KakaoTalk</text>
+    <text x="72" y="535" font-size="22" font-weight="600">보조 태블릿</text>
+    <text x="72" y="562" font-size="15" fill="#717069">redroid · 카카오톡</text>
     <rect x="68" y="588" width="230" height="66" rx="6" fill="#fbf3d6" stroke="#e2d5a5"/>
     <text x="85" y="614" font-size="17" font-weight="600">Iris</text>
-    <text x="85" y="637" font-size="13" fill="#717069">Read the tablet database</text>
+    <text x="85" y="637" font-size="13" fill="#717069">태블릿 DB 조회</text>
 
     <rect x="426" y="558" width="238" height="118" rx="8" fill="#fff" stroke="#dedad0"/>
     <text x="450" y="595" font-size="21" font-weight="600">iris-collector</text>
-    <text x="450" y="623" font-size="15" fill="#717069">Fetch rows · Retry storage</text>
-    <text x="450" y="650" font-size="13" fill="#717069">Bearer auth · ADB forward</text>
+    <text x="450" y="623" font-size="15" fill="#717069">메시지 조회 · 저장 재시도</text>
+    <text x="450" y="650" font-size="13" fill="#717069">Bearer 인증 · ADB 포워딩</text>
     <rect x="810" y="558" width="238" height="118" rx="8" fill="#fff" stroke="#dedad0"/>
-    <text x="834" y="595" font-size="22" font-weight="600">Collection API</text>
-    <text x="834" y="623" font-size="14" fill="#717069">SQLite · Messages and cursors</text>
-    <text x="834" y="650" font-size="13" fill="#717069">30-day retention by default</text>
+    <text x="834" y="595" font-size="22" font-weight="600">수집 API</text>
+    <text x="834" y="623" font-size="14" fill="#717069">SQLite · 메시지와 커서</text>
+    <text x="834" y="650" font-size="13" fill="#717069">기본 보관 기간 30일</text>
     <path d="M298 621h121" fill="none" stroke="#a1832e" stroke-width="2" marker-end="url(#data)"/>
     <path d="M664 621h139" fill="none" stroke="#a1832e" stroke-width="2" marker-end="url(#data)"/>
-    <text x="735" y="608" text-anchor="middle" font-size="13" fill="#8a722c">Body · IDs</text>
+    <text x="735" y="608" text-anchor="middle" font-size="13" fill="#8a722c">본문 · ID</text>
 
-    <text x="450" y="470" font-size="14" fill="#717069">Confirm the phone session manually</text>
-    <text x="450" y="495" font-size="14" fill="#717069">Events require a separate subscription</text>
-    <text x="32" y="744" font-size="12" fill="#717069">Main paths shown. dot-control verifies passkeys; public assertions and private administration use separate credentials.</text>
-    <text x="32" y="762" font-size="12" fill="#717069">adb-init provisions collector keys before Android starts. device-agent reports device status to the API.</text>
+    <text x="450" y="470" font-size="14" fill="#717069">휴대폰 로그인은 직접 확인</text>
+    <text x="450" y="495" font-size="14" fill="#717069">이벤트는 별도로 구독</text>
+    <text x="32" y="744" font-size="12" fill="#717069">주요 경로를 표시했습니다. dot-control은 공개 인증 확인과 비공개 관리에 별도 인증 정보를 사용합니다.</text>
+    <text x="32" y="762" font-size="12" fill="#717069">adb-init은 Android 시작 전에 수집기 키를 준비하고 device-agent는 기기 상태를 API에 보고합니다.</text>
   </g>
 </svg>

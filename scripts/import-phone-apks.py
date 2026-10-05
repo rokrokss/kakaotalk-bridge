@@ -5,6 +5,7 @@ import hashlib
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -14,7 +15,9 @@ def adb(*args):
         ["adb", "-d", *args], capture_output=True, text=True, timeout=180, check=False
     )
     if result.returncode:
-        raise RuntimeError("USB phone unavailable or not authorized; unlock and allow USB debugging")
+        raise RuntimeError(
+            "USB phone unavailable or not authorized; unlock and allow USB debugging"
+        )
     return result.stdout.strip()
 
 
@@ -22,7 +25,9 @@ def main():
     target = Path(__file__).resolve().parents[1] / "inputs" / "kakao"
     target.mkdir(parents=True, exist_ok=True)
     if list(target.glob("*.apk")):
-        raise RuntimeError("inputs/kakao already contains APKs; preserve them before importing a new set")
+        raise RuntimeError(
+            "inputs/kakao already contains APKs; preserve them before importing a new set"
+        )
     paths = adb("shell", "pm", "path", "com.kakao.talk").splitlines()
     if not paths or any(not line.startswith("package:") for line in paths):
         raise RuntimeError("KakaoTalk is not installed or its APKs are inaccessible")
@@ -45,11 +50,15 @@ def main():
                 digest = hashlib.file_digest(source, "sha256").hexdigest()
             shutil.move(local, target / name)
             print(f"{name}: sha256={digest}")
-    print(f"PASS: copied {len(names)} KakaoTalk APK(s); no app data or login settings changed")
+    print(f"카카오톡 APK {len(names)}개를 복사했습니다. 앱 데이터와 로그인 설정은 유지됩니다.")
 
 
 if __name__ == "__main__":
     try:
         main()
     except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
-        raise SystemExit(str(exc)) from None
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from ops.setup_output import report_error
+
+        report_error(exc)
+        raise SystemExit(1) from None

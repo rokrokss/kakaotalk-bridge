@@ -1,88 +1,82 @@
-# System architecture
+# 시스템 구조
 
-[README](../README.md) · [Iris implementation](iris.md) · [API](api.md)
+[README](../README.md) · [Iris 구현](iris.md) · [API](api.md)
 
-The stack runs one account and one redroid instance. Iris is the default collection path. The original notification-based design and implementation history remain in Git.
+계정 하나와 redroid 인스턴스 하나를 운영하며, 기본 수집 경로는 Iris입니다. 이전 알림 기반 설계와 구현 이력은 Git에 남아 있습니다.
 
-The diagram below shows the optional shared-HTTPS deployment. The default admin
-entry point is localhost or SSH forwarding; OpenAI tunnel and stdio connections
-are alternatives to public HTTPS. See [connection diagrams](../README.md#connect-your-ai).
+아래는 선택 사항인 공용 HTTPS 구성입니다. 기본 관리 화면은 localhost 또는 SSH 포워딩으로 접속하며, AI는 공개 HTTPS 대신 OpenAI 터널이나 stdio로 연결할 수도 있습니다. [연결 방식별 그림](../README.md#connect-your-ai)을 참고하세요.
 
-![Shared-HTTPS example: admin and MCP share port 443 with passkey and OAuth authentication. Iris runs inside redroid, and the collector stores messages through the API in SQLite.](assets/architecture.svg)
+![공용 HTTPS 구성: 관리 화면과 MCP는 443 포트를 공유하고 패스키와 OAuth로 인증합니다. redroid 안의 Iris가 읽은 메시지를 수집기가 API를 통해 SQLite에 저장합니다.](assets/architecture.svg)
 
-[Architecture diagram source](assets/architecture.svg) · [Simplified message flow](assets/message-flow.svg)
+[구조도 원본](assets/architecture.svg) · [메시지 흐름](assets/message-flow.svg)
 
-## Service boundaries
+<a id="service-boundaries"></a>
 
-| Service | Responsibility |
+## 서비스별 역할
+
+| 서비스 | 역할 |
 | --- | --- |
-| `redroid` | Run Android; the only privileged container |
-| `iris-collector` | Check the Iris process inside Android, fetch rows, and retry storage |
-| `api` | Authentication, deduplication, atomic message/cursor storage, queries, and retention cleanup |
-| `device-agent` | Check ADB state and registration information |
-| `gateway` | Private HTTPS and API/admin routing |
-| `admin` | Passkey login, operating overview, setup progress, connection/event controls, restricted screen/input commands, and login confirmation |
-| `dot-control` | Private passkey authority, OAuth/tunnel approval and revocation, activity metadata and conversation event policy |
-| `dot-plugin` | Passkey verification, explicit OAuth consent, remote MCP, and optional event delivery |
-| `dot-ingress` | Shared entry point; route admin and MCP, filter admin cookies on MCP routes, reject internal routes |
-| `admin-local` | Optional loopback-only admin entry point with an exact localhost Host check |
-| `dot-tunnel`, `openai-tunnel` | Optional private MCP listener and outbound OpenAI tunnel client; no published tunnel port |
-| Host setup agent | Finite connection operations over a private Unix socket; runs outside Compose under systemd or a service manager |
-| `adb-init` | Offline provisioning of the two collector public keys before Android starts |
-| `bootstrap`, `mcp` | One-time installation and the client-launched stdio adapter, respectively |
+| `redroid` | Android 실행. 유일한 특권 컨테이너 |
+| `iris-collector` | Android 안의 Iris 상태 확인, 행 조회, 저장 재시도 |
+| `api` | 인증, 중복 제거, 메시지·커서의 원자적 저장, 조회, 보관 기간 정리 |
+| `device-agent` | ADB 상태와 기기 등록 정보 확인 |
+| `gateway` | 비공개 HTTPS 및 API·관리 화면 라우팅 |
+| `admin` | 패스키 로그인, 운영 현황, 설정 진행, 연결·이벤트 관리, 제한된 화면·입력 제어, 로그인 확인 |
+| `dot-control` | 비공개 패스키 관리, OAuth·터널 승인과 철회, 활동 정보, 대화 이벤트 정책 |
+| `dot-plugin` | 패스키 검증, 명시적 OAuth 동의, 원격 MCP, 선택적 이벤트 전달 |
+| `dot-ingress` | 관리 화면·MCP 공용 진입점. MCP 경로에서 관리 쿠키 제거 및 내부 경로 차단 |
+| `admin-local` | 선택적 루프백 전용 관리 진입점. 정확한 localhost Host 확인 |
+| `dot-tunnel`, `openai-tunnel` | 비공개 MCP 리스너와 외부로 연결하는 OpenAI 터널 클라이언트. 터널 포트는 공개하지 않음 |
+| 호스트 설정 서비스 | Compose 밖의 systemd 등에서 실행. 비공개 Unix 소켓으로 정해진 연결 작업만 처리 |
+| `adb-init` | Android 시작 전에 수집기 공개 키 두 개를 오프라인 등록 |
+| `bootstrap`, `mcp` | 각각 일회성 설치와 클라이언트가 실행하는 stdio 어댑터 |
 
-Iris runs as an `app_process` inside redroid, not as a separate Compose service. The registration app handles configuration and web input. In Iris mode, it stops legacy notification observation and uploads.
+Iris는 별도 Compose 서비스가 아니라 redroid 안의 `app_process`로 실행됩니다. 등록 앱은 설정과 웹 입력을 담당합니다. Iris 모드에서는 이전 알림 관찰과 업로드를 중지합니다.
 
-## Login and collection approval
+<a id="login-and-collection-approval"></a>
 
-1. On a fresh tablet, setup prepares Korean and Aurora. After KakaoTalk installation, component setup verifies its signature, deploys Bridge and Iris, creates registration data and leaves collection locked. Repeating setup preserves existing enrollment and approval; the legacy CLI bootstrap remains a separate maintenance action.
-2. `login-check` reads tablet settings and the selected “Use with other devices” option (“다른 기기와 함께 사용”) on the Korean KakaoTalk screen. It does not press the login button.
-3. The operator signs in and manually checks both the phone and tablet sessions.
-4. `confirm-secondary` checks that the precheck is less than 30 minutes old, the app version and device match, and both confirmations are present, then saves the approval record.
-5. An app version or Android fingerprint change, or a phone sign-out report, invalidates collection approval.
+## 로그인과 수집 승인
 
-A tablet model name and resolution alone do not authorize simultaneous login. Phone confirmation is a timestamped operator record, not remote monitoring.
+1. 새 태블릿의 한국어 환경과 Aurora를 준비합니다. 카카오톡 설치 후 서명을 검증하고 Bridge·Iris를 배포하며 등록 정보를 생성합니다. 수집은 잠긴 상태로 유지합니다. 재설정은 기존 등록과 승인을 보존하며, 이전 CLI의 bootstrap은 별도 유지보수 작업입니다.
+2. `login-check`는 태블릿 설정과 한국어 카카오톡 화면의 **다른 기기와 함께 사용** 선택 여부를 읽습니다. 로그인 버튼을 누르지 않습니다.
+3. 운영자가 직접 로그인하고 휴대폰과 태블릿의 로그인을 모두 확인합니다.
+4. `confirm-secondary`는 사전 확인 후 30분 이내인지, 앱 버전·기기가 일치하는지, 두 기기 확인이 있는지 검사하고 승인 기록을 저장합니다.
+5. 앱 버전이나 Android 지문이 바뀌거나 휴대폰 로그아웃이 보고되면 수집 승인을 무효화합니다.
 
-The admin guide tracks **Prepare → Sign in → Collect**, independently of optional
-AI setup. Once the collector is running, the overview shows collector state,
-remote tool activity and manual phone confirmation. Tablet inspection expires
-after 60 seconds or a device action; the UI retains its last-observed approval
-label while requiring fresh inspection for dependent actions. Folding the tablet
-workspace suspends screen polling, not collection.
+태블릿 모델명과 해상도만으로 동시 로그인을 허용하지 않습니다. 휴대폰 확인 시각은 운영자의 수동 기록이며 원격 감시 결과가 아닙니다.
 
-## Connection setup and activity
+관리 화면은 선택적 AI 연결과 독립적으로 **준비 → 로그인 → 수집**을 안내합니다. 수집 중에는 수집기 상태, 원격 도구 활동, 수동 휴대폰 확인을 표시합니다. 태블릿 점검은 60초 또는 기기 조작 후 만료됩니다. 마지막 승인 상태 표시는 남기되 관련 작업에는 새 점검을 요구합니다. 태블릿 화면을 접으면 화면 갱신만 멈추고 수집은 계속됩니다.
 
-The web form selects a user destination, then a method. It sends only validated
-operations to the host setup agent; the admin container has no Docker socket.
-The agent provisions settings and services, reports bounded progress messages,
-and persists job status. A successful non-check job saves the preferred method
-separately. Running, failed or interrupted work can be inspected after reopening
-the page; interrupted changes require an explicit retry.
+<a id="connection-setup-and-activity"></a>
 
-HTTPS/tunnel instructions derive from saved configuration, not the last job.
-This lets service checks and failures retain useful client instructions without
-claiming that configuration implies successful access. See [setup security](security.md#web-connection-setup).
+## 연결 설정과 활동
 
-After a successful remote tool call, the MCP application stores only
-`last_tool_at` in a separate `connection_activity` record keyed by grant ID in
-`dot-state`. It does not rewrite the grant or save arguments/message content.
-The control service exposes the timestamp for active OAuth/tunnel approvals.
-Discovery and failed calls do not update it; a new grant starts without prior
-activity. The UI presents this as historical use, independently of server checks,
-event delivery and local stdio calls.
+웹 화면에서 사용할 곳과 연결 방식을 선택하면 검증된 작업만 호스트 설정 서비스로 전달합니다. 관리 컨테이너에는 Docker 소켓이 없습니다. 설정 서비스는 서비스와 설정을 준비하고 정해진 진행 안내와 작업 상태를 저장합니다. 점검 이외의 작업이 성공하면 선호 연결 방식을 별도로 저장합니다. 진행·실패·중단된 작업은 화면을 다시 열어 확인할 수 있고, 중단된 변경은 직접 재시도해야 합니다.
 
-## Storage and retries
+HTTPS·터널 연결 안내는 마지막 작업이 아닌 저장된 설정에서 가져옵니다. 점검이나 실패 후에도 안내를 유지하되 설정 저장을 실제 연결 성공으로 표시하지 않습니다. [설정 보안](security.md#web-connection-setup)을 참고하세요.
 
-Iris decrypts rows read through fixed SELECT queries. The Python collector waits for the API's commit acknowledgment for each row. The server saves the row and the latest Iris cursor in the same SQLite transaction. Lost acknowledgments can be recovered by querying and sending again.
+원격 도구 호출이 성공하면 MCP는 `dot-state`의 승인 ID별 `connection_activity`에 `last_tool_at`만 저장합니다. 승인 정보 자체를 다시 쓰거나 인수·메시지 내용을 저장하지 않습니다. 활성 OAuth·터널 승인에 대해 시각을 표시하며, 도구 목록 조회와 실패한 호출은 갱신하지 않습니다. 새 승인은 이전 활동을 이어받지 않습니다. 이 기록은 서버 점검, 이벤트 전달, 로컬 stdio 호출과 구분합니다.
 
-Message IDs are derived from the registration epoch, database identity, and log ID. Rows with different log IDs remain distinct even when their bodies match. Invalid rows, database replacement, and IDs moving backwards are not skipped automatically. Edits and deletions of existing rows are not synchronized.
+<a id="storage-and-retries"></a>
 
-## Networking and recovery
+## 저장과 재시도
 
-The default setup publishes admin on loopback HTTP for localhost or SSH forwarding, alongside the internal HTTPS API gateway. AI connections are optional. The local admin ingress rejects non-admin routes and requires the exact configured localhost Host. An optional public HTTPS proxy targets only dot-ingress: `/admin/*` forwards to admin and OAuth/MCP routes forward to dot-plugin. Separate Docker networks keep the public application away from Android and admin controls, while allowing read API and passkey assertion requests. The ingress has an edge network for loopback port publishing and separate internal links to dot-plugin and admin. It does not join device, API or control networks. The public MCP process does not join the admin ingress network. See [Security](security.md) for the cookie boundary and remaining risks.
+Iris는 고정 SELECT로 읽은 행을 복호화합니다. Python 수집기는 행마다 API의 커밋 응답을 기다립니다. 서버는 행과 최신 Iris 커서를 같은 SQLite 트랜잭션에 저장하므로 응답이 유실되면 다시 조회하고 전송할 수 있습니다.
 
-Automatic restarts are disabled for redroid. An optional host supervisor provides a limited number of recovery attempts. Follow [Operations](operations.md) for database backups and Android snapshots.
+메시지 ID는 등록 세대, DB 식별자, 로그 ID로 만듭니다. 본문이 같아도 로그 ID가 다르면 별개입니다. 잘못된 행, DB 교체, ID 역행을 자동으로 건너뛰지 않으며 기존 행의 수정·삭제는 동기화하지 않습니다.
 
-## Optional Events
+<a id="networking-and-recovery"></a>
 
-There are no automatic subscriptions. Admin **Conversation events** controls a shared conversation allowlist; every room defaults off. A separately requested client subscription sends new row identifiers only from enabled rooms, starting at each room's activation cursor. Disabling a room cancels queued sends and filters pending reads. Events act as wake-up signals; message bodies are read through MCP tools. Each consumer has its own acknowledged cursor, independent of KakaoTalk read status. See [Events](events.md).
+## 네트워크와 복구
+
+기본 구성은 내부 HTTPS API 게이트웨이와 localhost·SSH용 루프백 HTTP 관리 화면을 제공합니다. AI 연결은 선택 사항입니다. 로컬 관리 진입점은 정확한 localhost Host만 허용하며 관리 외 경로를 거부합니다. 선택적 공개 HTTPS 프록시는 dot-ingress만 향하고, `/admin/*`는 admin으로, OAuth·MCP는 dot-plugin으로 전달합니다.
+
+별도 Docker 네트워크는 공개 앱이 Android·관리 제어에 직접 접근하지 못하게 하면서 읽기 API와 패스키 검증만 허용합니다. ingress는 루프백 포트용 외부 네트워크와 dot-plugin·admin용 내부 연결을 사용하며 기기·API·제어 네트워크에는 참여하지 않습니다. 공개 MCP 프로세스는 관리 ingress 네트워크에 참여하지 않습니다. 쿠키 경계와 남은 위험은 [보안](security.md)을 참고하세요.
+
+redroid의 자동 재시작은 꺼져 있습니다. 선택적 호스트 감독 서비스가 제한된 횟수만 복구를 시도합니다. DB 백업과 Android 스냅샷은 [운영](operations.md)을 따르세요.
+
+<a id="optional-events"></a>
+
+## 선택적 이벤트
+
+자동 구독은 없습니다. 관리 화면의 **대화 이벤트**에서 공용 허용 목록을 관리하며 모든 방은 기본 꺼짐입니다. 클라이언트가 별도로 구독해야 허용한 방의 활성화 커서 이후 새 행 식별자를 전달합니다. 방을 끄면 대기 전송을 취소하고 미처리 조회에서도 제외합니다. 이벤트는 AI를 깨우는 신호이고 본문은 MCP 도구로 읽습니다. 소비자별 처리 커서는 카카오톡 읽음 상태와 독립적입니다. [이벤트](events.md)를 참고하세요.

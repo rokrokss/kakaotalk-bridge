@@ -118,7 +118,7 @@ class OwnerAuth:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Manage private administrator access")
+    parser = argparse.ArgumentParser(description="비공개 관리자 접근 관리")
     parser.add_argument("command", choices=["pair", "reset-password", "info"])
     args = parser.parse_args()
     auth = OwnerAuth(os.getenv("ADMIN_AUTH_DB", "/auth/admin.db"), secret("ADMIN_TOKEN"))
@@ -143,7 +143,7 @@ def main():
     elif args.command == "reset-password":
         auth.reset_password()
         print(
-            "Local password and browser sessions cleared. Use a passkey or ./bridge admin --recovery."
+            "로컬 비밀번호와 브라우저 로그인을 초기화했습니다. 패스키 또는 ./bridge admin --recovery를 사용하세요."
         )
     else:
         policy = passkeys.call("admin", "info")["policy"] if mode == "passkey" else "local"

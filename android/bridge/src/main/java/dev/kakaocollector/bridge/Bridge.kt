@@ -281,17 +281,17 @@ class SetupActivity : Activity() {
         val config = Enrollment.load(this)
         val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 48, 32, 32) }
         layout.addView(TextView(this).apply {
-            text = if (config == null) "Run bootstrap on the server, then reopen this app."
-                   else if (config.mode == "iris") "redroid virtual tablet · Iris database collection mode\nNotification access is not required.\nComplete login-check and confirm-secondary on the server, then check collection status.\nYou must confirm that your phone session remains active."
-                   else if (!config.collectionAllowed(this@SetupActivity)) "Collection locked: confirm secondary-device login and an active phone session first.\nRun login-check on the server before signing in. Confirm both sessions, then enable collection with confirm-secondary.\nDo not proceed with a primary-device transfer."
-                   else "Registered device: ${config.device}\nThe operator confirmed that both sessions remain active. Phone status is not monitored automatically.\nOnly notifications are collected. The app does not open chats or send messages."
+            text = if (config == null) "서버에서 bootstrap을 실행한 뒤 이 앱을 다시 여세요."
+                   else if (config.mode == "iris") "redroid 가상 태블릿 · Iris 데이터베이스 수집 모드\n알림 접근 권한은 필요하지 않습니다.\n서버에서 login-check와 confirm-secondary를 완료하고 수집 상태를 확인하세요.\n휴대폰의 기존 로그인이 유지되는지 직접 확인해야 합니다."
+                   else if (!config.collectionAllowed(this@SetupActivity)) "수집 잠김: 먼저 보조 기기 로그인과 휴대폰 로그인 유지를 확인하세요.\n로그인 전에 서버에서 login-check를 실행하세요. 두 기기의 로그인을 확인하고 confirm-secondary로 수집을 허용하세요.\n주 기기 이전은 진행하지 마세요."
+                   else "등록된 기기: ${config.device}\n두 기기의 로그인을 직접 확인했습니다. 휴대폰 상태는 자동으로 감시하지 않습니다.\n알림만 수집합니다. 앱이 대화방을 열거나 메시지를 보내지는 않습니다."
         })
         layout.addView(Button(this).apply {
-            text = "Notification access settings"
+            text = "알림 접근 권한 설정"
             setOnClickListener { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
         })
         layout.addView(Button(this).apply {
-            text = "Retry connection"
+            text = "연결 다시 시도"
             setOnClickListener {
                 NotificationListenerService.requestRebind(ComponentName(this@SetupActivity, KakaoListener::class.java))
                 Delivery.initialize(this@SetupActivity)

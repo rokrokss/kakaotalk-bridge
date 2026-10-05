@@ -25,24 +25,24 @@ from server.connection_setup import validate
 MAX_BODY = 4096
 STEPS = {
     "tunnel": (
-        "Starting the tunnel service",
-        "Check the tunnel ID, runtime key permissions and server internet access, then retry.",
+        "터널 서비스 시작 중",
+        "터널 ID, 실행용 키 권한과 서버 인터넷 연결을 확인한 뒤 다시 시도하세요.",
     ),
     "approval": (
-        "Applying your tunnel approval",
-        "Sign in to admin and check the tunnel approval, then retry.",
+        "터널 승인 적용 중",
+        "관리 화면에 로그인해 터널 승인을 확인하고 다시 시도하세요.",
     ),
     "verify": (
-        "Checking server services",
-        "The server connection is not ready. Wait briefly and run Check server connection again.",
+        "서버 서비스 확인 중",
+        "서버 연결이 준비되지 않았습니다. 잠시 후 ‘서버 연결 확인’을 다시 실행하세요.",
     ),
     "oauth": (
-        "Configuring HTTPS and OAuth",
-        "Check the HTTPS address and reverse proxy, then retry. Keep your existing admin address.",
+        "HTTPS 및 OAuth 설정 중",
+        "HTTPS 주소와 리버스 프록시를 확인하고 다시 시도하세요. 기존 관리 화면 주소는 유지하세요.",
     ),
     "tailscale": (
-        "Preparing Tailscale",
-        "Check Tailscale sign-in and Funnel permission, then retry.",
+        "Tailscale 준비 중",
+        "Tailscale 로그인과 Funnel 권한을 확인하고 다시 시도하세요.",
     ),
 }
 
@@ -148,9 +148,9 @@ def execute(data):
     if method in {"none", "stdio"}:
         return {
             "state": "ready",
-            "message": "Existing connections kept."
+            "message": "기존 연결을 유지했습니다."
             if method == "none"
-            else "Copy the configuration into your AI client.",
+            else "AI 클라이언트에 설정을 복사하세요.",
         }
     if method == "check":
         progress(data, "verify")
@@ -171,11 +171,11 @@ def execute(data):
         if not public and not result["configured"]:
             return {
                 "state": "ready",
-                "message": "No public or tunnel connection is configured. Choose a method above, or use stdio with your local client.",
+                "message": "공개 연결이나 터널이 설정되지 않았습니다. 위에서 방식을 선택하거나 로컬 클라이언트에서 stdio를 사용하세요.",
             }
         return {
             "state": "ready",
-            "message": "Server checks passed. Ask your AI for collector status to verify the complete connection.",
+            "message": "서버 확인을 통과했습니다. AI에 수집 상태를 요청해 전체 연결을 확인하세요.",
             "tunnel_ready": result["ready"],
         }
     with onboarding.installation_lock():
@@ -202,7 +202,7 @@ def execute(data):
                 raise RuntimeError("Tunnel is not ready")
             return {
                 "state": "ready",
-                "message": "Tunnel is ready and approved. Add it in ChatGPT to finish.",
+                "message": "터널이 준비되고 승인되었습니다. ChatGPT에 추가해 마무리하세요.",
                 "tunnel_ready": True,
             }
         if method == "https":
@@ -224,7 +224,7 @@ def execute(data):
             configure_oauth(cli.read_env()["DOT_PUBLIC_URL"])
         return {
             "state": "ready",
-            "message": "OAuth services are configured. Add the MCP URL in your AI client and approve the connection.",
+            "message": "OAuth 서비스를 설정했습니다. AI 클라이언트에 MCP URL을 추가하고 연결을 승인하세요.",
         }
 
 
@@ -241,7 +241,7 @@ def job_main():
     except ActionRequired as exc:
         result = {
             "state": "action_required",
-            "message": "Complete Tailscale approval, then choose Continue setup.",
+            "message": "Tailscale 승인을 완료한 뒤 ‘설정 계속’을 누르세요.",
             "action_url": exc.url,
         }
     except ValueError:
@@ -249,7 +249,7 @@ def job_main():
         # parsers may contain private data. Never return their raw errors.
         result = {
             "state": "failed",
-            "message": "Check the address, tunnel ID and runtime key, then retry.",
+            "message": "주소, 터널 ID와 실행용 키를 확인하고 다시 시도하세요.",
         }
     except Exception:  # noqa: BLE001 - the worker must never print provider errors or secrets
         step = current_progress(data.get("request_id")).get("step")
@@ -258,7 +258,7 @@ def job_main():
             "step": step,
             "message": STEPS[step][1]
             if step
-            else "Setup stopped. Check the settings and retry. If it repeats, run bridge doctor on the server.",
+            else "설정이 중단되었습니다. 설정 내용을 확인하고 다시 시도하세요. 반복되면 서버에서 bridge doctor를 실행하세요.",
         }
     print(json.dumps(result))
 
@@ -273,7 +273,7 @@ class Jobs:
             self.job.update(
                 {
                     "state": "interrupted",
-                    "message": "Setup was interrupted. Review the connection and retry.",
+                    "message": "설정이 중단되었습니다. 연결 내용을 확인하고 다시 시도하세요.",
                 }
             )
         self.thread = None
@@ -320,7 +320,7 @@ class Jobs:
                 "id": data["request_id"],
                 "method": data["method"],
                 "state": "running",
-                "message": "Preparing connection services…",
+                "message": "연결 서비스 준비 중…",
                 "started_at": time.time(),
             }
             cli.atomic(self.path, json.dumps(self.job))
@@ -334,7 +334,7 @@ class Jobs:
         except Exception:  # noqa: BLE001 - do not persist or return exception text containing secrets
             result = {
                 "state": "failed",
-                "message": "Setup stopped before completion. Check connection status and retry.",
+                "message": "설정이 완료되기 전에 중단되었습니다. 연결 상태를 확인하고 다시 시도하세요.",
             }
         with self.lock:
             self.job.update(result)
@@ -415,7 +415,7 @@ def install():
         return
     if not shutil.which("systemctl") or not Path("/run/systemd/system").is_dir():
         print(
-            "Web connection setup needs a running setup agent. Run bridge setup-agent serve under your service manager."
+            "웹 연결 설정에는 설정 에이전트가 필요합니다. 서비스 관리자에서 bridge setup-agent serve를 실행하세요."
         )
         return
     folder = socket_dir()
@@ -449,4 +449,4 @@ def install():
     cli.run(["systemctl", "enable", "--now", unit], capture=True)
     # Reload Python source on repeated up/upgrade, including unchanged unit files.
     cli.run(["systemctl", "restart", unit], capture=True)
-    print("Web connection setup service is ready.")
+    print("웹 연결 설정 서비스가 준비되었습니다.")

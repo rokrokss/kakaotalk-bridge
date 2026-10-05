@@ -46,7 +46,7 @@ class WebInputMethod : InputMethodService() {
     }
 
     override fun onCreateInputView(): View = TextView(this).apply {
-        text = "Enter text in the web admin console · Input is not stored"
+        text = "웹 관리 화면에서 텍스트를 입력하세요 · 입력 내용은 저장하지 않습니다"
         setPadding(16, 16, 16, 16)
     }
     override fun onEvaluateFullscreenMode(): Boolean = false

@@ -1,265 +1,173 @@
-# Admin console
+# 관리 화면
 
-[README](../README.md) · [Installation](install.md)
+[README](../README.md) · [설치](install.md)
 
-Use the admin console to check collection, configure AI connections, choose event
-conversations and control the tablet. You do not need ADB or scrcpy on the
-operator's computer.
+수집 상태 확인, AI 연결 설정, 이벤트 대화 선택, 태블릿 조작을 관리 화면에서 할 수 있습니다. 사용하는 컴퓨터에 ADB나 scrcpy를 설치할 필요는 없습니다.
 
-## Access
+<a id="access"></a>
+## 접속
 
-Fresh installations open the printed localhost address, normally
-`http://localhost:18789/admin/`. For a remote server, keep the
-[SSH forwarding session](quickstart.md#local-and-ssh-admin-access) open. Existing
-installations retain their configured address, including private HTTPS. Register
-a [passkey](passkeys.md) once, then select **Sign in with a passkey**. Keep the
-configured origin stable; a passkey for a server hostname does not work at
-localhost. `./bridge admin` opens the configured address.
+신규 설치가 출력하는 localhost 주소(기본 `http://localhost:18789/admin/`)를 여세요. 원격 서버라면 [SSH 포워딩](quickstart.md#local-and-ssh-admin-access)을 유지하세요. 기존 설치는 비공개 HTTPS 등 설정된 주소를 유지합니다. [패스키](passkeys.md)를 한 번 등록한 뒤 **패스키로 로그인**을 사용하세요. 서버 호스트에 등록한 패스키는 localhost에서 작동하지 않으므로 출처를 유지해야 합니다. `./bridge admin`으로 설정된 주소를 열 수 있습니다.
 
-Admin does not require Tailscale or an OpenAI tunnel. An optional shared HTTPS
-deployment serves `/admin/` and `/mcp` on the same port; its login page is public
-unless your proxy denies admin routes. A private admin origin can stay separate
-from public MCP. Bookmark the admin address for everyday use.
+관리 화면에 Tailscale이나 OpenAI 터널은 필요하지 않습니다. 선택적으로 공용 HTTPS의 같은 포트에서 `/admin/`, `/mcp`를 제공할 수 있습니다. 이 경우 프록시가 관리 경로를 차단하지 않으면 로그인 화면은 공개됩니다. 비공개 관리 출처와 공개 MCP를 분리할 수도 있습니다. 자주 쓸 관리 주소를 북마크하세요.
 
-Sessions last 30 minutes, or seven days with **Keep me signed in**, and survive container restarts. Under **Tablet & settings**, revoke them in **Admin browsers** or add a backup in **Passkeys and recovery**. **Lock** ends only the bridge's admin session; it does not sign out the tablet's KakaoTalk app. If every key is lost, run `./bridge passkey-login --enroll` on the server. Missing passkey configuration keeps controls locked.
+세션은 30분, **로그인 유지**를 선택하면 7일간 유효하며 컨테이너 재시작 후에도 유지됩니다. **태블릿 및 설정 → 관리 브라우저**에서 취소하거나 **패스키 및 복구**에서 백업 패스키를 추가하세요. **잠금**은 관리자 로그인만 종료하며 태블릿 카카오톡은 로그아웃하지 않습니다. 패스키를 모두 잃었다면 서버에서 `./bridge passkey-login --enroll`을 실행하세요. 패스키가 설정되지 않으면 조작 기능은 잠겨 있습니다.
 
-After the security update, sign in once again with your existing passkey. It replaces older admin browser sessions; your passkeys and MCP connections remain registered. Tablet setup, login confirmation and collection controls follow the same steps below.
+보안 업데이트 후에는 기존 패스키로 한 번 다시 로그인하세요. 이전 브라우저 세션은 교체하지만 패스키와 MCP 연결은 유지됩니다. 태블릿 설정·로그인 확인·수집 절차는 아래와 같습니다.
 
-## First login
+<a id="first-login"></a>
+## 첫 로그인
 
-After admin sign-in, fresh-device preparation and collection-component installation
-run automatically. The page detects KakaoTalk installation without requiring a
-refresh and opens it when preparation finishes. Existing enrollment and collection
-approval are left intact. A failed preparation stops automatic actions until you
-retry; login and both-session confirmations always require your input.
+관리 화면 로그인 후 새 기기 준비와 수집 구성 요소 설치가 자동으로 진행됩니다. 카카오톡 설치를 감지하면 새로고침 없이 준비를 마치고 앱을 엽니다. 기존 기기 등록과 수집 승인은 유지합니다. 준비가 실패하면 재시도 전까지 자동 작업을 멈춥니다. 로그인과 두 기기 확인은 항상 직접 해야 합니다.
 
-The **KakaoTalk setup** guide has three steps: **Prepare → Sign in → Collect**.
-AI connection is optional and is configured separately.
+**카카오톡 설정**은 **준비 → 로그인 → 수집** 순서입니다. AI 연결은 별도의 선택 사항입니다.
 
-1. Let automatic preparation finish, then [install **KakaoTalk by Kakao Corp.** in Aurora](#install-kakaotalk-in-aurora). Bridge detects installation and configures collection components automatically. Alternatively import a complete official APK set.
-2. Use the tablet under **Tablet & settings**; **Open KakaoTalk** is available if needed. To enter text, select **Connect keyboard**, focus an input field on the tablet, then send a value through **Text input**.
-3. In KakaoTalk, select **“Use with other devices” (“다른 기기와 함께 사용” in the Korean UI)**. In the console, select **KakaoTalk login → Check login options**. The check currently recognizes the Korean KakaoTalk UI. Stop if the option is missing or KakaoTalk asks to transfer the primary device.
-4. After the check passes, finish signing in on the tablet. Manually verify that KakaoTalk still opens with the existing session on your phone.
-5. Select both checkboxes and **Start collecting messages**. The precheck is valid for 30 minutes and must match the current app version and device.
+1. 자동 준비가 끝나면 [Aurora에서 **Kakao Corp.의 카카오톡**을 설치](#install-kakaotalk-in-aurora)하세요. Bridge가 감지해 수집 구성 요소를 설치합니다. 공식 APK 전체 세트를 가져올 수도 있습니다.
+2. **태블릿 및 설정**의 화면을 사용하세요. 필요하면 **카카오톡 열기**를 누르세요. 텍스트는 **키보드 연결** 후 태블릿 입력란을 선택하고 **텍스트 입력**으로 보내세요.
+3. 카카오톡의 **다른 기기와 함께 사용**을 선택하고 **카카오톡 로그인 → 로그인 옵션 확인**을 누르세요. 점검은 현재 한국어 카카오톡 화면을 인식합니다. 옵션이 없거나 주 기기 이전을 요구하면 중단하세요.
+4. 점검을 통과하면 태블릿 로그인을 완료하세요. 휴대폰에서 기존 카카오톡 로그인이 유지되는지 직접 확인하세요.
+5. 두 확인 항목을 선택하고 **메시지 수집 시작**을 누르세요. 사전 확인은 30분간 유효하며 현재 앱 버전·기기와 일치해야 합니다.
 
-Starting collection records your manual confirmation. The program does not control KakaoTalk's login behavior or prevent your phone from being signed out.
+수집 시작은 직접 확인한 내용을 기록합니다. 프로그램이 카카오톡 로그인 동작을 제어하거나 휴대폰 로그아웃을 막지는 못합니다.
 
-Use **Check login options** only on the screen before signing in. Once collection is approved, the button is disabled; use **Check status** for the current state. Check progress and results appear below the button. A failed check preserves existing approval and precheck records.
+**로그인 옵션 확인**은 로그인 전 화면에서만 사용하세요. 수집 승인 후에는 버튼이 비활성화되므로 **상태 확인**을 사용하세요. 버튼 아래에 진행 상황과 결과가 표시됩니다. 점검 실패 시 기존 승인과 사전 확인 기록은 유지됩니다.
 
-### Install KakaoTalk in Aurora
+<a id="install-kakaotalk-in-aurora"></a>
+### Aurora에서 카카오톡 설치
 
-Use the virtual tablet shown in **Tablet & settings**. The **KakaoTalk setup**
-guide displays these instructions while it is waiting for installation.
+**태블릿 및 설정**의 가상 태블릿을 사용하세요. 설치 대기 중에는 **카카오톡 설정**에도 같은 안내가 표시됩니다.
 
-1. Select **Open store**. Review Aurora's welcome screens and terms and continue.
-   If it asks for an installation method, choose **Session Installer**.
-2. When prompted to allow app installation, open the Android settings for Aurora,
-   enable **Allow from this source** (**이 출처 허용**), and use the tablet's
-   **Back** button to return. This setting belongs to the virtual tablet.
-3. Choose **Anonymous** sign-in. This is the store session; KakaoTalk sign-in
-   comes later.
-4. Search for **KakaoTalk** or **카카오톡** and select the app by **Kakao Corp.**
-   Click the tablet's search field and use its on-screen keyboard to type
-   **KakaoTalk**. Bridge's **Text input** becomes available after collection
-   components are prepared.
-5. Select **Install** and confirm Android's installation prompt if shown. Keep
-   the admin page open while downloading and installing.
-6. Wait for Bridge to finish preparing collection components and open KakaoTalk.
-   The store instructions disappear and the next action becomes signing in.
-   Follow the login-option check above **before completing KakaoTalk sign-in**.
+1. **스토어 열기**를 누르고 Aurora의 시작 안내와 약관을 확인하세요. 설치 방식을 물으면 **Session Installer**를 선택하세요.
+2. 앱 설치 권한을 요청하면 Android의 Aurora 설정에서 **이 출처 허용(Allow from this source)**을 켜고 태블릿의 **뒤로** 버튼으로 돌아오세요. 가상 태블릿에 적용되는 설정입니다.
+3. **익명(Anonymous)** 로그인을 선택하세요. 스토어 로그인이며 카카오톡 로그인은 이후에 진행합니다.
+4. **카카오톡** 또는 **KakaoTalk**을 검색해 **Kakao Corp.**의 앱을 선택하세요. 태블릿 검색란을 누르고 화면 키보드로 입력하세요. Bridge의 **텍스트 입력**은 수집 구성 요소 준비 후 사용할 수 있습니다.
+5. **설치(Install)**를 선택하고 Android 확인 창이 나타나면 승인하세요. 다운로드·설치 중에는 관리 화면을 열어 두세요.
+6. Bridge가 구성 요소를 준비하고 카카오톡을 열 때까지 기다리세요. 스토어 안내가 사라지고 로그인 단계가 표시되면 **카카오톡 로그인 완료 전에** 위 로그인 옵션 점검을 진행하세요.
 
-| Where you are stuck | Next action |
+| 막힌 지점 | 다음 조치 |
 | --- | --- |
-| Anonymous sign-in or download fails | Read the store error and retry there. See [Aurora's troubleshooting guide](https://auroraoss.gitbook.io/wiki/troubleshooting-and-faqs/faqs/aurora-store). |
-| Android blocks installation | Allow Aurora to install apps, return with **Back**, and retry **Install**. |
-| App installed, but Bridge still shows store instructions | Select **Check again** in **KakaoTalk setup**. If preparation reports an error, follow it and select **Retry preparation**. |
+| 익명 로그인·다운로드 실패 | 스토어 오류를 확인하고 다시 시도하세요. [Aurora 문제 해결](https://auroraoss.gitbook.io/wiki/troubleshooting-and-faqs/faqs/aurora-store)을 참고하세요. |
+| Android가 설치 차단 | Aurora의 앱 설치를 허용하고 **뒤로**로 돌아와 **설치**를 다시 누르세요. |
+| 설치 후에도 스토어 안내 유지 | **카카오톡 설정 → 다시 확인**을 누르세요. 준비 오류를 해결한 뒤 **준비 다시 시도**를 누르세요. |
 
-Already have the complete official APK set? Use the [APK import alternative](#installation).
-Aurora wording can vary by version and language; installation permission applies
-to Aurora, and the app being installed should be KakaoTalk by Kakao Corp.
+공식 APK 세트가 있다면 [APK 가져오기](#installation)를 사용할 수 있습니다. Aurora 문구는 버전·언어에 따라 달라질 수 있습니다. 설치 권한은 Aurora에 부여하고 설치할 앱은 Kakao Corp.의 카카오톡인지 확인하세요.
 
-## Installation
+<a id="installation"></a>
+## 설치와 복구
 
-Automatic preparation is the normal path. Manual **Prepare tablet and Aurora**
-and **Set up collection components** actions remain under
-**Tablet & settings → Installation** for recovery. APK import is also available
-through `./bridge import-apks /path/to/folder`.
+기본 경로는 자동 준비입니다. 복구용 **태블릿과 Aurora 준비**, **수집 구성 요소 설치**는 **태블릿 및 설정 → 설치**에 있습니다. `./bridge import-apks /path/to/folder`로 APK를 가져올 수도 있습니다.
 
-KakaoTalk signatures are checked before first enrollment. An already enrolled tablet is left unchanged. These setup actions do not reset an existing collection approval. The legacy CLI `bootstrap` remains a maintenance action that does reset approval; it is not used by the setup wizard.
+처음 등록하기 전에 카카오톡 서명을 확인합니다. 이미 등록된 태블릿과 기존 수집 승인은 유지합니다. 이전 CLI의 `bootstrap`은 승인을 초기화하는 유지 관리 작업이며 설정 안내에서 사용하지 않습니다.
 
-## Everyday use
+<a id="everyday-use"></a>
+## 평소 사용
 
-The **Your bridge** overview shows three independent signals:
+**내 Bridge** 현황에는 서로 다른 세 가지 상태가 표시됩니다.
 
-| Card | Meaning |
+| 항목 | 의미 |
 | --- | --- |
-| Message collection | Collector state and last observed collection time; **Partial history** does not promise the phone's entire history |
-| Remote AI activity | Last successful tool call from an approved OAuth or tunnel connection, or a prompt to make the first call |
-| Your phone | Your last manual confirmation; **Recheck needed** after 24 hours is a reminder, not an observed sign-out |
+| 메시지 수집 | 수집 상태와 마지막 관측 시각. 일부 기록만 수집하며 휴대폰 전체 기록을 보장하지 않음 |
+| 원격 AI 사용 기록 | 승인된 OAuth·터널 연결의 마지막 도구 호출 성공 또는 첫 호출 대기 |
+| 내 휴대폰 | 마지막 직접 확인 기록. 24시간 후 **재확인 필요**는 알림이며 로그아웃 감지가 아님 |
 
-For a running collector, **KakaoTalk setup** and **Tablet & settings** start
-collapsed. The navigation buttons open **AI connections**, **Conversation events**
-or **Tablet & settings** directly. During initial setup the guide and tablet open
-so you can finish sign-in.
+수집 중이면 **카카오톡 설정**, **태블릿 및 설정**은 접혀 시작합니다. 메뉴로 **AI 연결**, **대화 이벤트**, **태블릿 및 설정**을 바로 열 수 있습니다. 초기 설정 중에는 로그인할 수 있도록 안내와 태블릿을 펼칩니다.
 
-Inside **Tablet & settings**, the tablet screen and settings appear side by side,
-stacking on smaller screens. Screenshots refresh roughly every 1.2 seconds while
-this section is open and the page is visible. Closing it stops screen polling,
-not message collection. Use clicks, drags, and the Android buttons to control the
-tablet.
+태블릿과 설정은 넓은 화면에서 나란히, 작은 화면에서는 세로로 배치됩니다. 해당 영역이 열려 있고 페이지가 보일 때 약 1.2초마다 화면을 갱신합니다. 영역을 닫으면 화면 조회만 멈추며 메시지 수집은 계속됩니다. 클릭·드래그·Android 버튼으로 조작하세요.
 
-**Text input** inserts text into the focused field and clears the web input. Text is masked by default. It is not automatically submitted until you press Enter or a button on the device. Opening a conversation manually may change its KakaoTalk read status.
+**텍스트 입력**은 선택된 입력란에 값을 넣고 웹 입력란을 비웁니다. 기본적으로 내용을 가립니다. Enter나 기기 버튼을 누르기 전에는 자동 제출하지 않습니다. 대화방을 직접 열면 카카오톡 읽음 상태가 바뀔 수 있습니다.
 
-**Pause** stops screen refreshes and clicks on the screen. Message collection and the Android buttons remain available.
+**일시 정지**는 화면 갱신과 화면 클릭을 멈춥니다. 메시지 수집과 Android 버튼은 계속 사용할 수 있습니다.
 
-## Reading status
+<a id="reading-status"></a>
+## 상태 읽기
 
-**Check status** retrieves the current screen and saved confirmation records.
-After a device action or 60 seconds, the screen inspection becomes stale. The UI
-shows **Inspection out of date** and labels saved approval **Approved · last
-inspection**, rather than treating elapsed time as revoked approval. Actions that
-depend on current tablet state still require a fresh inspection.
+**상태 확인**은 현재 화면과 저장된 확인 기록을 가져옵니다. 기기를 조작하거나 60초가 지나면 화면 점검이 오래된 것으로 표시됩니다. **점검 결과 갱신 필요**, **승인됨 · 마지막 점검 기준**은 시간이 지났다는 뜻이며 승인을 취소했다는 뜻이 아닙니다. 현재 태블릿 상태가 필요한 작업에는 새 점검이 필요합니다.
 
-| Field | Meaning |
+| 항목 | 의미 |
 | --- | --- |
-| Tablet | Login screen, signed-in screen, or connection state observed on the current screen |
-| Phone | Time of the operator's manual confirmation or sign-out report |
-| Collection approval | Whether the secondary-login confirmation matches the current app and device |
-| Collecting messages | Recent Iris database access and collection approval are valid; this does not mean the entire chat history has been restored |
+| 태블릿 | 현재 화면에서 관측한 로그인 화면·로그인된 화면·연결 상태 |
+| 휴대폰 | 사용자가 직접 확인하거나 로그아웃을 신고한 시각 |
+| 수집 승인 | 보조 기기 로그인 확인이 현재 앱·기기와 일치하는지 여부 |
+| 메시지 수집 중 | 최근 Iris DB 접근과 수집 승인이 유효함. 전체 기록 복원을 뜻하지 않음 |
 
-The phone session is not monitored automatically. Choose **Review phone
-confirmation**, check KakaoTalk on your phone, select the confirmation checkbox,
-then **Update confirmation time**. If disabled, read the explanation below the
-button; **Refresh tablet inspection** is offered when needed. Records older than
-24 hours are marked for rechecking.
+휴대폰 로그인은 자동 감시하지 않습니다. **휴대폰 확인 기록 보기**를 누르고 휴대폰 카카오톡을 확인한 뒤 체크하고 **확인 시간 갱신**을 누르세요. 비활성화되면 버튼 아래 설명을 읽고 필요하면 **태블릿 점검 새로고침**을 누르세요. 24시간 이상 지난 기록에는 재확인 안내가 붙습니다.
 
-If your phone has been signed out, select **Signed out · Stop collection**. This revokes collection approval. Restarting requires the login-option check and confirmation of both sessions.
+휴대폰에서 로그아웃되었다면 **로그아웃됨 · 수집 중지**를 누르세요. 수집 승인을 취소하며 다시 시작하려면 로그인 옵션 점검과 두 기기 확인이 필요합니다.
 
-## AI connections
+<a id="ai-connections"></a>
+## AI 연결
 
-1. Open **AI connections → Add or change a connection**.
-2. In **Where will you use your messages?**, choose **ChatGPT**, **An AI app on
-   my computer**, **Another remote AI client**, or **Decide later**. **All
-   connection options** exposes every method. ChatGPT offers a personal tunnel
-   and HTTPS choices; desktop clients offer stdio; remote clients offer HTTPS.
-3. Enter **Connection settings** and start setup. Existing methods can coexist;
-   **Decide later** keeps existing connections. An existing connection's settings
-   start collapsed; expand them when you want to make a change.
-4. [Finish in your AI client](#finish-in-your-ai-client) using the saved address,
-   tunnel ID or stdio configuration. HTTPS uses OAuth; a personal tunnel uses
-   its approved private connection.
-5. Ask the AI to check collector status, then retrieve a message you sent from
-   your phone to verify the content.
+1. **AI 연결 → 연결 추가 또는 변경**을 여세요.
+2. **메시지를 어디에서 사용하시겠어요?**에서 **ChatGPT**, **내 컴퓨터의 AI 앱**, **다른 원격 AI 클라이언트**, **나중에 결정** 중 선택하세요. **모든 연결 방식**은 전체 방식을 표시합니다. ChatGPT는 개인 터널·HTTPS, 데스크톱 앱은 stdio, 원격 클라이언트는 HTTPS를 제공합니다.
+3. **연결 설정**을 입력하고 시작하세요. 여러 방식을 함께 사용할 수 있습니다. **나중에 결정**은 기존 설정을 유지합니다. 기존 연결 설정은 접혀 있으며 변경할 때 펼치세요.
+4. 저장된 주소·터널 ID·stdio 설정으로 [AI 클라이언트에서 마무리](#finish-in-your-ai-client)하세요. HTTPS는 OAuth를, 개인 터널은 승인된 비공개 연결을 사용합니다.
+5. AI에 수집 상태를 요청하고 휴대폰에서 직접 보낸 메시지를 조회하세요.
 
-The HTTPS field accepts either an origin such as `https://bridge.example.com` or
-the full `https://bridge.example.com/mcp` address. Other paths, query strings and
-embedded credentials are rejected. Your reverse proxy must already be routed;
-this form does not configure external DNS or proxy services.
+HTTPS에는 `https://bridge.example.com` 또는 전체 `https://bridge.example.com/mcp` 주소를 입력할 수 있습니다. 다른 경로·쿼리·내장 인증 정보는 거부합니다. 프록시는 미리 연결되어 있어야 하며 외부 DNS나 프록시를 이 폼에서 설정하지는 않습니다.
 
-Tunnel setup requires an ID, runtime key and explicit access approval. A saved
-key may be reused for the same ID; the browser never receives it back. Tailscale
-setup requires explicit installation/public-exposure consent. Follow the provider
-link if shown, then select **Continue setup**. The CLI alternative and web setup
-service requirements are in [onboarding](onboarding.md#connect-an-ai-client-optional).
+터널에는 ID, 실행용 키, 명시적 접근 승인이 필요합니다. 같은 ID에는 저장된 키를 재사용할 수 있고 브라우저에 키를 다시 반환하지 않습니다. Tailscale은 설치·공개 동의가 필요합니다. 제공업체 링크가 표시되면 승인하고 **설정 계속**을 누르세요. CLI와 서비스 요구 사항은 [고급 설치](onboarding.md#connect-an-ai-client-optional)를 참고하세요.
 
-### Finish in your AI client
+<a id="finish-in-your-ai-client"></a>
+### AI 클라이언트에서 마무리
 
-Keep admin open beside your AI client. **Server setup complete** means you can
-continue with the saved **Connection instructions**; the client still needs its
-own connection setup.
+AI 클라이언트 옆에 관리 화면을 열어 두세요. **서버 설정 완료**가 표시되면 저장된 **연결 안내**에 따라 클라이언트도 설정해야 합니다.
 
-For ChatGPT, open [Plugins](https://chatgpt.com/plugins) in a web browser, select
-**+ → Create custom MCP server**, and name it **KakaoTalk Bridge**. Use the row
-matching the connection method you configured:
+ChatGPT 웹의 [플러그인](https://chatgpt.com/plugins)에서 **+ → 사용자 지정 MCP 서버 만들기(Create custom MCP server)**를 열고 이름을 **KakaoTalk Bridge**로 지정하세요.
 
-| Method in Bridge | What to enter in the client | Complete access |
+| Bridge 연결 방식 | 클라이언트 입력 | 접근 완료 |
 | --- | --- | --- |
-| Personal tunnel | Choose **Tunnel**, use the saved tunnel ID, and choose **No authentication** for this approved personal connection. | Bridge must show tunnel access allowed. If the tunnel is missing, check its workspace association and your Tunnels Read + Use permission. [Tunnel preparation](openai-tunnel.md#before-setup) |
-| Existing HTTPS or Tailscale | Paste the saved **MCP server URL**, including `/mcp`, and select **OAuth**. In ChatGPT, choose CIMD if asked for registration and leave optional static client credentials blank. | Follow passkey consent, or match the code in admin **AI connections → Approve connection**. Return to the AI client to finish. |
-| Local or SSH app | Use **Copy client configuration** in Bridge. Add the `kakaotalk` entry to the app's `mcpServers` configuration, preserving other servers; for form-based clients, copy the command and arguments. | Save and reload MCP connections or restart the client, then enable KakaoTalk Bridge. For SSH, verify access without an interactive password prompt. [Client examples](api.md#stdio-mcp) |
+| 개인 터널 | **터널(Tunnel)**, 저장된 터널 ID, 승인된 개인 연결의 **인증 없음(No authentication)** | Bridge에서 접근이 허용되어야 합니다. 터널이 없으면 워크스페이스 연결과 Tunnels Read + Use 권한을 확인하세요. [터널 준비](openai-tunnel.md#before-setup) |
+| 기존 HTTPS·Tailscale | `/mcp`를 포함한 **MCP 서버 URL**, **OAuth**. ChatGPT가 등록 방식을 물으면 CIMD, 선택적 고정 인증 정보는 비워 둠 | 패스키로 동의하거나 **AI 연결 → 연결 승인**에서 코드를 맞춘 뒤 클라이언트로 돌아가 완료 |
+| 로컬·SSH 앱 | **클라이언트 설정 복사** 후 기존 서버를 유지하며 `mcpServers`에 `kakaotalk` 추가. 폼이라면 명령·인수 복사 | 저장 후 MCP 새로고침 또는 앱 재시작, Bridge 활성화. SSH는 비밀번호 입력 없이 접속 가능해야 함. [예시](api.md#stdio-mcp) |
 
-In ChatGPT, review the notice, create the plugin and install it. Select
-**@KakaoTalk Bridge** in a conversation. If creation is unavailable, check
-workspace permissions. The [official ChatGPT instructions](https://developers.openai.com/api/docs/guides/custom-mcp-server)
-describe the current menus.
+ChatGPT에서 안내를 확인하고 플러그인을 만들어 설치한 뒤 대화에서 **@KakaoTalk Bridge**를 선택하세요. 생성할 수 없으면 워크스페이스 권한과 [공식 안내](https://developers.openai.com/api/docs/guides/custom-mcp-server)를 확인하세요.
 
-**Tailscale asks for approval:** open the link displayed by Bridge, finish the
-requested sign-in or approval, then return to admin and select **Continue
-setup**. Repeat if another approval is requested. Once the MCP URL is saved,
-follow the HTTPS row above.
+**Tailscale 승인 요청:** 표시된 링크에서 로그인·승인을 완료하고 돌아와 **설정 계속**을 누르세요. 추가 요청이 있으면 반복하세요. MCP URL이 저장되면 HTTPS 절차를 따르세요.
 
-**Verify with your own message:** ask the connected AI to check collector status.
-After collection starts, send yourself a distinctive message from your phone,
-such as “Bridge check 14:32”, and ask the AI to find that exact text. Check the
-returned text and time. For remote connections, admin's **Remote AI activity**
-should record the successful request; local stdio activity is not recorded there.
-An expired OAuth request needs a new connection attempt and matching code.
+**내 메시지로 확인:** AI에 수집 상태를 요청하세요. 수집 시작 후 휴대폰에서 ‘Bridge 확인 14:32’ 같은 구별되는 메시지를 나에게 보내고 정확한 문구를 찾아 달라고 하세요. 본문과 시각을 확인하세요. 원격 연결의 성공 요청은 **원격 AI 사용 기록**에 표시하며 로컬 stdio는 기록하지 않습니다. OAuth 요청이 만료되면 새로 연결하고 새 코드를 승인하세요.
 
-### Progress and recovery
+<a id="progress-and-recovery"></a>
+### 진행 상황과 재시도
 
-One connection setup runs at a time. Its current stage and elapsed time remain
-visible when you reopen the page. Closing the browser does not stop the server
-job. A setup-service restart can interrupt a job; the UI opens that job for review
-instead of silently resubmitting it.
+연결 설정은 한 번에 하나씩 진행합니다. 화면을 다시 열어도 현재 단계와 경과 시간을 볼 수 있습니다. 브라우저를 닫아도 서버 작업은 계속됩니다. 설정 서비스가 재시작되면 중단 상태로 표시하며 자동 재제출하지 않습니다. 내부 명령의 원문 출력 대신 한국어로 진행 단계와 다음 조치를 안내합니다.
 
-Use **Review and retry** after a setup failure, correct the displayed settings
-and submit again. A runtime key cleared from the form may need re-entry if it
-was not saved. **Check again** repeats a failed server check. Submitted choices
-are saved after successful setup; checks and failures do not overwrite the last
-saved method. Unsaved edits are not guaranteed to survive a reload.
+실패하면 **확인 후 다시 시도**로 설정을 수정해 제출하세요. 폼에서 지워진 실행용 키가 저장되지 않았다면 다시 입력해야 합니다. 실패한 서버 점검은 **다시 확인**으로 반복합니다. 선택한 방식은 성공 후 저장하며 점검·실패로 덮어쓰지 않습니다. 저장하지 않은 편집 내용은 새로고침 후 유지되지 않을 수 있습니다.
 
-Saved HTTPS/tunnel instructions come from configuration, so they stay available
-after a check, failure or reload. **Connection instructions** on the tunnel card
-opens them directly. A saved configuration can still need approval or repair.
+HTTPS·터널 안내는 현재 설정에서 가져오므로 점검·실패·새로고침 후에도 유지됩니다. 터널 카드의 **연결 안내**로 바로 열 수 있습니다. 저장된 설정도 별도 승인이나 복구가 필요할 수 있습니다.
 
-### What each status proves
+<a id="what-each-status-proves"></a>
+### 각 상태의 의미
 
-| Signal | What it proves |
+| 표시 | 확인된 내용 |
 | --- | --- |
-| Server setup/check complete | Configuration finished or a server-side check completed; not a completed connection from your AI client |
-| Access allowed | This OAuth client or personal tunnel has permission; not evidence of a tool call |
-| Waiting for first AI request | An approval exists but no successful tool call has been recorded for it |
-| Successful tool call recorded | A remote MCP tool completed at the displayed time; not proof that the connection is reachable now |
+| 서버 설정·확인 완료 | 서버 설정이나 점검 완료. AI 클라이언트 연결 완료는 아님 |
+| 접근 허용됨 | OAuth 클라이언트·개인 터널의 권한 있음. 도구 호출 증거는 아님 |
+| 첫 AI 요청 대기 중 | 승인되었지만 성공한 도구 호출 기록이 없음 |
+| 도구 호출 성공 기록 있음 | 표시된 시각에 원격 MCP 도구가 완료됨. 현재 연결 가능 여부는 별도 확인 필요 |
 
-Tool discovery and failed calls do not update activity. Logging starts with this
-version; earlier successful calls are not backfilled. Local stdio calls are not
-included. **Check server connection** checks services separately. Use **Refresh
-connections** to refresh approvals/activity; it does not call your AI client.
+도구 목록 조회와 실패한 호출은 활동을 갱신하지 않습니다. 기록은 이 기능이 포함된 버전부터 시작하며 이전 호출은 소급하지 않습니다. 로컬 stdio도 제외합니다. **서버 연결 확인**은 서비스를 별도로 점검합니다. **연결 새로고침**은 승인·활동을 다시 가져오며 AI를 호출하지 않습니다.
 
-For OAuth, consent happens in the connecting browser when admin and public MCP
-use the same HTTPS passkey hostname with registered origins. With a separate
-localhost/private admin hostname, match the browser's code in
-**AI connections** and approve it there. A personal tunnel configured by CLI can
-be approved with **Allow personal tunnel**. Disconnect an OAuth client or tunnel
-from its card at any time; this is separate from locking the admin browser.
+OAuth는 관리·공개 MCP가 같은 HTTPS 패스키 호스트라면 연결 브라우저에서 동의합니다. localhost·비공개 관리 호스트가 별도라면 **AI 연결**에서 코드를 맞추세요. CLI로 설정한 개인 터널은 **개인 터널 허용**으로 승인합니다. 카드에서 언제든 연결을 해제할 수 있으며 관리 화면 잠금과는 별개입니다.
 
-## Conversation events
+<a id="conversation-events"></a>
+## 대화 이벤트
 
-Open **Conversation events**, search for a room and switch it from **Off** to
-**Allowed**. **Allowed · no AI subscription yet** means the room is permitted but
-you must still ask your connected AI to subscribe. A registered subscription
-does not prove that the AI ran or displayed a notification. Expand **Conversation
-identifier** when you need the exact reference for rooms with matching names.
+대화를 검색하고 **꺼짐**에서 **허용**으로 바꾸세요. **허용됨 · 아직 AI 구독이 없습니다**라면 AI에도 구독을 요청해야 합니다. 등록된 구독이 AI 실행이나 알림 표시를 입증하지는 않습니다. 같은 이름의 대화는 **대화 식별자**로 구분하세요.
 
-All rooms start off. Turning one off cancels queued deliveries and filters pending
-reads, without stopping collection or normal message search. See [MCP Events](events.md)
-for subscription renewal and delivery limits.
+모든 대화는 기본적으로 꺼져 있습니다. 끄면 대기 전송을 취소하고 대기 조회에서 제외하지만 수집·일반 검색은 계속됩니다. 갱신과 전달 제한은 [MCP 이벤트](events.md)를 참고하세요.
 
-## Troubleshooting
+<a id="troubleshooting"></a>
+## 문제 해결
 
-| Screen or situation | Action |
+| 상황 | 조치 |
 | --- | --- |
-| Waiting for connection | Check that redroid has booted on the server, then refresh |
-| Text is not entered | Connect the keyboard, then focus the KakaoTalk input field again |
-| Start collection button is disabled | Check for a valid precheck and both checkboxes; refresh status if stale |
-| Registration app opens after installation | Select Open KakaoTalk; Iris mode does not need notification access |
-| Collection is approved but no messages arrive | [Check Iris status and logs](operations.md#check-status) |
-| Waiting for first AI request after approval | Finish adding the connection in the AI client and ask it to check collector status |
-| Setup needs attention or Setup was interrupted | Review the stage-specific message, then select **Review and retry** |
-| Web setup is unavailable | Follow the displayed recovery instruction and the [setup service guide](operations.md#web-connection-setup) |
+| 연결 대기 중 | 서버에서 redroid 시작을 확인하고 새로고침 |
+| 텍스트가 입력되지 않음 | 키보드를 연결하고 카카오톡 입력란을 다시 선택 |
+| 수집 시작 버튼 비활성화 | 유효한 사전 확인과 두 체크 항목 확인. 오래되면 상태 새로고침 |
+| 설치 후 등록 앱이 열림 | **카카오톡 열기** 선택. Iris 모드에는 알림 권한 불필요 |
+| 승인 후에도 수집되지 않음 | [Iris 상태와 로그 확인](operations.md#check-status) |
+| 승인 후 첫 AI 요청 대기 중 | AI 클라이언트에서 연결을 마치고 수집 상태 요청 |
+| 설정 확인 필요·설정 중단됨 | 단계별 안내를 확인하고 **확인 후 다시 시도** |
+| 웹 설정 사용 불가 | 화면의 복구 안내와 [설정 서비스 안내](operations.md#web-connection-setup) 확인 |
 
-Canceling the installation dialog leaves the setup unchanged. Under **Tablet &
-settings → Collection test and maintenance**, a collection test reports a newly
-received row without displaying its content. It does not match a unique test
-message: another incoming message can satisfy it. Retrieve the message from your
-AI client to verify the exact content.
+설치 대화상자를 취소하면 설정은 바뀌지 않습니다. **태블릿 및 설정 → 수집 테스트 및 유지 관리**의 테스트는 본문을 표시하지 않고 새 메시지 도착만 확인합니다. 다른 수신 메시지로도 통과할 수 있으므로 AI에서 정확한 테스트 메시지를 조회하세요.

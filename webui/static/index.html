@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KakaoTalk Bridge · Admin</title>
+  <title>KakaoTalk Bridge · 관리</title>
   <link rel="icon" type="image/svg+xml" href="/admin/logo.svg?v=cc464e4">
   <link rel="stylesheet" href="/admin/style.css">
   <script src="/admin/passkey.js" defer></script>
@@ -13,326 +13,326 @@
 </head>
 <body>
   <header class="app-header">
-    <a class="brand" href="/admin/"><img src="/admin/logo.svg?v=cc464e4" width="28" height="28" alt="">KakaoTalk Bridge <span>Admin</span></a>
+    <a class="brand" href="/admin/"><img src="/admin/logo.svg?v=cc464e4" width="28" height="28" alt="">KakaoTalk Bridge <span>관리</span></a>
     <div class="header-actions">
-      <span id="connection">Authentication required</span>
-      <button id="logout" class="quiet" hidden>Lock</button>
+      <span id="connection">로그인이 필요합니다</span>
+      <button id="logout" class="quiet" hidden>잠금</button>
     </div>
   </header>
   <main>
     <section id="login-panel" class="login-panel" aria-labelledby="login-title">
-      <h1 id="login-title">Open admin console</h1>
-      <p>View the tablet screen and message collection status.</p>
+      <h1 id="login-title">관리 화면 열기</h1>
+      <p>태블릿 화면과 메시지 수집 상태를 확인하세요.</p>
       <div id="passkey-panel" hidden>
-        <p id="passkey-help">Use your device, phone or security key.</p>
+        <p id="passkey-help">기기, 휴대폰 또는 보안 키로 인증하세요.</p>
         <form id="passkey-form">
-          <button id="passkey-submit" class="primary wide" type="submit">Sign in with a passkey</button>
-          <label class="check"><input id="passkey-remember" type="checkbox">Keep me signed in for 7 days on this device</label>
+          <button id="passkey-submit" class="primary wide" type="submit">패스키로 로그인</button>
+          <label class="check"><input id="passkey-remember" type="checkbox">이 기기에서 7일 동안 로그인 유지</label>
         </form>
         <p id="passkey-status" role="status"></p>
-        <details class="recovery"><summary>Can't sign in?</summary><p>Try the phone or password manager where you saved your passkey. Use a current system browser at the configured server address.</p><p>If all passkeys are lost, run <code>./bridge passkey-login --enroll</code> on your server to open a one-time recovery link.</p></details>
+        <details class="recovery"><summary>로그인할 수 없나요?</summary><p>패스키를 저장한 휴대폰이나 비밀번호 관리자를 사용해 보세요. 최신 시스템 브라우저에서 설정한 서버 주소로 접속하세요.</p><p>패스키를 모두 잃어버렸다면 서버에서 <code>./bridge passkey-login --enroll</code>을 실행해 일회용 복구 링크를 여세요.</p></details>
       </div>
       <p id="pair-help" hidden></p>
       <form id="owner-form" hidden>
-        <label id="password-label" for="owner-password">Admin password</label>
+        <label id="password-label" for="owner-password">관리자 비밀번호</label>
         <input id="owner-password" type="password" autocomplete="current-password" maxlength="256" required>
-        <label class="check"><input id="remember" type="checkbox">Keep me signed in for 7 days on this device</label>
-        <button id="owner-submit" type="submit" class="primary wide">Sign in</button>
+        <label class="check"><input id="remember" type="checkbox">이 기기에서 7일 동안 로그인 유지</label>
+        <button id="owner-submit" type="submit" class="primary wide">로그인</button>
       </form>
-      <details id="recovery-panel" class="recovery" hidden><summary>Use a recovery key</summary>
+      <details id="recovery-panel" class="recovery" hidden><summary>복구 키 사용</summary>
         <form id="login-form">
-          <label for="admin-token">Admin recovery key</label>
+          <label for="admin-token">관리자 복구 키</label>
           <input id="admin-token" type="password" autocomplete="off" required>
-          <p class="hint">Stored in <code>secrets/admin_token</code>. Using it signs out other admin browsers.</p>
-          <button type="submit" class="wide">Recover access</button>
+          <p class="hint"><code>secrets/admin_token</code>에 저장되어 있습니다. 사용하면 다른 관리 브라우저에서 로그아웃됩니다.</p>
+          <button type="submit" class="wide">접근 권한 복구</button>
         </form>
       </details>
     </section>
     <section id="console" hidden aria-labelledby="console-title">
       <div class="page-heading">
-        <h1 id="console-title">Your bridge</h1>
-        <span id="collector-status" class="collector-state" role="status">Checking collection status</span>
+        <h1 id="console-title">내 Bridge</h1>
+        <span id="collector-status" class="collector-state" role="status">수집 상태 확인 중</span>
       </div>
-      <section class="overview" aria-label="Bridge overview">
-        <article><h2>Message collection</h2><strong id="overview-collection">Checking…</strong><p id="overview-last" class="hint"></p></article>
-        <article><h2>Remote AI activity</h2><strong id="overview-ai">Checking…</strong><p id="overview-ai-detail" class="hint">AI connections are optional.</p><button id="overview-connect" class="quiet">Manage AI connections</button></article>
-        <article><h2>Your phone</h2><strong id="overview-phone">Checking…</strong><p id="overview-phone-detail" class="hint">Confirmed by you, never monitored automatically.</p><button id="overview-phone-action" class="quiet">Review phone confirmation</button></article>
+      <section class="overview" aria-label="Bridge 현황">
+        <article><h2>메시지 수집</h2><strong id="overview-collection">확인 중…</strong><p id="overview-last" class="hint"></p></article>
+        <article><h2>원격 AI 사용 기록</h2><strong id="overview-ai">확인 중…</strong><p id="overview-ai-detail" class="hint">AI 연결은 선택 사항입니다.</p><button id="overview-connect" class="quiet">AI 연결 관리</button></article>
+        <article><h2>내 휴대폰</h2><strong id="overview-phone">확인 중…</strong><p id="overview-phone-detail" class="hint">직접 확인한 상태이며 자동으로 감시하지 않습니다.</p><button id="overview-phone-action" class="quiet">휴대폰 확인 기록 보기</button></article>
       </section>
-      <nav class="section-nav" aria-label="Bridge sections"><button data-panel="connections-panel">AI connections</button><button data-panel="events-panel">Conversation events</button><button data-panel="tablet-workspace">Tablet &amp; settings</button></nav>
+      <nav class="section-nav" aria-label="Bridge 메뉴"><button data-panel="connections-panel">AI 연결</button><button data-panel="events-panel">대화 이벤트</button><button data-panel="tablet-workspace">태블릿 및 설정</button></nav>
       <details id="setup-guide" class="setup-guide" open>
-        <summary>KakaoTalk setup <span id="guide-summary">Checking…</span></summary><div class="section-body">
-        <div class="section-heading"><h2 id="guide-title">Connect your KakaoTalk</h2><button data-action="setup-check" class="quiet">Check again</button></div>
-        <ol id="setup-progress" class="setup-progress" aria-label="Setup progress"></ol>
-        <p id="setup-next">Checking the server and tablet…</p>
-        <p class="hint">Device preparation runs automatically. You complete store installation and KakaoTalk sign-in on the screen below.</p>
-        <button id="setup-next-button" class="primary" hidden>Continue</button>
+        <summary>카카오톡 설정 <span id="guide-summary">확인 중…</span></summary><div class="section-body">
+        <div class="section-heading"><h2 id="guide-title">카카오톡 연결하기</h2><button data-action="setup-check" class="quiet">다시 확인</button></div>
+        <ol id="setup-progress" class="setup-progress" aria-label="설정 진행 상황"></ol>
+        <p id="setup-next">서버와 태블릿 확인 중…</p>
+        <p class="hint">기기는 자동으로 준비됩니다. 아래 화면에서 스토어를 통해 앱을 설치하고 카카오톡에 로그인하세요.</p>
+        <button id="setup-next-button" class="primary" hidden>계속</button>
         <section id="setup-store-guide" class="manual-guide" aria-labelledby="store-guide-title" hidden>
-          <h3 id="store-guide-title">Install KakaoTalk on the tablet below</h3>
+          <h3 id="store-guide-title">아래 태블릿에 카카오톡 설치</h3>
           <ol class="manual-steps">
-            <li>Choose <strong>Open store</strong>. In Aurora, review the welcome screens and terms, then continue. If asked for an installation method, use <strong>Session Installer</strong>.</li>
-            <li>If Android asks to let Aurora install apps, open its settings, enable <strong>Allow from this source</strong> (<span lang="ko">이 출처 허용</span>), then use the tablet’s <strong>Back</strong> button to return to Aurora.</li>
-            <li>Choose <strong>Anonymous</strong> sign-in. Search for <strong>KakaoTalk</strong> or <strong lang="ko">카카오톡</strong>, and select the app by <strong>Kakao Corp.</strong></li>
-            <li>Select <strong>Install</strong> and confirm the Android installation prompt if shown. Keep this admin page open while the download finishes.</li>
-            <li>Bridge detects the installed app and finishes preparation. Continue when this guide changes to <strong>Sign in</strong> and KakaoTalk opens.</li>
+            <li><strong>스토어 열기</strong>를 누르세요. Aurora의 시작 안내와 약관을 확인하고 계속하세요. 설치 방식을 물으면 <strong>Session Installer</strong>를 선택하세요.</li>
+            <li>Android에서 Aurora의 앱 설치 권한을 요청하면 설정에서 <strong>이 출처 허용</strong>을 켜세요. 태블릿의 <strong>뒤로</strong> 버튼으로 Aurora에 돌아오세요.</li>
+            <li><strong>익명(Anonymous)</strong> 로그인을 선택하세요. <strong>카카오톡</strong> 또는 <strong>KakaoTalk</strong>을 검색하고 <strong>Kakao Corp.</strong>의 앱을 선택하세요.</li>
+            <li><strong>설치(Install)</strong>를 선택하고 Android 설치 확인 창이 나타나면 승인하세요. 다운로드가 끝날 때까지 관리 화면을 열어 두세요.</li>
+            <li>Bridge가 설치된 앱을 감지해 준비를 마칩니다. 안내가 <strong>로그인</strong>으로 바뀌고 카카오톡이 열리면 계속하세요.</li>
           </ol>
-          <p class="hint">For store search, click the tablet’s search field and type <strong>KakaoTalk</strong> using its on-screen keyboard. Bridge’s <strong>Text input</strong> becomes available after collection components are prepared.</p>
-          <details><summary>Store sign-in or download is stuck?</summary><p>Read Aurora’s error, then retry anonymous sign-in or the download in the store. If installation has finished but this guide has not changed, choose <strong>Check again</strong> above. For a preparation error, use <strong>Retry preparation</strong>.</p><p><a href="https://auroraoss.gitbook.io/wiki/troubleshooting-and-faqs/faqs/aurora-store" target="_blank" rel="noopener noreferrer">Aurora troubleshooting ↗</a></p></details>
+          <p class="hint">스토어에서 검색하려면 태블릿의 검색란을 누르고 화면 키보드로 <strong>KakaoTalk</strong>을 입력하세요. Bridge의 <strong>텍스트 입력</strong>은 수집 구성 요소가 준비된 뒤 사용할 수 있습니다.</p>
+          <details><summary>스토어 로그인이나 다운로드가 멈췄나요?</summary><p>Aurora의 오류 내용을 확인하고 익명 로그인이나 다운로드를 다시 시도하세요. 설치가 끝났는데 안내가 바뀌지 않으면 위의 <strong>다시 확인</strong>을 누르세요. 준비 중 오류가 발생했다면 <strong>준비 다시 시도</strong>를 누르세요.</p><p><a href="https://auroraoss.gitbook.io/wiki/troubleshooting-and-faqs/faqs/aurora-store" target="_blank" rel="noopener noreferrer">Aurora 문제 해결 ↗</a></p></details>
         </section>
-        <p class="hint">The phone session is confirmed by you. Tablet settings alone do not guarantee it stays signed in.</p>
+        <p class="hint">휴대폰 로그인 상태는 직접 확인해야 합니다. 태블릿 설정만으로 휴대폰 로그인이 유지된다고 보장할 수 없습니다.</p>
         </div>
       </details>
           <details class="management-panel" id="connections-panel">
-            <summary>AI connections <span id="pending-count"></span></summary>
+            <summary>AI 연결 <span id="pending-count"></span></summary>
             <div class="section-body">
-              <button id="open-ai-setup">Add or change a connection</button>
-              <p id="connection-help">Add the MCP address below in ChatGPT and choose OAuth. Confirm with your passkey and review access in the connecting browser.</p>
-              <code id="mcp-address" class="endpoint">No public AI connection configured.</code>
+              <button id="open-ai-setup">연결 추가 또는 변경</button>
+              <p id="connection-help">ChatGPT에 아래 MCP 주소를 추가하고 OAuth를 선택하세요. 연결 중인 브라우저에서 패스키로 인증하고 접근 권한을 확인하세요.</p>
+              <code id="mcp-address" class="endpoint">공개 AI 연결이 설정되지 않았습니다.</code>
               <div id="tunnel-connection" hidden aria-live="polite"></div>
-              <button id="refresh-connections" class="quiet">Refresh connections</button>
+              <button id="refresh-connections" class="quiet">연결 새로고침</button>
               <div id="connections-list" aria-live="polite"></div>
-              <p class="hint">Connecting does not subscribe to events automatically.</p>
+              <p class="hint">연결만으로 이벤트가 자동 구독되지는 않습니다.</p>
       <details id="ai-setup" class="ai-setup">
-        <summary>Add or change a connection <span>Optional · existing connections stay available</span></summary>
+        <summary>연결 추가 또는 변경 <span>선택 사항 · 기존 연결 유지</span></summary>
         <div class="ai-setup-body">
-          <ol class="ai-steps" aria-label="AI connection steps"><li>Choose a connection</li><li>Set up the server</li><li>Finish in your AI client</li></ol>
-          <p id="ai-agent-status" class="hint" role="status">Checking web setup availability…</p>
+          <ol class="ai-steps" aria-label="AI 연결 단계"><li>연결 방식 선택</li><li>서버 설정</li><li>AI 클라이언트에서 마무리</li></ol>
+          <p id="ai-agent-status" class="hint" role="status">웹 설정 사용 가능 여부 확인 중…</p>
           <form id="ai-setup-form" autocomplete="off">
             <fieldset id="ai-setup-fields" disabled>
               <div class="ai-setup-grid">
                 <div>
-                  <label for="ai-destination">Where will you use your messages?</label>
-                  <select id="ai-destination"><option value="none">Decide later</option><option value="chatgpt">ChatGPT</option><option value="desktop">An AI app on my computer</option><option value="remote">Another remote AI client</option><option value="advanced">All connection options</option></select>
-                  <label for="ai-method">Connection option</label>
+                  <label for="ai-destination">메시지를 어디에서 사용하시겠어요?</label>
+                  <select id="ai-destination"><option value="none">나중에 결정</option><option value="chatgpt">ChatGPT</option><option value="desktop">내 컴퓨터의 AI 앱</option><option value="remote">다른 원격 AI 클라이언트</option><option value="advanced">모든 연결 방식</option></select>
+                  <label for="ai-method">연결 방식</label>
                   <select id="ai-method">
-                    <option value="none">Decide later</option>
-                    <option value="openai-tunnel">Personal tunnel · no public address</option>
-                    <option value="https">Use my existing HTTPS address</option>
-                    <option value="tailscale">Create an HTTPS address with Tailscale</option>
-                    <option value="stdio">Run Bridge from my AI app · local or SSH</option>
+                    <option value="none">나중에 결정</option>
+                    <option value="openai-tunnel">개인 터널 · 공개 주소 불필요</option>
+                    <option value="https">기존 HTTPS 주소 사용</option>
+                    <option value="tailscale">Tailscale로 HTTPS 주소 만들기</option>
+                    <option value="stdio">AI 앱에서 Bridge 실행 · 로컬 또는 SSH</option>
                   </select>
                   <p id="ai-method-help" class="hint"></p>
-                  <p class="hint">Methods can coexist. Choosing another method keeps your existing connections.</p>
+                  <p class="hint">여러 방식을 함께 사용할 수 있습니다. 다른 방식을 선택해도 기존 연결은 유지됩니다.</p>
                 </div>
-                <details id="ai-edit" class="ai-method-fields" open><summary>Connection settings</summary>
-                  <div data-ai-method="none"><h3>Connect whenever you’re ready</h3><p>Collection and the admin console work without an AI connection.</p></div>
+                <details id="ai-edit" class="ai-method-fields" open><summary>연결 설정</summary>
+                  <div data-ai-method="none"><h3>필요할 때 연결하세요</h3><p>AI를 연결하지 않아도 메시지 수집과 관리 화면을 사용할 수 있습니다.</p></div>
                   <div data-ai-method="openai-tunnel" hidden>
-                    <h3>Get your tunnel details from OpenAI</h3>
+                    <h3>OpenAI에서 터널 정보 가져오기</h3>
                     <ol class="manual-steps">
-                      <li>Open <a href="https://platform.openai.com/settings/organization/tunnels" target="_blank" rel="noopener noreferrer">OpenAI tunnel settings ↗</a> and create a tunnel. Associate it with the ChatGPT workspace you will use.</li>
-                      <li>Copy its <strong>tunnel ID</strong> and obtain a runtime API key with <strong>Tunnels Read + Use</strong> permission.</li>
-                      <li>Return here, fill in both fields, review the access checkbox and select <strong>Set up and allow tunnel</strong>. Then follow <strong>Connection instructions</strong> below.</li>
+                      <li><a href="https://platform.openai.com/settings/organization/tunnels" target="_blank" rel="noopener noreferrer">OpenAI 터널 설정 ↗</a>에서 터널을 만들고 사용할 ChatGPT 워크스페이스에 연결하세요.</li>
+                      <li><strong>터널 ID</strong>를 복사하고 <strong>Tunnels Read + Use</strong> 권한이 있는 실행용 API 키를 발급받으세요.</li>
+                      <li>이 화면으로 돌아와 두 항목을 입력하고 접근 허용 내용을 확인한 뒤 <strong>터널 설정 및 허용</strong>을 누르세요. 아래 <strong>연결 안내</strong>에 따라 마무리하세요.</li>
                     </ol>
-                    <details><summary>Cannot create or find your tunnel?</summary><p>Creating a tunnel requires Tunnels Read + Manage. Selecting it requires Read + Use and access from your ChatGPT workspace. Ask the organization or workspace administrator if these controls are missing. <a href="https://developers.openai.com/api/docs/guides/secure-mcp-tunnels" target="_blank" rel="noopener noreferrer">OpenAI tunnel guide ↗</a></p></details>
-                    <label for="ai-tunnel-id">Tunnel ID</label><input id="ai-tunnel-id" placeholder="tunnel_…" maxlength="39" spellcheck="false" autocapitalize="off">
-                    <label for="ai-api-key">Runtime API key</label><input id="ai-api-key" type="password" autocomplete="new-password" maxlength="512" spellcheck="false" autocapitalize="off" aria-describedby="ai-key-help">
-                    <p id="ai-key-help" class="hint">Saved on your server. The key is never returned to this page.</p>
-                    <label class="check"><input id="ai-tunnel-approve" type="checkbox">Allow this personal tunnel to read collected messages and manage event subscriptions. Access stays allowed until I disconnect it.</label>
-                    <p class="hint">Use a tunnel only you can access. Conversation events remain off unless enabled separately.</p>
+                    <details><summary>터널을 만들거나 찾을 수 없나요?</summary><p>터널 생성에는 Tunnels Read + Manage 권한이 필요합니다. 터널 선택에는 Read + Use 권한과 ChatGPT 워크스페이스의 접근 권한이 필요합니다. 메뉴가 보이지 않으면 조직 또는 워크스페이스 관리자에게 문의하세요. <a href="https://developers.openai.com/api/docs/guides/secure-mcp-tunnels" target="_blank" rel="noopener noreferrer">OpenAI 터널 안내 ↗</a></p></details>
+                    <label for="ai-tunnel-id">터널 ID</label><input id="ai-tunnel-id" placeholder="tunnel_…" maxlength="39" spellcheck="false" autocapitalize="off">
+                    <label for="ai-api-key">실행용 API 키</label><input id="ai-api-key" type="password" autocomplete="new-password" maxlength="512" spellcheck="false" autocapitalize="off" aria-describedby="ai-key-help">
+                    <p id="ai-key-help" class="hint">서버에 저장됩니다. 저장한 키는 이 화면에 다시 표시되지 않습니다.</p>
+                    <label class="check"><input id="ai-tunnel-approve" type="checkbox">이 개인 터널이 수집된 메시지를 읽고 이벤트 구독을 관리하도록 허용합니다. 연결을 해제할 때까지 접근이 허용됩니다.</label>
+                    <p class="hint">본인만 접근할 수 있는 터널을 사용하세요. 대화 이벤트는 별도로 켜기 전까지 꺼져 있습니다.</p>
                   </div>
                   <div data-ai-method="https" hidden>
-                    <label for="ai-public-url">Your existing HTTPS address</label><input id="ai-public-url" type="url" placeholder="https://kakao.example.com" maxlength="253" autocapitalize="off" spellcheck="false">
-                    <p class="hint">Use this if your HTTPS address already routes to Bridge. You can paste the full /mcp URL. Bridge configures OAuth and keeps your current admin address.</p>
+                    <label for="ai-public-url">기존 HTTPS 주소</label><input id="ai-public-url" type="url" placeholder="https://kakao.example.com" maxlength="253" autocapitalize="off" spellcheck="false">
+                    <p class="hint">이미 Bridge에 연결된 HTTPS 주소가 있을 때 사용하세요. /mcp를 포함한 전체 URL도 입력할 수 있습니다. OAuth를 설정하며 현재 관리 화면 주소는 유지됩니다.</p>
                   </div>
                   <div data-ai-method="tailscale" hidden>
-                    <h3>Let Tailscale provide the HTTPS address</h3><p>Bridge installs Tailscale if needed, then configures Funnel and OAuth. If sign-in or Funnel approval is needed, a link appears here.</p>
+                    <h3>Tailscale로 HTTPS 주소 설정</h3><p>필요하면 Tailscale을 설치한 뒤 Funnel과 OAuth를 설정합니다. 로그인이나 Funnel 승인이 필요하면 여기에 링크가 표시됩니다.</p>
                     <ol class="manual-steps">
-                      <li>Review the checkbox below and select <strong>Set up Tailscale and OAuth</strong>.</li>
-                      <li>If <strong>Your approval is needed</strong> appears, open the Tailscale approval link and complete the requested sign-in or approval.</li>
-                      <li>Return to this page and select <strong>Continue setup</strong>. Follow any further approval request, then use the saved MCP URL under <strong>Connection instructions</strong>.</li>
+                      <li>아래 동의 항목을 확인하고 <strong>Tailscale 및 OAuth 설정</strong>을 누르세요.</li>
+                      <li><strong>승인이 필요합니다</strong>가 표시되면 Tailscale 승인 링크를 열어 로그인 또는 승인을 완료하세요.</li>
+                      <li>이 화면으로 돌아와 <strong>설정 계속</strong>을 누르세요. 추가 승인이 있으면 완료한 뒤 <strong>연결 안내</strong>에 저장된 MCP URL을 사용하세요.</li>
                     </ol>
                     <p id="ai-tailscale-location" class="hint"></p>
-                    <label class="check"><input id="ai-tailscale-allow" type="checkbox">Install or use Tailscale on this server and publish its MCP endpoint with Funnel.</label>
+                    <label class="check"><input id="ai-tailscale-allow" type="checkbox">이 서버에 Tailscale을 설치하거나 기존 설치를 사용하고, Funnel로 MCP 접속 주소를 공개합니다.</label>
                   </div>
                   <div data-ai-method="stdio" hidden>
-                    <h3>Copy configuration into your AI client</h3><p>No public address, OAuth or tunnel is required. The client must be able to run Bridge on the installation machine.</p>
-                    <label for="ai-ssh-target">Remote server? SSH destination (optional)</label><input id="ai-ssh-target" placeholder="user@your-server" maxlength="253" autocapitalize="off" spellcheck="false">
-                    <p class="hint">Use an existing SSH host alias or user@host for the installation machine. That account must already be able to run Bridge with its configuration and Docker access, without an interactive prompt.</p>
-                    <pre id="ai-stdio-config" class="ai-copy-block"></pre><button id="ai-copy-stdio" type="button">Copy client configuration</button>
+                    <h3>AI 클라이언트에 설정 복사</h3><p>공개 주소, OAuth, 터널이 필요하지 않습니다. 클라이언트가 Bridge를 설치한 컴퓨터에서 명령을 실행할 수 있어야 합니다.</p>
+                    <label for="ai-ssh-target">원격 서버의 SSH 접속 대상 (선택)</label><input id="ai-ssh-target" placeholder="user@your-server" maxlength="253" autocapitalize="off" spellcheck="false">
+                    <p class="hint">Bridge를 설치한 컴퓨터의 SSH 호스트 별칭이나 user@host를 입력하세요. 해당 계정은 추가 입력 없이 Bridge 설정과 Docker에 접근해 실행할 수 있어야 합니다.</p>
+                    <pre id="ai-stdio-config" class="ai-copy-block"></pre><button id="ai-copy-stdio" type="button">클라이언트 설정 복사</button>
                     <ol class="manual-steps">
-                      <li>Use <strong>Copy client configuration</strong>, then open your AI app’s MCP server settings or configuration file.</li>
-                      <li>Add the <code>kakaotalk</code> entry to its <code>mcpServers</code> settings, keeping any existing servers. If the app uses form fields, copy the displayed command and arguments into those fields.</li>
-                      <li>Save and reload the AI app’s MCP connections, or restart the app. Enable KakaoTalk Bridge and ask it to check collector status.</li>
+                      <li><strong>클라이언트 설정 복사</strong>를 누른 뒤 AI 앱의 MCP 서버 설정이나 설정 파일을 여세요.</li>
+                      <li>기존 서버 설정을 유지하면서 <code>mcpServers</code>에 <code>kakaotalk</code> 항목을 추가하세요. 입력 폼을 사용하는 앱이라면 표시된 명령어와 인수를 해당 항목에 복사하세요.</li>
+                      <li>저장한 뒤 AI 앱의 MCP 연결을 새로고침하거나 앱을 다시 실행하세요. KakaoTalk Bridge를 활성화하고 수집 상태 확인을 요청하세요.</li>
                     </ol>
-                    <p class="hint">If the command cannot start, check that the installation path is reachable from the AI app. For SSH, confirm that the destination works without an interactive password prompt.</p>
+                    <p class="hint">명령을 실행할 수 없으면 AI 앱에서 설치 경로에 접근할 수 있는지 확인하세요. SSH는 비밀번호 입력 없이 접속할 수 있어야 합니다.</p>
                   </div>
                 </details>
               </div>
-              <p id="ai-form-error" role="alert" hidden></p><div class="ai-setup-actions"><button id="ai-setup-submit" type="submit" class="primary">Keep current setup</button><button id="ai-check" type="button">Check server connection</button></div>
+              <p id="ai-form-error" role="alert" hidden></p><div class="ai-setup-actions"><button id="ai-setup-submit" type="submit" class="primary">현재 설정 유지</button><button id="ai-check" type="button">서버 연결 확인</button></div>
             </fieldset>
           </form>
           <div id="ai-job" class="ai-job" hidden aria-live="polite">
-            <h3 id="ai-job-title"></h3><p id="ai-job-message"></p><p id="ai-job-time" class="hint"></p><button id="ai-retry" type="button" hidden>Retry setup</button>
-            <a id="ai-provider-action" target="_blank" rel="noopener noreferrer" hidden>Open Tailscale approval ↗</a>
-            <button id="ai-continue" type="button" hidden>Continue setup</button>
+            <h3 id="ai-job-title"></h3><p id="ai-job-message"></p><p id="ai-job-time" class="hint"></p><button id="ai-retry" type="button" hidden>설정 다시 시도</button>
+            <a id="ai-provider-action" target="_blank" rel="noopener noreferrer" hidden>Tailscale 승인 페이지 열기 ↗</a>
+            <button id="ai-continue" type="button" hidden>설정 계속</button>
           </div>
           <div id="ai-finish" class="ai-finish" hidden>
-            <h3>Connection instructions</h3><p id="ai-finish-help"></p>
+            <h3>연결 안내</h3><p id="ai-finish-help"></p>
             <strong id="ai-client-label"></strong><code id="ai-client-value" class="endpoint"></code>
-            <div class="ai-setup-actions"><button id="ai-copy-value" type="button">Copy</button><a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">Open ChatGPT plugins ↗</a></div>
+            <div class="ai-setup-actions"><button id="ai-copy-value" type="button">복사</button><a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">ChatGPT 플러그인 열기 ↗</a></div>
             <ol id="ai-finish-tunnel" class="manual-steps" hidden>
-              <li>In ChatGPT on the web, open <strong>Plugins → + → Create custom MCP server</strong>. Name it <strong>KakaoTalk Bridge</strong>.</li>
-              <li>Under <strong>Connection</strong>, choose <strong>Tunnel</strong> and select or paste the ID above. For this approved personal tunnel, choose <strong>No authentication</strong>.</li>
-              <li>Review the notice and create the plugin. Install it in your workspace, then select <strong>@KakaoTalk Bridge</strong> in a conversation.</li>
+              <li>ChatGPT 웹에서 <strong>플러그인(Plugins) → + → 사용자 지정 MCP 서버 만들기(Create custom MCP server)</strong>를 여세요. 이름은 <strong>KakaoTalk Bridge</strong>로 지정하세요.</li>
+              <li><strong>연결(Connection)</strong>에서 <strong>터널(Tunnel)</strong>을 선택하고 위 ID를 선택하거나 붙여 넣으세요. 승인된 개인 터널에는 <strong>인증 없음(No authentication)</strong>을 선택하세요.</li>
+              <li>안내를 확인하고 플러그인을 만드세요. 워크스페이스에 설치한 뒤 대화에서 <strong>@KakaoTalk Bridge</strong>를 선택하세요.</li>
             </ol>
             <ol id="ai-finish-https" class="manual-steps" hidden>
-              <li>Add a remote MCP server in your AI client. In ChatGPT on the web, use <strong>Plugins → + → Create custom MCP server</strong> and name it <strong>KakaoTalk Bridge</strong>.</li>
-              <li>Paste the URL above into <strong>Server URL</strong> and choose <strong>OAuth</strong>. In ChatGPT, use CIMD if a registration method is requested; leave optional static client credentials blank. Review the notice and create the plugin.</li>
-              <li>Complete the connection: approve with your passkey, or match the displayed code in this admin page’s <strong>AI connections</strong> and choose <strong>Approve connection</strong>. Return to the client to finish.</li>
-              <li>Install or enable the connection. In ChatGPT, select <strong>@KakaoTalk Bridge</strong> in a conversation.</li>
+              <li>AI 클라이언트에 원격 MCP 서버를 추가하세요. ChatGPT 웹에서는 <strong>플러그인(Plugins) → + → 사용자 지정 MCP 서버 만들기(Create custom MCP server)</strong>에서 이름을 <strong>KakaoTalk Bridge</strong>로 지정하세요.</li>
+              <li><strong>서버 URL(Server URL)</strong>에 위 URL을 붙여 넣고 <strong>OAuth</strong>를 선택하세요. ChatGPT에서 등록 방식을 물으면 CIMD를 사용하고, 선택 항목인 고정 클라이언트 인증 정보는 비워 두세요. 안내를 확인하고 플러그인을 만드세요.</li>
+              <li>패스키로 승인하거나 관리 화면의 <strong>AI 연결</strong>에서 코드가 일치하는 요청의 <strong>연결 승인</strong>을 누르세요. 클라이언트로 돌아가 연결을 마무리하세요.</li>
+              <li>연결을 설치하거나 활성화하세요. ChatGPT에서는 대화에서 <strong>@KakaoTalk Bridge</strong>를 선택하세요.</li>
             </ol>
-            <details><summary>Connection option missing or approval unfinished?</summary><p>Check your ChatGPT workspace permissions. For a missing tunnel, check its workspace association and your Read + Use access. For an expired OAuth request, start the connection again in your AI client and approve the new matching code. <a href="https://developers.openai.com/api/docs/guides/custom-mcp-server" target="_blank" rel="noopener noreferrer">ChatGPT connection guide ↗</a></p></details>
-            <p><strong>Verify:</strong> ask your AI to check collector status. Then send yourself a distinctive message from your phone, such as “Bridge check 14:32”, and ask the AI to find that exact text.</p>
-            <p class="hint">Server setup and access approval are separate from a successful AI request. Check <strong>Remote AI activity</strong> in the overview after your request.</p>
+            <details><summary>연결 방식이 보이지 않거나 승인이 끝나지 않았나요?</summary><p>ChatGPT 워크스페이스 권한을 확인하세요. 터널이 보이지 않으면 워크스페이스 연결 여부와 Read + Use 권한을 확인하세요. OAuth 요청이 만료되면 AI 클라이언트에서 다시 연결하고 새로 표시된 코드와 일치하는 요청을 승인하세요. <a href="https://developers.openai.com/api/docs/guides/custom-mcp-server" target="_blank" rel="noopener noreferrer">ChatGPT 연결 안내 ↗</a></p></details>
+            <p><strong>연결 확인:</strong> AI에 수집 상태 확인을 요청하세요. 휴대폰에서 ‘Bridge 확인 14:32’처럼 구별하기 쉬운 메시지를 나에게 보내고 AI에 해당 문구를 찾아 달라고 요청하세요.</p>
+            <p class="hint">서버 설정과 접근 승인만으로 AI 요청의 성공 여부를 알 수는 없습니다. 요청 후 현황의 <strong>원격 AI 사용 기록</strong>을 확인하세요.</p>
           </div>
-          <p class="hint">Prefer the terminal? <code>./bridge setup-connection</code> is also available.</p>
+          <p class="hint">터미널에서는 <code>./bridge setup-connection</code>을 사용할 수 있습니다.</p>
         </div>
       </details>
             </div>
           </details>
           <details id="events-panel" class="management-panel">
-            <summary>Conversation events</summary>
+            <summary>대화 이벤트</summary>
             <div class="section-body">
-              <p>Choose which conversations can send new-message events to your connected AI. All conversations start off. Collection and message search are unchanged.</p>
-              <p class="hint">Turning on allows newly collected messages from this point forward. Your AI client must also subscribe to MCP Events. Turning off cancels queued events; a delivery already in progress may finish.</p>
+              <p>연결된 AI에 새 메시지 이벤트를 보낼 대화를 선택하세요. 기본값은 모든 대화에서 꺼짐입니다. 메시지 수집과 검색에는 영향을 주지 않습니다.</p>
+              <p class="hint">켜면 그 시점부터 새로 수집된 메시지의 이벤트를 허용합니다. AI 클라이언트에서도 MCP Events를 구독해야 합니다. 끄면 대기 중인 이벤트가 취소되지만 이미 전송 중인 이벤트는 전달될 수 있습니다.</p>
               <form id="event-search-form">
-                <label for="event-search">Find a conversation</label>
+                <label for="event-search">대화 찾기</label>
                 <div class="input-row">
-                  <input id="event-search" type="search" maxlength="256" placeholder="Conversation name" autocomplete="off">
-                  <button type="submit" id="event-search-button">Search</button>
+                  <input id="event-search" type="search" maxlength="256" placeholder="대화 이름" autocomplete="off">
+                  <button type="submit" id="event-search-button">검색</button>
                 </div>
               </form>
-              <button id="refresh-events" class="quiet">Refresh conversations</button>
+              <button id="refresh-events" class="quiet">대화 새로고침</button>
               <p id="event-list-status" class="hint" role="status"></p>
               <div id="event-conversations"></div>
-              <button id="more-events" class="quiet" hidden>Load more conversations</button>
+              <button id="more-events" class="quiet" hidden>대화 더 보기</button>
             </div>
           </details>
-      <details id="tablet-workspace" class="management-panel"><summary>Tablet &amp; settings <span>Login, installation and recovery</span></summary>
+      <details id="tablet-workspace" class="management-panel"><summary>태블릿 및 설정 <span>로그인, 설치 및 복구</span></summary>
       <div class="workspace">
-        <section class="device-panel" aria-label="Remote tablet screen">
+        <section class="device-panel" aria-label="원격 태블릿 화면">
           <div class="screen-toolbar">
-            <span id="screen-label">Connecting to screen</span>
+            <span id="screen-label">화면 연결 중</span>
             <div class="toolbar-actions">
-              <button id="refresh" class="quiet">Refresh</button>
-              <button id="pause" class="quiet" aria-pressed="false">Pause</button>
+              <button id="refresh" class="quiet">새로고침</button>
+              <button id="pause" class="quiet" aria-pressed="false">일시 정지</button>
             </div>
           </div>
           <div class="screen-stage">
             <div id="screen-placeholder">
-              <h2>Waiting for the screen</h2>
-              <p>Your private device is starting. If it stays here, run the installation command again.</p>
+              <h2>화면 대기 중</h2>
+              <p>개인 기기를 시작하고 있습니다. 이 상태가 계속되면 설치 명령을 다시 실행하세요.</p>
             </div>
-            <img id="screen" hidden draggable="false" alt="Tablet screen controlled by clicking or dragging">
+            <img id="screen" hidden draggable="false" alt="클릭하거나 드래그해 조작하는 태블릿 화면">
           </div>
-          <nav class="device-keys" aria-label="Android controls">
-            <button data-key="back">Back</button>
-            <button data-key="home">Home</button>
-            <button data-key="wake">Wake</button>
-            <button data-action="open-kakao">Open KakaoTalk</button>
+          <nav class="device-keys" aria-label="Android 조작">
+            <button data-key="back">뒤로</button>
+            <button data-key="home">홈</button>
+            <button data-key="wake">화면 켜기</button>
+            <button data-action="open-kakao">카카오톡 열기</button>
           </nav>
-          <p class="screen-help">Click to select and drag to scroll. Opening a chat may change its read status.</p>
+          <p class="screen-help">클릭해 선택하고 드래그해 스크롤하세요. 대화방을 열면 읽음 상태가 바뀔 수 있습니다.</p>
         </section>
-        <aside aria-label="Status and settings">
+        <aside aria-label="상태 및 설정">
           <section class="status-section" aria-labelledby="status-title">
             <div class="section-heading">
-              <h2 id="status-title">Login status</h2>
-              <button data-action="session-check" class="quiet">Check status</button>
+              <h2 id="status-title">로그인 상태</h2>
+              <button data-action="session-check" class="quiet">상태 확인</button>
             </div>
-            <p id="session-inspected" class="hint">Select “Check status” to inspect the device.</p>
+            <p id="session-inspected" class="hint">‘상태 확인’을 눌러 기기를 점검하세요.</p>
             <dl class="status-list">
-              <div><dt>Tablet</dt><dd><span id="tablet-status">Not checked</span><small id="tablet-detail"></small></dd></div>
-              <div><dt>Phone</dt><dd><span id="phone-status">Not checked</span><small id="phone-detail">Phone status reflects your manual confirmation.</small></dd></div>
-              <div><dt>Collection approval</dt><dd><span id="approval-status">Not checked</span><small id="approval-detail"></small></dd></div>
+              <div><dt>태블릿</dt><dd><span id="tablet-status">미확인</span><small id="tablet-detail"></small></dd></div>
+              <div><dt>휴대폰</dt><dd><span id="phone-status">미확인</span><small id="phone-detail">휴대폰 상태는 직접 확인한 내용을 표시합니다.</small></dd></div>
+              <div><dt>수집 승인</dt><dd><span id="approval-status">미확인</span><small id="approval-detail"></small></dd></div>
             </dl>
           </section>
           <details class="settings-section" open>
-            <summary>Text input</summary>
+            <summary>텍스트 입력</summary>
             <div class="section-body">
-              <p>Select an input field on the tablet before sending text.</p>
+              <p>텍스트를 보내기 전에 태블릿의 입력란을 선택하세요.</p>
               <form id="text-form">
-                <label class="sr-only" for="device-text">Text to enter on the tablet</label>
+                <label class="sr-only" for="device-text">태블릿에 입력할 텍스트</label>
                 <div class="input-row">
-                  <input id="device-text" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="4096" required placeholder="Text to enter">
-                  <button type="submit" id="send-text">Insert</button>
+                  <input id="device-text" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="4096" required placeholder="입력할 텍스트">
+                  <button type="submit" id="send-text">입력</button>
                 </div>
-                <label class="check"><input id="show-text" type="checkbox">Show text</label>
+                <label class="check"><input id="show-text" type="checkbox">텍스트 표시</label>
               </form>
               <div class="input-tools">
-                <button data-action="keyboard" class="quiet">Connect keyboard</button>
+                <button data-action="keyboard" class="quiet">키보드 연결</button>
                 <div>
                   <button data-key="tab" class="quiet">Tab</button>
-                  <button data-key="delete" class="quiet" aria-label="Delete one character">Delete</button>
+                  <button data-key="delete" class="quiet" aria-label="한 글자 삭제">삭제</button>
                   <button data-key="enter" class="quiet">Enter</button>
                 </div>
               </div>
             </div>
           </details>
           <details id="login-setup" class="settings-section">
-            <summary>KakaoTalk login <span id="setup-summary"></span></summary>
+            <summary>카카오톡 로그인 <span id="setup-summary"></span></summary>
             <div class="section-body">
               <ol class="login-steps">
                 <li>
-                  <h3>Sign in as a secondary device</h3>
-                  <p>In the Korean KakaoTalk UI, select <strong>“Use with other devices” (<span lang="ko">다른 기기와 함께 사용</span>)</strong>, then run the check. Do not sign in if this option is missing.</p>
-                  <button id="login-check" data-action="login-check" class="wide" aria-describedby="login-check-help">Check login options</button>
-                  <p id="login-check-help" class="hint">Use only before signing in. Sign in on the tablet within 30 minutes of a successful check.</p>
+                  <h3>보조 기기로 로그인</h3>
+                  <p>한국어 카카오톡 화면에서 <strong>다른 기기와 함께 사용</strong>을 선택한 뒤 확인을 실행하세요. 이 옵션이 없으면 로그인하지 마세요.</p>
+                  <button id="login-check" data-action="login-check" class="wide" aria-describedby="login-check-help">로그인 옵션 확인</button>
+                  <p id="login-check-help" class="hint">로그인하기 전에만 사용하세요. 확인에 성공한 뒤 30분 이내에 태블릿에 로그인하세요.</p>
                   <p id="login-check-result" class="job" role="status" hidden></p>
                 </li>
                 <li>
-                  <h3>Finish signing in on the tablet</h3>
-                  <p>After the check succeeds, complete KakaoTalk sign-in on the tablet, including any verification requested on your phone. Open KakaoTalk on your phone and check that its existing session still works.</p>
+                  <h3>태블릿 로그인 완료</h3>
+                  <p>확인에 성공하면 휴대폰 인증 등 필요한 절차를 거쳐 태블릿에서 카카오톡 로그인을 완료하세요. 휴대폰의 카카오톡을 열어 기존 로그인이 유지되는지 확인하세요.</p>
                 </li>
                 <li>
-                  <h3>Confirm both sessions</h3>
-                  <label class="check"><input id="phone-active" type="checkbox">My existing phone session is still active.</label>
-                  <label class="check"><input id="tablet-active" type="checkbox">I have signed in on the tablet.</label>
-                  <button id="confirm" class="primary wide" disabled>Start collecting messages</button>
+                  <h3>두 기기의 로그인 확인</h3>
+                  <label class="check"><input id="phone-active" type="checkbox">휴대폰의 기존 로그인이 유지되고 있습니다.</label>
+                  <label class="check"><input id="tablet-active" type="checkbox">태블릿에 로그인했습니다.</label>
+                  <button id="confirm" class="primary wide" disabled>메시지 수집 시작</button>
                 </li>
               </ol>
             </div>
           </details>
           <details id="phone-panel" class="settings-section">
-            <summary>Phone confirmation</summary>
+            <summary>휴대폰 확인</summary>
             <div class="section-body">
-              <p>Open KakaoTalk on your phone to check. This server does not monitor the phone session automatically.</p>
-              <label class="check"><input id="phone-rechecked" type="checkbox">My phone session is still active.</label>
-              <button id="phone-recheck" class="wide" disabled>Update confirmation time</button><p id="phone-recheck-help" class="hint"></p><button id="phone-inspect" class="quiet" data-action="session-check" hidden>Refresh tablet inspection</button>
-              <p class="hint">Available after collection is approved. A reminder to recheck appears after 24 hours.</p>
-              <button data-action="phone-lost" class="danger wide">Signed out · Stop collection</button>
+              <p>휴대폰에서 카카오톡을 열어 확인하세요. 서버는 휴대폰 로그인 상태를 자동으로 감시하지 않습니다.</p>
+              <label class="check"><input id="phone-rechecked" type="checkbox">휴대폰 로그인이 유지되고 있습니다.</label>
+              <button id="phone-recheck" class="wide" disabled>확인 시간 갱신</button><p id="phone-recheck-help" class="hint"></p><button id="phone-inspect" class="quiet" data-action="session-check" hidden>태블릿 점검 새로고침</button>
+              <p class="hint">수집 승인 후 사용할 수 있습니다. 24시간이 지나면 재확인 안내가 표시됩니다.</p>
+              <button data-action="phone-lost" class="danger wide">로그아웃됨 · 수집 중지</button>
             </div>
           </details>
           <details class="settings-section">
-            <summary>Installation</summary>
+            <summary>설치</summary>
             <div class="section-body">
-              <p>Prepare a Korean tablet, then install KakaoTalk through Aurora using anonymous sign-in.</p>
-              <button data-action="prepare" class="wide">Prepare tablet and Aurora</button>
-              <button data-action="open-store" class="wide">Open Aurora</button>
-              <p class="hint">In Aurora, search for KakaoTalk by Kakao Corp. Allow app installation when Android asks. Keep “Use with other devices” selected before signing in.</p>
-              <button id="install" class="wide">Set up collection components…</button>
-              <details><summary>Install from APK files instead</summary><p>Run <code>./bridge import-apks /path/to/apk-folder</code> on the server, then set up collection components. Include the base APK and all matching splits. Publisher signatures are verified.</p></details>
-              <p class="hint">Existing enrollment and collection approval are preserved. These actions do not sign in for you.</p>
+              <p>한국어 태블릿을 준비한 뒤 Aurora에 익명으로 로그인해 카카오톡을 설치하세요.</p>
+              <button data-action="prepare" class="wide">태블릿과 Aurora 준비</button>
+              <button data-action="open-store" class="wide">Aurora 열기</button>
+              <p class="hint">Aurora에서 Kakao Corp.의 카카오톡을 검색하세요. Android에서 요청하면 앱 설치를 허용하세요. 로그인 전에 ‘다른 기기와 함께 사용’을 선택하세요.</p>
+              <button id="install" class="wide">수집 구성 요소 설치…</button>
+              <details><summary>APK 파일로 설치하기</summary><p>서버에서 <code>./bridge import-apks /path/to/apk-folder</code>를 실행한 뒤 수집 구성 요소를 설치하세요. 기본 APK와 일치하는 모든 분할 APK를 포함해야 합니다. 배포자 서명도 검증합니다.</p></details>
+              <p class="hint">기존 기기 등록과 수집 승인은 유지됩니다. 이 작업으로 자동 로그인되지는 않습니다.</p>
             </div>
           </details>
           <details id="passkeys-panel" class="settings-section" hidden>
-            <summary>Passkeys and recovery</summary>
+            <summary>패스키 및 복구</summary>
             <div class="section-body">
-              <p>Add a backup passkey on another device or security key so you can still sign in if you lose this one.</p>
-              <label for="passkey-label">Name</label><input id="passkey-label" maxlength="80" value="Backup passkey" autocomplete="off">
-              <button id="passkey-add">Add a passkey</button>
-              <p class="hint">Adding or removing a passkey asks you to confirm with an existing one. Removing a passkey signs out admin browsers and disconnects MCP clients.</p>
+              <p>기기를 잃어버려도 로그인할 수 있도록 다른 기기나 보안 키에 백업 패스키를 추가하세요.</p>
+              <label for="passkey-label">이름</label><input id="passkey-label" maxlength="80" value="백업 패스키" autocomplete="off">
+              <button id="passkey-add">패스키 추가</button>
+              <p class="hint">패스키를 추가하거나 삭제할 때 기존 패스키로 인증해야 합니다. 패스키를 삭제하면 관리 브라우저에서 로그아웃되고 MCP 클라이언트 연결도 해제됩니다.</p>
               <div id="passkeys-list"></div>
             </div>
           </details>
           <details class="settings-section" id="browsers-panel">
-            <summary>Admin browsers</summary><div id="browsers-list" class="section-body"></div>
+            <summary>관리 브라우저</summary><div id="browsers-list" class="section-body"></div>
           </details>
           <details class="settings-section">
-            <summary>Collection test and maintenance</summary>
+            <summary>수집 테스트 및 유지 관리</summary>
             <div class="section-body">
-              <button id="test-collection" class="wide">Start a collection test</button>
-              <p id="test-result" role="status">Start the test, then send yourself a message from your phone.</p>
-              <p>Server commands:</p><code>./bridge doctor<br>./bridge backup<br>./bridge update --manifest release.json</code>
-              <p class="hint">Backups include Android login data and keys. Store them privately. Diagnostics omit messages and credentials.</p>
+              <button id="test-collection" class="wide">수집 테스트 시작</button>
+              <p id="test-result" role="status">테스트를 시작한 뒤 휴대폰에서 나에게 메시지를 보내세요.</p>
+              <p>서버 명령어:</p><code>./bridge doctor<br>./bridge backup<br>./bridge update --manifest release.json</code>
+              <p class="hint">백업에는 Android 로그인 정보와 키가 포함됩니다. 안전하게 보관하세요. 진단 결과에는 메시지와 인증 정보가 포함되지 않습니다.</p>
             </div>
           </details>
           <div id="job" class="job" role="status" hidden></div>
@@ -344,11 +344,11 @@
   </main>
   <dialog id="install-dialog" aria-labelledby="install-title" aria-describedby="install-description">
     <form method="dialog">
-      <h2 id="install-title">Set up collection components?</h2>
-      <p id="install-description">Install the registration app, keyboard and Iris after KakaoTalk is installed. An already enrolled tablet is left unchanged.</p>
+      <h2 id="install-title">수집 구성 요소를 설치할까요?</h2>
+      <p id="install-description">카카오톡 설치 후 등록 앱, 키보드와 Iris를 설치합니다. 이미 등록된 태블릿은 변경하지 않습니다.</p>
       <div class="dialog-actions">
-        <button value="cancel" autofocus>Cancel</button>
-        <button value="install" class="primary">Set up</button>
+        <button value="cancel" autofocus>취소</button>
+        <button value="install" class="primary">설치</button>
       </div>
     </form>
   </dialog>

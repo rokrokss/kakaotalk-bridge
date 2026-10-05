@@ -180,7 +180,7 @@ class Passkeys:
                 raise ValueError("invalid_passkey_proof")
         return row
 
-    def register_options(self, role, origin, browser, enrollment="", proof="", label="Passkey"):
+    def register_options(self, role, origin, browser, enrollment="", proof="", label="패스키"):
         if role != "admin":
             raise ValueError("passkey_registration_unavailable")
         if not isinstance(label, str) or not 1 <= len(label.strip()) <= 80:
@@ -357,7 +357,7 @@ if __name__ == "__main__":
     auth = authority()
     if sys.argv[1:] == ["configure"]:
         auth.configure(**json.loads(sys.stdin.read(4096)))
-        print("Passkey origins configured.")
+        print("패스키 주소를 설정했습니다.")
     elif sys.argv[1:] == ["enroll"]:
         print(auth.issue_enrollment())
     elif sys.argv[1:] == ["info"]:

@@ -8,5 +8,5 @@ trap cleanup EXIT
 docker compose exec -T api python -m server.maintenance backup "/tmp/$name"
 docker compose cp "api:/tmp/$name" "backups/$name"
 chmod 600 "backups/$name"
-echo "Encrypted DB backup: backups/$name"
-echo 'Keep secrets/backup_key separately. Android /data and enrollment state require a stopped-instance snapshot.'
+echo "암호화된 DB 백업: backups/$name"
+echo 'secrets/backup_key는 별도로 보관하세요. Android /data와 기기 등록 상태는 인스턴스를 중지한 뒤 스냅샷으로 백업해야 합니다.'

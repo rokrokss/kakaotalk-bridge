@@ -1,68 +1,96 @@
-# Validation scope
+# 검증 범위
 
-[Development and test commands](development.md) · [Current architecture](design.md)
+[개발과 테스트 명령](development.md) · [현재 구조](design.md)
 
-The dated sections record validation at each checkpoint, not a claim that every
-installation path has been exercised. The latest admin and connection setup
-checks are [below](#admin-ux-and-connection-setup-2026-10-05).
+날짜별 항목은 해당 시점의 검증 기록이며 모든 설치 경로를 실행했다는 뜻은 아닙니다. 최근 관리 화면·연결 설정 검사는 [아래](#admin-ux-and-connection-setup-2026-10-05)에 있습니다. 명령과 실제 진단 출력은 원문을 유지합니다.
 
-## Verified with a real account
+<a id="korean-user-guidance-2026-10-06"></a>
 
-On 2026-10-04, using Lima/Ubuntu 24.04 arm64 on an Apple Silicon Mac:
+## 한국어 사용자 안내 (2026-10-06)
 
-- redroid boot with Android 14, SM-T970 tablet configuration, and 1200 × 1920 resolution at density 240.
-- Screen viewing, control, and Korean text input through the web admin console.
-- KakaoTalk secondary-device option check (“다른 기기와 함께 사용”, meaning “Use with other devices”) and secondary login.
-- Phone session continuity, manually confirmed by the user on the phone; this was not an automated server check.
-- Iris database row storage and collection of new messages sent to self after approval.
-- State volume persistence across container and VM restarts.
-- Public HTTPS OAuth flow and successful connection of `KakaoTalk Bridge` in ChatGPT.
+README·사용 문서, 관리·OAuth 화면, MCP 도구 설명, Android 등록 앱, 터미널 안내를 한국어 중심으로 바꿨습니다. README의 SVG와 편집 원본도 수정하고 가상 데이터의 한국어 관리 화면을 다시 캡처했습니다. 내부 주석·예외·진단과 프로토콜 식별자는 영어를 유지합니다. 설정 stdout·stderr는 비공개 로그로 보내고 단계·완료·경과 시간·실패 후 안내를 한국어로 표시합니다. 인증 링크와 기계 판독 출력은 로그·진행 안내와 분리합니다.
 
-## Automated checks
+| 실행한 검사 | 실제 결과 |
+| --- | --- |
+| `uv run pytest -q` | `371 passed, 1 warning in 21.18s` |
+| `uv run ruff check .` | `All checks passed!` |
+| `node --test tests/connection-guidance.test.cjs tests/setup-flow.test.cjs` | `tests 7`, `pass 7`, `fail 0` |
+| `node tests/setup-browser.cjs` | `PASS`: 자동 준비·스토어 설치 감지·구성 요소 설정·수동 확인 경계·재설치 없는 새로고침 |
+| `node tests/passkey_browser.cjs` | `PASS`: 패스키 등록·로그인·세션·두 포트 사용·명시적 OAuth 승인/취소·PKCE·갱신·도구 조회·코드 재사용 거부 |
+| `node tests/localization-browser.cjs` | `PASS: Korean admin, connection guidance, mobile layout, README capture and SVG canvas bounds` |
+| `./bridge --help`, `./bridge up --plan` | 종료 코드 0. 한국어 사용법·설정 단계 출력 |
+| JS `node --check`, 설치·운영 셸 `bash -n`, `docker compose --profile dot config --quiet`, `git diff --check` | 모두 종료 코드 0, 출력 없음 |
+| 로컬 문서 링크·앵커 검사 | `PASS: local documentation links and anchors` |
 
-Python tests use synthetic data to cover authentication, CSRF, Origin, login approval conditions, database deduplication, cursors, restores, MCP queries, and event retries, revocation, and expiry. Docker smoke tests cover the API, gateway, stdio MCP, SQLite, and encrypted backups.
+Python 추가 검사는 하위 명령의 두 출력 스트림 격리, 실패 진단·0600 로그, 한국어 경과 시간, 인증 링크 비저장, MCP·JSON 출력 보존, CLI 인수 오류를 확인합니다. 브라우저 검사는 합성 기기·인증기를 사용했으며 실제 계정·VM을 조작하지 않았습니다. 폭 390·1168픽셀의 관리 화면과 SVG 글자 영역을 검사하고 영문 내부 오류가 한국어 안내로 표시되는 것도 확인했습니다. 기존 Starlette 테스트 클라이언트 지원 중단 예고 1개가 남았습니다. 이 변경에서는 운영 배포와 Android APK 재빌드를 수행하지 않았습니다.
 
-Image builds and API startup have been verified on amd64. This does not establish redroid or KakaoTalk compatibility on an amd64 host. Reproduction commands are in [Development](development.md).
+<a id="verified-with-a-real-account"></a>
 
-## MCP message queries (2026-10-04)
+## 실제 계정으로 확인한 내용
 
-The [query API](mcp-queries.md) now separates send time from collection time, returns structured sender/room metadata, supports sender/room/date filters and stable pagination, lists distinct conversations and retrieves surrounding conversation context. The remote catalog contains eight tools. Numeric event cursors and pending/ack behavior remain unchanged.
+2026-10-04, Apple Silicon Mac의 Lima·Ubuntu 24.04 arm64에서 확인했습니다.
 
-`uv run pytest -q` reported **187 passed** with the existing Starlette TestClient warning. `uv run ruff check .` reported **All checks passed!**, and `git diff --check` passed. Tests cover timestamp ordering, literal search, filters, signed cursors, late history, room-scoped names, context, metadata refresh, retention, restore and real API-to-MCP output-schema validation. Both arm64 images built successfully.
+- Android 14 redroid 시작, SM-T970 태블릿 설정, 밀도 240의 1200 × 1920 해상도.
+- 웹 관리 화면에서 화면 보기·조작·한국어 입력.
+- 카카오톡 **다른 기기와 함께 사용** 옵션 검사와 보조 기기 로그인.
+- 사용자가 휴대폰에서 직접 확인한 기존 로그인 유지. 서버 자동 검사는 아닙니다.
+- 승인 후 Iris DB 행 저장과 나에게 보낸 새 메시지 수집.
+- 컨테이너·VM 재시작 후 상태 볼륨 유지.
+- 공개 HTTPS OAuth와 ChatGPT의 `KakaoTalk Bridge` 연결 성공.
 
-The real Lima deployment was backed up with authenticated encryption before replacing the Iris component and query services. The Iris migration verified both APK hashes and preserved its previous binary. Before/after container comparisons confirmed that redroid, gateway, device-agent and the passkey authority were not recreated. The signed-in KakaoTalk package and enrollment were not replaced.
+<a id="automated-checks"></a>
 
-Production checks passed for latest-first ordering, pagination without overlapping rows, room and resolved-sender-name filters, 22 distinct conversations and same-room context. Calls through the installed connector succeeded for recent messages, profile and collector status; a recent-message response included resolved sender and room names. The collector remained `collecting_partial` with Iris connected. After the first metadata pass, 390 observed room/sender pairs comprised 139 resolved sender labels (129 open-member records and 10 self labels), 236 missing local profile records and 15 unavailable legacy friend-table lookups. These are pair counts, not distinct people. No metadata transport errors appeared in 32 polls after the corrected deployment.
+## 자동 검사
 
-Bulk metadata initially exceeded the server's GET request-line limit. It now uses a bounded POST JSON body. At this checkpoint, ordinary sender names were still unresolved because the installed KakaoTalk version had no legacy `friends` table. The encrypted-profile integration below resolves that limitation. No KakaoTalk messages were sent or chats opened for these checks. The installed client may need to refresh its tool catalog to discover the new context tool and query arguments. These agent-invoked checks do not establish execution inside the user's Dot conversation.
+Python 테스트는 합성 데이터로 인증, CSRF, Origin, 로그인 승인 조건, DB 중복 제거, 커서, 복구, MCP 조회, 이벤트 재시도·철회·만료를 검사합니다. Docker smoke 테스트는 API·gateway·stdio MCP·SQLite·암호화 백업을 검사합니다.
 
-## Encrypted profile names (2026-10-04)
+amd64에서 이미지 빌드·API 시작을 확인했지만 amd64 호스트의 redroid·카카오톡 호환성을 입증하지는 않습니다. 재현 명령은 [개발](development.md)에 있습니다.
 
-The installed KakaoTalk 26.8.2 APK (versionCode 29260820) matched the local inspection APK by SHA-256. Its database schema and display-name code identified `crypto_user_database.user`, the local key-preference format, the app's display-name precedence and the distinct `talk_channel` ID/chat-ID fields. No APK or decompiled application source is distributed in this repository.
+<a id="mcp-message-queries-2026-10-04"></a>
 
-Iris v3 adds read-only SQLCipher access with a pinned library, schema checks and non-destructive corruption handling. It uses exact observed sender IDs, preserves open-chat link/user scoping and keeps database key material within Android memory. The preference and database files are not created or migrated. The displayed name may come from a user-defined nickname, an existing KakaoTalk contact-name field, or the profile nickname; its source is returned explicitly. Phone address-book enumeration and phone-number joins are not used.
+## MCP 메시지 조회 (2026-10-04)
 
-Validation results:
+[조회 API](mcp-queries.md)는 발신·수집 시각을 분리하고 구조화된 발신자·방 정보, 발신자·방·날짜 필터, 안정된 페이지 조회, 대화 목록·앞뒤 문맥을 제공합니다. 원격 도구는 8개이며 숫자 이벤트 커서와 미처리·처리 확인 동작은 유지합니다.
 
-- `:app:testReleaseUnitTest :app:assembleRelease`: **BUILD SUCCESSFUL**, **10 profile tests, 0 failures, 0 errors**. Tests cover positive/negative PBKDF2 vectors, fallback keys, malformed preferences, display-name precedence and deactivated profiles.
-- `uv run pytest -q`: **187 passed**, with the existing Starlette TestClient warning. `uv run ruff check .`: **All checks passed!**; `git diff --check` passed.
-- A separate Android probe opened the real encrypted DB with `read_only=true`. All observed non-self ordinary pairs matched: DirectChat **3/3**, MultiChat **9/9**, PlusChat **3/3**. All three channel identities also appeared among their respective room members. Only aggregate counts were printed.
-- After deployment and metadata refresh, the API resolved all **15/15** ordinary/channel pairs: 8 user-defined nicknames, 4 profile nicknames and 3 channel names. The contact-name fallback has unit/static-code coverage but was not selected by these production rows.
-- An actual call through the installed MCP connector returned **10/10 recent sender names and 10/10 room names**, including 3 rows resolved by the new adapter. The retained query suite passed ordering, pagination, sender/room filters and context checks over **22 distinct rooms**.
+`uv run pytest -q`는 **187 passed**와 기존 Starlette 경고, `uv run ruff check .`는 **All checks passed!**, `git diff --check`는 성공했습니다. 시각 정렬, 문자열 검색, 필터, 서명 커서, 늦은 기록, 방별 이름, 문맥, 메타데이터 갱신, 보관 기간, 복구, 실제 API→MCP 출력 스키마를 검사했습니다. arm64 이미지 둘도 빌드했습니다.
 
-An encrypted backup preceded the component migration. The previous Iris APK was retained, and deployed source/license hashes matched the checkout. Only admin and iris-collector containers were recreated; redroid, device-agent, API, remote MCP, gateway and passkey authority IDs/start times remained unchanged. Collection continued with Iris connected. No test message was sent or chat opened.
+실제 Lima 배포는 인증 암호화 백업 후 Iris와 조회 서비스를 교체했습니다. 두 APK 해시를 검증하고 이전 바이너리를 보관했습니다. redroid·gateway·device-agent·패스키 관리 컨테이너는 재생성하지 않았으며 로그인된 카카오톡·기기 등록도 교체하지 않았습니다.
 
-The current snapshot still contains 236 unresolved open-chat room/sender pairs with no matching local member record. This is separate from the now-resolved encrypted ordinary-profile format. Compatibility with other KakaoTalk versions and schema/key changes remains unverified; unavailable data is reported instead of guessed.
+운영 검사는 최신순 정렬, 중복 없는 페이지, 방·확인된 발신자 이름 필터, 대화 22개, 같은 방 문맥에 통과했습니다. 설치된 연결의 최근 메시지·프로필·수집 상태 호출이 성공했고 발신자·방 이름을 반환했습니다. 수집기는 `collecting_partial`, Iris 연결 상태였습니다. 첫 메타데이터 처리 후 방·발신자 쌍 390개 중 발신자 확인 139개(오픈 멤버 129, 본인 10), 로컬 프로필 없음 236개, 이전 friends 조회 불가 15개였습니다. 사람 수가 아닌 쌍의 수입니다. 수정 배포 후 32회 점검에서 전송 오류는 없었습니다.
 
-## Open-chat missing names: follow-up investigation (2026-10-04)
+처음에는 대량 메타데이터가 GET 요청행 제한을 넘어 제한된 POST JSON으로 바꿨습니다. 이 시점에는 설치 버전에 이전 `friends` 테이블이 없어 일반 발신자 이름이 미확인이었고 아래 암호화 프로필 구현에서 해결했습니다. 검증 중 메시지 전송·대화 열기는 하지 않았습니다. 새 문맥 도구·인수는 클라이언트의 도구 목록 갱신이 필요할 수 있습니다. 에이전트 호출 검증이며 사용자의 Dot 대화 안에서 실행됐다는 뜻은 아닙니다.
 
-This was a read-only investigation, with no collector changes or deployment. Among 365 observed non-self open-chat room/sender pairs, 236 pairs (236 user IDs across seven rooms) had no matching local open-member record. None matched another link's member record, `open_profile`, or the link owner. None appeared in the stored member/active-member arrays; these arrays can be partial, so this does not prove that all 236 people left their rooms.
+<a id="encrypted-profile-names-2026-10-04"></a>
 
-A second path exists in already-collected system messages. The installed APK defines feed type 2 as LEAVE with `member.userId`/`member.nickName`, and type 4 as OPENLINK_JOIN with `members[].userId`/`nickName`. Exact same-room/user matching found historical names for **26 of the 236 pairs** in 27 observations (21 leave, 6 join). One pair has two different historical nicknames. These names are evidence from the event time and must not be presented as current profiles. Other observed feed types 14, 25 and 26 did not provide a participant-name path.
+## 암호화 프로필 이름 (2026-10-04)
 
-The app's code also contains an on-demand `member(chatId, memberIds)` request, whose response includes nicknames and updates the local profile cache by link and user. The collector does not invoke that authenticated app-session protocol. No such request was executed in this investigation, so remote recoverability for the remaining 210 pairs is unverified. A room snapshot may supply parallel display ID/name arrays, but the inspected local room records contained only display IDs, without corresponding name arrays.
+설치된 카카오톡 26.8.2(versionCode 29260820)는 로컬 검사 APK와 SHA-256이 같았습니다. 스키마·이름 표시 코드를 통해 `crypto_user_database.user`, 로컬 키 설정 형식, 표시 우선순위, `talk_channel`의 별도 ID·대화 ID를 확인했습니다. APK·역컴파일 소스는 저장소에서 배포하지 않습니다.
 
-Reproduction commands and observed output (private investigation scripts under ignored `artifacts/`, no personal values printed):
+Iris v3는 고정 라이브러리·스키마 검사·비파괴 손상 처리기를 사용한 읽기 전용 SQLCipher 접근을 추가했습니다. 관측된 정확한 발신자 ID와 오픈채팅 링크·사용자 범위를 사용하고 키는 Android 메모리에만 둡니다. 설정·DB를 생성하거나 이전하지 않습니다. 사용자 지정 닉네임·기존 카카오톡 연락처 이름·프로필 닉네임의 출처를 명시하며 주소록 순회·전화번호 연결은 하지 않습니다.
+
+검증 결과:
+
+- `:app:testReleaseUnitTest :app:assembleRelease`: **BUILD SUCCESSFUL**, **10 profile tests, 0 failures, 0 errors**. PBKDF2 정상·오류 벡터, 대체 키, 잘못된 설정, 이름 우선순위, 비활성 프로필 검사.
+- `uv run pytest -q`: **187 passed**, 기존 Starlette 경고. `uv run ruff check .`: **All checks passed!**, `git diff --check` 성공.
+- 별도 Android 검사가 실제 암호화 DB를 `read_only=true`로 열었습니다. 본인 외 일반 쌍은 DirectChat **3/3**, MultiChat **9/9**, PlusChat **3/3** 일치했고 채널 3개 모두 해당 방 멤버에도 있었습니다. 집계만 출력했습니다.
+- 배포·갱신 후 일반·채널 쌍 **15/15** 확인: 사용자 지정 닉네임 8, 프로필 4, 채널 3. 연락처 대체 이름은 단위·정적 검사가 있지만 이 운영 행에서는 선택되지 않았습니다.
+- 기존 MCP 연결이 최근 발신자 **10/10**, 방 **10/10** 이름을 반환했고 새 어댑터 행 3개를 포함했습니다. **22개 방**에서 정렬·페이지·방/발신자 필터·문맥도 통과했습니다.
+
+교체 전 암호화 백업을 하고 이전 Iris APK를 남겼으며 배포 소스·라이선스 해시를 확인했습니다. admin·iris-collector만 재생성하고 redroid·device-agent·API·원격 MCP·gateway·패스키 관리의 ID·시작 시각은 유지했습니다. Iris 연결·수집을 유지했고 테스트 메시지 전송·대화 열기는 하지 않았습니다.
+
+로컬 멤버 기록이 없는 오픈채팅 쌍 236개는 여전히 미확인이었습니다. 해결된 일반 암호화 프로필과 별개입니다. 다른 카카오톡 버전·스키마·키 변경은 미검증이며 추측 대신 조회 불가 상태를 표시합니다.
+
+<a id="open-chat-missing-names-follow-up-investigation-2026-10-04"></a>
+
+## 오픈채팅 미확인 이름 추가 조사 (2026-10-04)
+
+수집기 변경·배포 없는 읽기 전용 조사입니다. 본인 외 오픈채팅 쌍 365개 중 7개 방의 사용자 ID 236개에 해당하는 236쌍은 로컬 open-member가 없었습니다. 다른 링크의 멤버·`open_profile`·링크 소유자와도 일치하지 않았고 저장된 멤버·활성 멤버 배열에도 없었습니다. 배열은 일부일 수 있어 모두 퇴장했다고 단정할 수는 없습니다.
+
+이미 수집한 시스템 메시지에 두 번째 근거가 있었습니다. 설치 APK의 feed 2는 LEAVE(`member.userId`/`member.nickName`), feed 4는 OPENLINK_JOIN(`members[].userId`/`nickName`)입니다. 같은 방·사용자 일치로 **236쌍 중 26쌍**의 과거 이름을 관측 27개(퇴장 21, 입장 6)에서 찾았습니다. 한 쌍에는 다른 과거 닉네임 둘이 있었습니다. 이벤트 당시 근거이므로 현재 프로필로 표시해서는 안 됩니다. feed 14·25·26에서는 이름 경로를 찾지 못했습니다.
+
+앱에는 닉네임을 받고 링크·사용자별 로컬 캐시를 갱신하는 `member(chatId, memberIds)` 요청도 있지만 수집기는 이 앱 세션 인증 프로토콜을 호출하지 않습니다. 조사에서도 실행하지 않아 남은 210쌍의 원격 복구 가능성은 미검증입니다. 방 스냅샷에는 표시 ID·이름 배열이 함께 있을 수 있지만 검사한 로컬 기록에는 ID만 있었습니다.
+
+재현 명령과 실제 결과입니다. 비공개 조사 스크립트는 Git 제외 `artifacts/`에 있으며 개인 값은 출력하지 않았습니다.
 
 ```text
 python3 artifacts/open-member-research/aggregate.py
@@ -74,17 +102,17 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21 bash artifacts/name-storage/jadx/bin/jadx
   Re-decompiled FeedType constructors expose LEAVE=2 and OPENLINK_JOIN=4.
 ```
 
-Static evidence is in the local inspection outputs: `feedtype/sources/defpackage/z3r.java:225` (leave), `:397` (join), `jp80.java:145` (join member payload), and the previous decompilation's `defpackage/uf9.java:299` (local lookup/fallback and requested refresh), `nn9.java:3752` (member response), `ll9.java:1620` (paired snapshot names). No decompiled application source is distributed. Collection remained `collecting_partial` with Iris connected after the checks.
+로컬 정적 근거는 `feedtype/sources/defpackage/z3r.java:225`(퇴장), `:397`(입장), `jp80.java:145`(입장 멤버), 이전 역컴파일의 `defpackage/uf9.java:299`(로컬 조회·대체·갱신), `nn9.java:3752`(멤버 응답), `ll9.java:1620`(스냅샷 이름 쌍)입니다. 역컴파일 소스는 배포하지 않습니다. 검사 후 수집기는 `collecting_partial`, Iris 연결 상태를 유지했습니다. 후속 구현은 아래와 같습니다.
 
-The follow-up implementation is recorded below.
+<a id="historical-open-chat-nickname-fallback-2026-10-04"></a>
 
-## Historical open-chat nickname fallback (2026-10-04)
+## 과거 오픈채팅 닉네임 보완 (2026-10-04)
 
-Implemented and deployed to the API/MCP services. Resolved profiles retain priority. When a non-self sender in an `OM`/`OD` room has no resolved profile, a separate index selects the last retained join/leave nickname for that exact device, epoch, conversation and user. Source event time determines recency; message ID breaks ties. Malformed, ambiguous, truncated, unsupported and undated evidence is skipped. Evidence expires with its source message, and current-profile refresh continues independently.
+API·MCP에 구현·배포했습니다. 현재 확인된 프로필이 우선합니다. `OM`/`OD` 방의 본인 외 발신자에게 현재 프로필이 없으면 별도 색인이 같은 기기·등록 세대·대화·사용자의 최신 보관 입장·퇴장 이름을 선택합니다. 원본 시각을 우선하고 메시지 ID로 동률을 구분합니다. 잘못된·모호한·잘린·미지원·시각 없는 근거는 제외하고 원본 메시지 만료 시 근거도 제거합니다. 현재 프로필 갱신은 독립적으로 계속합니다.
 
-The MCP/HTTP sender view distinguishes `historical` from `resolved`, exposes `name_observed_at` and `name_evidence_message_id`, and keeps `updated_at` as the profile lookup time. Remote and stdio instructions explain the distinction. Name search and status counts use the same fallback. Name-filtered pagination now expires when display metadata or evidence changes; unchanged metadata refreshes preserve the cursor. Other message cursors and legacy event payloads are unchanged.
+MCP·HTTP는 `historical`/`resolved`를 구분하고 `name_observed_at`, `name_evidence_message_id`를 제공하며 `updated_at`은 프로필 조회 시각으로 유지합니다. 원격·stdio 지시에도 이 구분을 설명합니다. 이름 검색·상태 집계는 같은 보완을 사용합니다. 이름 필터 커서는 표시 정보·근거 변경 시 만료되고 동일한 갱신은 유지됩니다. 다른 메시지 커서·기존 이벤트 형식은 유지합니다.
 
-Validation commands and actual results:
+검증 명령과 실제 결과:
 
 ```text
 uv run pytest -q
@@ -98,15 +126,17 @@ limactl shell --workdir=/ kakaotalk-test sudo docker exec -i kakaotalk-collector
   current_profiles_unchanged=true, observations_unchanged=true, event_progress_unchanged=true
 ```
 
-The live-data check opened the production DB read-only, copied it into memory and loaded the new implementation only for that process. New data since the earlier investigation accounts for the difference from 236/26 to 238/28. The script printed counts and booleans only, validated historical responses against the new schema, and wrote nothing to the live DB. These are pre-deployment results, not evidence of the running connector using the change.
+실데이터 검사는 운영 DB를 읽기 전용으로 열어 메모리에 복사하고 해당 프로세스에서만 새 구현을 사용했습니다. 조사 후 들어온 새 데이터로 236/26에서 238/28로 바뀌었습니다. 집계·불리언만 출력하고 새 스키마를 검사했으며 운영 DB에는 쓰지 않았습니다. 이는 배포 전 결과로 실행 중인 연결의 사용 증거는 아닙니다.
 
-Tests cover current-profile precedence; exact room/user/device/epoch scope; source-time ordering, ties and late imports; bounded parsing and large IDs; schema-valid remote MCP output; name search/status; cursor invalidation; retained-data backfill/restart; evidence removal; and unchanged ingestion progress. The existing Starlette TestClient deprecation warning remains.
+현재 프로필 우선순위, 정확한 방·사용자·기기·등록 범위, 원본 시각·동률·늦은 수집, 제한된 파싱·큰 ID, MCP 스키마, 이름 검색·집계, 커서 만료, 기존 데이터 색인·재시작·근거 제거, 수집 위치 유지를 검사했습니다. 기존 Starlette 경고가 남았습니다.
 
-### Production deployment verification
+<a id="production-deployment-verification"></a>
 
-Deployed `kakaotalk-collector/server:historical-names-20261004` on the existing Lima host. Image build succeeded, and all application source hashes matched the tested checkout. Comparison with the previously running image found changes only in the six API/MCP files for this feature. Only `api` and `dot-plugin` were recreated; redroid, Iris collector, admin, device-agent, gateway and passkey authority retained their container IDs and start times. Passkey configuration/credentials, admin sessions, MCP grants and the profile identity matched the pre-deployment audit.
+### 운영 배포 검증
 
-An authenticated encrypted backup of the four application databases, secrets and deployment configuration is stored on that host at `/srv/kakaotalk-collector/backups/historical-names-20261004/state.bin` with mode `0600`. The first backup attempt could not access SQLite WAL files through read-only volume mounts and stopped before changing services. The completed backup used SQLite `mode=ro` connections on writable mounts for WAL shared-memory bookkeeping; each database passed `integrity_check`, and the saved encrypted archive was decrypted in memory to verify authentication and contents.
+기존 Lima에 `kakaotalk-collector/server:historical-names-20261004`를 배포했습니다. 빌드·소스 해시가 테스트한 소스와 일치했고 이전 이미지와의 차이는 이 기능의 API·MCP 파일 6개뿐이었습니다. `api`, `dot-plugin`만 재생성하고 나머지 6개 컨테이너의 ID·시작 시각, 패스키 설정·인증 정보, 관리 세션, MCP 승인, 프로필을 유지했습니다.
+
+앱 DB 4개·키·배포 설정의 인증 암호화 백업은 호스트의 `/srv/kakaotalk-collector/backups/historical-names-20261004/state.bin`에 0600으로 보관합니다. 첫 시도는 읽기 전용 볼륨에서 SQLite WAL에 접근하지 못해 서비스 변경 전에 멈췄습니다. 완료한 백업은 쓰기 가능한 마운트에서 SQLite `mode=ro`로 연결해 WAL 공유 메모리를 처리했습니다. DB마다 `integrity_check`를 통과하고 저장된 암호화 파일을 메모리에서 복호화해 인증·내용을 검증했습니다.
 
 ```text
 limactl shell --workdir=/ kakaotalk-test sudo python3 /tmp/historical-names-rollout/deploy.py
@@ -126,58 +156,58 @@ Public HTTPS checks
   OAuth resource discovery=200, /admin/=404, unauthenticated POST /mcp=401
 ```
 
-The deployed data had 238 open-chat pairs without current profiles: 28 used historical evidence and 210 remained unnamed. The connector check used the existing authenticated connection, without relinking, subscribing, acknowledging events or sending messages. It verifies this agent's MCP call; it does not claim a separate user-invoked Dot conversation query. Only aggregate results were printed.
+배포 데이터의 현재 프로필 없는 오픈채팅 쌍 238개 중 28개는 과거 근거, 210개는 미확인이었습니다. 기존 인증 연결로 검사했고 재연결·구독·처리 확인·메시지 전송은 하지 않았습니다. 에이전트 MCP 호출 검증이며 별도 사용자 Dot 대화 조회를 뜻하지 않습니다. 집계만 출력했습니다.
 
-## Passkey authentication (2026-10-04)
+<a id="passkey-authentication-2026-10-04"></a>
 
-The owner completed real passkey registration and reported completing the client connection. Calling the installed connector from the agent returned `KakaoTalk Bridge` from `get_profile` and `collecting_partial` with an active Iris listener from `get_collector_status`. These calls verify connector access; they do not establish message retrieval or event execution in the user's Dot conversation.
+## 패스키 인증 (2026-10-04)
 
-Native Chromium WebAuthn tests use a virtual CTAP2 credential for registration, login, remembered sessions, reload, the same credential on both origins, explicit MCP consent, cancellation, PKCE, refresh rotation and tool discovery. Python tests use real ES256 signatures to check challenge, browser, origin, RP, user handle, user verification, expiry, replay and counter rollback. Additional coverage checks recovery, last-key protection, private authority isolation and migration preserving passkey sessions/grants.
+소유자가 실제 패스키 등록을 마치고 클라이언트 연결 완료를 알렸습니다. 에이전트의 기존 연결 호출은 `get_profile`에서 `KakaoTalk Bridge`, `get_collector_status`에서 `collecting_partial`·활성 Iris를 반환했습니다. 연결 접근 검증이며 사용자 Dot 대화의 메시지 조회·이벤트 실행 검증은 아닙니다.
 
-Kakao OAuth code and UI have been removed. Passkeys are the default; setup and recovery are documented in [Passkeys](passkeys.md).
+Chromium·가상 CTAP2 테스트는 등록·로그인·기억한 세션·새로고침·두 출처의 동일 키·MCP 동의·취소·PKCE·갱신·도구 조회를 검사합니다. Python은 실제 ES256으로 challenge·브라우저·출처·RP·사용자 핸들·사용자 검증·만료·재사용·카운터 역행을 검사합니다. 복구, 마지막 키 보호, 비공개 권한 격리, 세션·승인 보존 이전도 포함합니다.
 
-After removal, `uv run pytest -q` reported **172 passed** with the existing Starlette TestClient deprecation warning; `uv run ruff check .`, JavaScript syntax checks, Compose configuration, local documentation links and `git diff --check` passed. `node tests/passkey_browser.cjs` passed the native WebAuthn flow described above. Removed provider tests account for the smaller suite compared with the earlier trial.
+카카오 OAuth 코드·UI를 제거하고 패스키를 기본으로 했습니다. [설정과 복구](passkeys.md)를 참고하세요. 제거 후 `uv run pytest -q`는 **172 passed**와 기존 경고, Ruff·JS 구문·Compose·로컬 문서 링크·diff 검사는 성공했습니다. `node tests/passkey_browser.cjs`도 통과했습니다. 이전보다 테스트 수가 줄어든 것은 제거한 공급자 테스트 때문입니다.
 
-The arm64 device and server images were built and their deployed source hashes checked. An authenticated encrypted backup includes the current admin, OAuth and passkey databases plus configuration and secrets. Only admin, dot-plugin and dot-control were recreated. Before/after comparisons confirmed unchanged passkey configuration, credential identities, passkey admin sessions, MCP grants and profile identity; retired provider configuration was removed. The five collector/device container IDs and start times remained unchanged.
+arm64 기기·서버 이미지를 빌드하고 배포 소스 해시를 검사했습니다. 관리·OAuth·패스키 DB와 설정·키를 인증 암호화 백업했습니다. admin·dot-plugin·dot-control만 재생성하고 패스키 설정·ID·관리 세션·MCP 승인·프로필은 유지했으며 이전 공급자 설정은 제거했습니다. 수집·기기 컨테이너 5개의 ID·시작 시각은 유지했습니다.
 
-Production reports `mode=passkey`, `configured=true`, `owner_registered=true`. Public OAuth discovery returns 200; public admin/private-authority paths and removed provider routes return 404. Post-deployment calls through the installed connector again succeeded for `get_profile` and `get_collector_status`, with an active Iris listener, no warnings, no queued rows and no event subscriptions. This is evidence of agent-invoked connector access, not a completed query or event run in the user's Dot conversation.
+운영은 `mode=passkey`, `configured=true`, `owner_registered=true`를 보고했습니다. 당시 공개 OAuth 목록은 200, 공개 관리·비공개 권한·삭제된 공급자 경로는 404였습니다. 배포 후 기존 `get_profile`, `get_collector_status`도 성공했으며 Iris 활성, 경고·대기 행·이벤트 구독 없음이었습니다. 이것도 에이전트 연결 접근 검증입니다.
 
-## Earlier password/pairing onboarding checks (2026-10-04)
+<a id="earlier-passwordpairing-onboarding-checks-2026-10-04"></a>
 
-The new owner login, setup guide, private connection approval, installer and snapshot commands were checked separately from the real-account deployment:
+## 이전 비밀번호·연결 링크 설정 검사 (2026-10-04)
 
-- Python regression tests cover one-use/expired pairing, password authentication, restart persistence, CSRF, session revocation, private approval, PKCE, setup preservation, signature rejection and authenticated snapshot restoration.
-- Both server and device images built successfully on Docker Desktop arm64. Bridge release lint and APK signature verification passed during the device build.
-- A separate Docker Compose project with synthetic credentials passed HTTPS pairing, an admin restart, private approval, OAuth token exchange, MCP access, grant revocation and browser revocation. Public control paths returned 404.
-- A full snapshot of the synthetic Docker volumes was encrypted and restored into new volumes; existing volumes were retained. The test also exposed and fixed unsupported xattrs on Docker Desktop host binds.
-- The device image verified the publisher certificate of the previously downloaded official KakaoTalk APK.
-- The setup guide and access-management layout were checked in a browser using an HTTP mock preview. The real HTTPS browser flow was not exercised for these changes because the test CA is not trusted by that browser; backend HTTPS tests explicitly trusted only the test certificate.
+소유자 로그인, 설정 안내, 비공개 승인, 설치·스냅샷 명령은 실제 계정 배포와 별도로 검사했습니다.
 
-Before committing these changes, `uv run pytest -q` reported **152 passed** with one Starlette TestClient deprecation warning, and `uv run ruff check .` reported **All checks passed!** Both JavaScript entry points passed `node --check`; `docker compose --profile dot config --quiet` and `git diff --check` also passed. The suite includes the canonical release image namespace and reuse of the saved private Tailscale URL on Linux.
+- Python 회귀 검사: 일회용·만료 연결, 비밀번호, 재시작 유지, CSRF, 세션 철회, 비공개 승인, PKCE, 설정 보존, 서명 거부, 인증 스냅샷 복구.
+- Docker Desktop arm64의 서버·기기 이미지 빌드, Bridge 릴리스 lint·APK 서명 검증 통과.
+- 합성 키의 별도 Compose 프로젝트에서 HTTPS 연결, 관리 재시작, 비공개 승인, OAuth 토큰 교환, MCP, 승인·브라우저 철회 통과. 공개 제어 경로 404.
+- 합성 볼륨 전체 스냅샷을 암호화하고 새 볼륨에 복구, 기존 볼륨 유지. Docker Desktop 호스트 바인드의 미지원 xattr 문제도 발견·수정.
+- 기기 이미지가 기존 공식 카카오톡 APK의 배포자 인증서를 검증.
+- HTTP 가상 브라우저에서 설정·접근 관리 배치 확인. 테스트 CA를 브라우저가 신뢰하지 않아 실제 HTTPS 브라우저 흐름은 미실행. 백엔드 HTTPS 검사는 테스트 인증서만 명시적으로 신뢰.
 
-These checks did not update the signed-in redroid instance or repeat account login. Fresh Lima installation through the new CLI, the newly scripted Korean-locale preparation, both architectures of the release workflow, Tailscale route setup and published release downloads still require integration validation. The earlier manual Aurora/Korean-secondary-option check is separate evidence, not a complete installer test. Tailscale identity sign-in remains future work; passkey verification is recorded below.
+당시 `uv run pytest -q`는 **152 passed**, Starlette 경고 1개였고 Ruff는 **All checks passed!**였습니다. JS 진입점 둘의 `node --check`, Compose 설정, diff 검사도 통과했습니다. 표준 릴리스 이미지 이름과 Linux의 저장된 비공개 Tailscale 주소 재사용을 포함합니다.
 
-## Security remediation deployment (2026-10-05)
+로그인된 redroid를 갱신하거나 다시 로그인하지 않았습니다. 새 CLI의 신규 Lima 설치, 한국어 자동 설정, 두 아키텍처 릴리스, Tailscale 경로, 공개 릴리스 다운로드는 통합 검증이 남았습니다. 앞선 수동 Aurora·한국어 옵션 확인이 전체 설치 도구 검증을 대신하지 않습니다. 당시 Tailscale 신원 로그인은 후속 과제였으며 패스키 검증은 별도 기록입니다.
 
-The [security report](security.md#security-fixes-2026-10-05) records findings, changes, scan scope and the remaining Android patch risk. Deployed Iris v4 caller authentication, authenticated ADB, separate public/private networks, cookie-filtering ingress, admin cookie migration, stateless pending OAuth registration, updated runtime libraries and container limits.
+<a id="security-remediation-deployment-2026-10-05"></a>
 
-`uv run pytest -q` returned **227 passed, 1 warning**; `uv run ruff check .` and `git diff --check` passed. The device build passed Kotlin tests with Netty `4.1.138.Final`. The ingress smoke test passed 15 cookie cases, 5 private-path denials and a published-loopback-port check. The native Chromium virtual-authenticator test passed registration, admin login, scoped session persistence, explicit OAuth consent, PKCE, refresh, MCP discovery and replay rejection. These tests use synthetic identities.
+## 보안 수정 배포 (2026-10-05)
 
-The real ARM64 deployment now runs server/device `security-20261005-r2` and gateway `security-20261005`. The full pre-migration encrypted snapshot was authenticated. Final source hashes, APK hashes, passkey identities, MCP grants and profile identity were checked. A temporary ingress 502 was corrected by fixing file permissions and giving the isolated ingress a separate edge network for Docker port publishing; health checks were added. Final public MCP returned 401 without OAuth; public admin routes returned 404. The already connected client's **get_profile** and **get_collector_status** then succeeded, reporting `collecting_partial`, Iris connected and no warnings. No message body was queried or sent during these checks.
+[보안 보고서](security.md#security-fixes-2026-10-05)에 발견 사항·수정·검사 범위·Android 패치 위험을 기록했습니다. Iris v4 호출자 인증, ADB 인증, 공개·비공개 망 분리, 쿠키 필터 ingress, 관리 쿠키 이전, 상태 비저장 대기 OAuth 등록, 실행 라이브러리 갱신, 컨테이너 제한을 배포했습니다.
 
-Redroid restarted once to enforce ADB authentication, with its existing data volume. The final dependency/ingress rollout kept that Android container running. Registered passkeys and MCP connections remain, while the owner must log back into admin once after the cookie migration. This does not automatically verify the phone session. The old Android OS security patch level remains open; moving to an unverified major image was not included in this rollout.
+`uv run pytest -q`: **227 passed, 1 warning**. Ruff·diff 통과. 기기 빌드의 Kotlin·Netty `4.1.138.Final` 검사 통과. ingress smoke는 쿠키 15개, 비공개 경로 5개, 실제 루프백 포트 검사에 통과했습니다. Chromium 가상 인증기의 등록·관리 로그인·세션 유지·명시적 동의·PKCE·갱신·MCP 조회·재사용 거부도 통과했으며 합성 신원을 사용했습니다.
 
-## Admin UX and connection setup (2026-10-05)
+ARM64 운영에 server/device `security-20261005-r2`, gateway `security-20261005`를 배포했습니다. 이전 전체 암호화 백업을 인증하고 최종 소스·APK 해시, 패스키·MCP 승인·프로필을 확인했습니다. 일시적 ingress 502는 권한 수정과 별도 외부 네트워크의 포트 공개로 해결하고 상태 검사를 추가했습니다. 최종 미인증 MCP는 401, 당시 공개 관리 경로는 404였습니다. 기존 연결의 **get_profile**, **get_collector_status**가 성공했고 `collecting_partial`, Iris 연결, 경고 없음을 반환했습니다. 본문 조회·전송은 하지 않았습니다.
 
-The admin console now starts with collection status, remote AI activity and manual
-phone confirmation. Existing collectors fold setup and tablet controls. The
-connection form starts from the user's destination, keeps saved instructions
-after checks/reloads, reports setup stages and elapsed time, and offers explicit
-review/retry. Inspection freshness, recorded approval and actual successful MCP
-use are separate signals. Conversation event permission and client subscriptions
-are also shown separately.
+ADB 인증을 위해 기존 볼륨으로 Android를 한 번 재시작했습니다. 마지막 의존성·ingress 배포에서는 Android 실행을 유지했습니다. 패스키·MCP 연결은 남지만 쿠키 이전 후 소유자가 관리 화면에 한 번 다시 로그인해야 합니다. 휴대폰 세션은 자동 확인하지 않습니다. 오래된 Android 패치는 미해결이며 미검증 주요 버전 교체는 포함하지 않았습니다.
 
-Automated commands and observed results for this implementation:
+<a id="admin-ux-and-connection-setup-2026-10-05"></a>
+
+## 관리 화면과 연결 설정 (2026-10-05)
+
+관리 화면은 수집 현황, 원격 AI 활동, 수동 휴대폰 확인으로 시작합니다. 기존 수집기는 설정·태블릿을 접습니다. 사용처부터 연결 방식을 선택하고 점검·새로고침 후 안내를 유지하며 단계·경과 시간·명시적 확인·재시도를 제공합니다. 점검 유효성, 기록된 승인, 실제 성공 MCP 호출을 구분하고 이벤트 허용·클라이언트 구독도 따로 표시합니다.
+
+자동 검사 명령과 실제 결과:
 
 ```text
 .venv/bin/pytest -q
@@ -192,47 +222,20 @@ git diff --check
   Each exited 0 with no output.
 ```
 
-After the final interrupted-job change, the focused Python suite
-`tests/test_web_connection_setup.py tests/test_tunnel.py` reported **56 passed,
-1 warning**. A strengthened failed-tool assertion then passed independently in
-`test_actual_tool_activity_is_separate_from_approval_and_discovery`. The warning
-is the existing Starlette/httpx deprecation. JavaScript syntax and lint checks
-also passed after the final initial-inspection retry fix.
+최종 중단 작업 변경 후 `tests/test_web_connection_setup.py tests/test_tunnel.py`는 **56 passed, 1 warning**이었습니다. 강화한 실패 도구 검사는 `test_actual_tool_activity_is_separate_from_approval_and_discovery`에서 별도 통과했습니다. 경고는 기존 Starlette/httpx 지원 중단 예고입니다. 최초 점검 재시도 수정 후 JS 구문·lint도 통과했습니다.
 
-Synthetic browser checks used the actual admin UI/API with fixture providers.
-They covered approval without recorded use, instructions surviving a server
-check/reload, full `/mcp` URL normalization, deliberate setup failure followed by
-a successful corrected retry, and stale tablet inspection with a disabled-action
-explanation. At a 390 × 844 viewport the page had no horizontal overflow. These
-checks did not create provider credentials or expose a real test endpoint.
+합성 브라우저는 실제 관리 UI·API와 가상 공급자로 활동 없는 승인, 점검·새로고침 후 안내 유지, 전체 `/mcp` 주소 정규화, 의도한 실패 후 수정·재시도 성공, 오래된 점검의 비활성 작업 안내를 확인했습니다. 390 × 844에서 가로 넘침이 없었습니다. 실제 공급자 키나 공개 테스트 주소는 만들지 않았습니다.
 
-The real Apple Silicon Lima deployment was updated after consistent admin,
-OAuth/tunnel and passkey database backups. The admin, MCP services and host setup
-agent were updated; redroid, API, device-agent, Iris collector, gateway and
-dot-ingress retained their container IDs, images and start times. The two existing
-OAuth grants, permanent tunnel approval, passkey registration and private admin
-origin were preserved. The setup socket remained mode 0600 inside a mode-0700
-directory, mounted read-only into admin without a Docker socket.
+실제 Apple Silicon Lima는 일관된 관리·OAuth/터널·패스키 DB 백업 후 관리·MCP·호스트 설정 서비스를 갱신했습니다. redroid·API·device-agent·Iris·gateway·dot-ingress는 ID·이미지·시작 시각을 유지했습니다. 기존 OAuth 승인 2개, 영구 터널 승인, 패스키, 비공개 관리 출처를 보존했습니다. 설정 소켓은 0700 디렉터리의 0600이며 Docker 소켓 없이 관리 화면에 읽기 전용 마운트했습니다.
 
-In the actual authenticated admin browser, **Check server connection** completed
-with saved instructions visible and existing fields collapsed. Reload displayed
-the overview without the initial device-operation conflict. An actual
-`get_collector_status` call through the OpenAI tunnel succeeded at **17:21 UAE**
-and appeared as the tunnel's last successful tool call in admin. It reported
-`collecting_partial`, an active listener, no warnings and no subscriptions. No
-KakaoTalk message was sent or event subscription created during this UX check.
-An old manual phone confirmation was shown as needing recheck; the phone session
-was not remotely verified.
+인증된 실제 브라우저의 **서버 연결 확인**은 저장된 안내와 접힌 기존 설정을 유지하며 완료됐습니다. 새로고침 후 초기 기기 작업 충돌 없이 현황을 표시했습니다. OpenAI 터널의 실제 `get_collector_status`가 **UAE 17:21**에 성공했고 관리 화면의 최근 성공 시각에 반영됐습니다. `collecting_partial`, 활성 리스너, 경고·구독 없음을 보고했습니다. 메시지 전송·이벤트 구독은 하지 않았습니다. 오래된 수동 휴대폰 기록은 재확인 필요로 표시했으며 원격 검증하지 않았습니다.
 
-This checkpoint verifies an existing connection and deployment, not creation of
-a fresh OpenAI tunnel or new Tailscale onboarding. Earlier real message retrieval
-is recorded in the [tunnel validation scope](openai-tunnel.md#validation-scope).
-Remote-server browser-entry automation and a collection test that matches a
-unique test message remain future work. Current collection tests accept any new
-row. End-to-end AI event execution remains unverified.
+기존 연결·배포의 검증이며 새 OpenAI 터널 생성·Tailscale 신규 설정 검증은 아닙니다. 앞선 실제 메시지 조회는 [터널 검증 범위](openai-tunnel.md#validation-scope)에 있습니다. 원격 서버의 브라우저 진입 자동화, 고유 테스트 메시지 일치 검사는 후속 과제입니다. 현재 수집 테스트는 아무 새 행이나 수신하면 통과하며 AI 이벤트 전체 실행은 미검증입니다.
 
-## Not yet verified
+<a id="not-yet-verified"></a>
 
-Compatibility with other KakaoTalk versions and hosts, completeness of conversation history, end-to-end comparison of read status before and after collection, and 24–72 hours of continuous reception require further validation. Actual Dot event execution has not been verified, and automatic subscription is not a requirement.
+## 아직 검증하지 않은 범위
 
-Details of the initial notification-based MVP and troubleshooting history remain in Git. Refer to [Iris](iris.md), [Admin console](web-ui.md), and [MCP](dot-plugin.md) for current behavior.
+다른 카카오톡 버전·호스트 호환성, 전체 대화 기록의 완전성, 수집 전후 읽음 상태 전체 비교, 24–72시간 연속 수신은 추가 검증이 필요합니다. 실제 Dot 이벤트 실행은 미검증이며 자동 구독은 요구 사항이 아닙니다.
+
+초기 알림 기반 MVP와 문제 해결 이력은 Git에 남아 있습니다. 현재 동작은 [Iris](iris.md), [관리 화면](web-ui.md), [MCP](dot-plugin.md)를 참고하세요.

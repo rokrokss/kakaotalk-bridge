@@ -1,198 +1,170 @@
-# Data and access control
+# 데이터와 접근 제어
 
-[README](../README.md) · [Operations and backups](operations.md)
+[README](../README.md) · [운영과 백업](operations.md)
 
-This setup assumes a personal server with one owner. Because redroid is a privileged container, run it on a dedicated Linux host or VM. An operator with root ADB access can also access KakaoTalk data and sessions.
+소유자 한 명의 개인 서버를 전제로 합니다. redroid는 특권 컨테이너이므로 전용 Linux 호스트나 VM에서 실행하세요. root ADB 권한이 있는 운영자는 카카오톡 데이터와 세션에도 접근할 수 있습니다.
 
-## Exposed routes
+<a id="exposed-routes"></a>
 
-| Route | Default access | Authentication |
+## 외부에 연결되는 경로
+
+| 경로 | 기본 접근 범위 | 인증 |
 | --- | --- | --- |
-| ADB | Host loopback / internal Docker network | Preseeded collector RSA keys (`ro.adb.secure=1`) |
-| `/admin/` | Loopback HTTP via localhost/SSH, or configured HTTPS | Passkey login, persistent revocable cookies, Origin and CSRF checks |
-| `/v1/*` | Private HTTPS | Read token |
-| `/mcp` | Separately configured public HTTPS proxy | OAuth |
-| Private tunnel `/mcp` | Docker-internal listener; no published port | Locally injected service credential and owner-approved grant |
+| ADB | 호스트 루프백·내부 Docker 네트워크 | 사전 등록한 수집기 RSA 키 (`ro.adb.secure=1`) |
+| `/admin/` | localhost·SSH의 루프백 HTTP 또는 설정한 HTTPS | 패스키, 철회 가능한 쿠키, Origin·CSRF 확인 |
+| `/v1/*` | 비공개 HTTPS | 읽기 토큰 |
+| `/mcp` | 별도 설정한 공개 HTTPS 프록시 | OAuth |
+| 비공개 터널 `/mcp` | Docker 내부 리스너, 공개 포트 없음 | 로컬 주입 서비스 키와 소유자 승인 |
 
-The public proxy must connect **only to the dot-ingress port** (`127.0.0.1:18787` by default). Do not bypass this cookie-filtering proxy with a direct dot-plugin route. Do not expose the API gateway or ADB alongside it. Tailscale Funnel provides a public internet address, so OAuth protects MCP access rather than Tailscale user ACLs. An optional shared HTTPS origin also serves `/admin/`, protected by passkeys. The admin login page is publicly reachable. To retain a tailnet-only admin in an advanced split-origin deployment, explicitly deny `/admin` and `/admin/*` at the public reverse proxy.
+공개 프록시는 **dot-ingress 포트에만** 연결해야 합니다. 기본값은 `127.0.0.1:18787`입니다. 쿠키를 제거하는 이 프록시를 우회해 dot-plugin에 직접 연결하거나 API 게이트웨이·ADB를 함께 공개하지 마세요. Tailscale Funnel은 인터넷 공개 주소이므로 MCP 접근은 Tailscale 사용자 ACL이 아닌 OAuth로 보호합니다. 선택적 공용 HTTPS 출처는 패스키로 보호하는 `/admin/`도 제공하며 로그인 페이지는 공개됩니다. 분리된 출처 구성에서 관리를 tailnet 전용으로 유지하려면 공개 프록시가 `/admin`, `/admin/*`를 명시적으로 거부해야 합니다.
 
-## What is stored?
+<a id="what-is-stored"></a>
 
-- Android volume: KakaoTalk login state and the app's message database.
-- Collection database: Message bodies, types, identifiers, and timestamps read by Iris; retained for 30 days by default.
-- Admin state database: Emergency links and revocable browser sessions; records are encrypted with a key derived from the admin recovery token. Any legacy salted password hash remains for explicit local mode.
-- MCP state database: Pending consent requests, OAuth grants, subscriptions, processing cursors, and the webhook queue; values are encrypted with the storage key.
-- Passkey database: Encrypted public credentials, RP/origin configuration and short-lived enrollment/verification state. Private keys stay with the authenticator.
-- ChatGPT: Messages returned by tools are also sent to ChatGPT.
+## 저장하는 정보
 
-Compose does not encrypt the Android volume or collection database itself. Use host disk encryption. Collection database backups and full snapshots are encrypted separately.
+- Android 볼륨: 카카오톡 로그인 상태와 앱 메시지 DB.
+- 수집 DB: Iris가 읽은 본문, 종류, 식별자, 시각. 기본 보관 기간 30일.
+- 관리 상태 DB: 긴급 링크와 철회 가능한 브라우저 세션. 관리자 복구 토큰에서 도출한 키로 암호화하며 이전 salted 비밀번호 해시는 명시적 로컬 모드에만 남습니다.
+- MCP 상태 DB: 대기 동의 요청, OAuth 승인, 구독, 처리 커서, 웹훅 대기열. 저장 키로 암호화합니다.
+- 패스키 DB: 암호화한 공개 인증 정보, RP·출처 설정, 단기 등록·검증 상태. 개인 키는 인증 장치에 남습니다.
+- ChatGPT: 도구가 반환한 메시지는 ChatGPT에도 전달됩니다.
 
-## Key management
+Compose 자체가 Android 볼륨이나 수집 DB를 암호화하지는 않습니다. 호스트 디스크 암호화를 사용하세요. 수집 DB 백업과 전체 스냅샷은 별도로 암호화합니다.
 
-| File | Purpose |
+<a id="key-management"></a>
+
+## 키 관리
+
+| 파일 | 용도 |
 | --- | --- |
-| `secrets/admin_token` | Admin recovery and encryption of owner/session state |
-| `secrets/read_token` | Collection API queries |
-| `secrets/ingest_token`, `secrets/device_token` | Ingestion and device status reports |
-| `secrets/mcp_link_key` | Legacy opt-in key approval mode |
-| `secrets/mcp_approval_token` | Private admin-to-control requests and passkey-state encryption derivation |
-| `secrets/mcp_passkey_token` | Assertion-only public-to-control requests |
-| `secrets/mcp_storage_key` | MCP state encryption |
-| `secrets/openai_tunnel_api_key` | OpenAI tunnel runtime authentication; mounted only in the tunnel client |
-| `secrets/mcp_tunnel_authorization` | Tunnel client to private MCP listener; never accepted as public OAuth |
-| `secrets/backup_key` | Database and full-volume snapshot encryption |
-| `secrets/bridge.jks`, `secrets/bridge_key_password` | Registration app signing |
+| `secrets/admin_token` | 관리자 복구와 소유자·세션 상태 암호화 |
+| `secrets/read_token` | 수집 API 조회 |
+| `secrets/ingest_token`, `secrets/device_token` | 수집과 기기 상태 보고 |
+| `secrets/mcp_link_key` | 명시적으로 선택하는 이전 키 승인 모드 |
+| `secrets/mcp_approval_token` | 관리 화면의 비공개 제어 요청과 패스키 암호화 키 도출 |
+| `secrets/mcp_passkey_token` | 공개 서비스의 패스키 검증 전용 요청 |
+| `secrets/mcp_storage_key` | MCP 상태 암호화 |
+| `secrets/openai_tunnel_api_key` | OpenAI 터널 실행 인증. 터널 클라이언트에만 마운트 |
+| `secrets/mcp_tunnel_authorization` | 터널 클라이언트와 비공개 MCP 간 인증. 공개 OAuth로는 사용 불가 |
+| `secrets/backup_key` | DB·전체 볼륨 스냅샷 암호화 |
+| `secrets/bridge.jks`, `secrets/bridge_key_password` | 등록 앱 서명 |
 
-`secrets/` has mode 0700; some files use 0444 so container UIDs can read them. Preserve the parent directory's permissions. `.env`, `secrets/`, `inputs/`, `artifacts/`, and `backups/` are excluded from Git and image build inputs.
+`secrets/`는 0700이며 일부 파일은 컨테이너 UID가 읽도록 0444를 사용합니다. 상위 디렉터리 권한을 유지하세요. `.env`, `secrets/`, `inputs/`, `artifacts/`, `backups/`는 Git과 이미지 빌드 입력에서 제외됩니다.
 
-Do not pass permanent keys through URLs, chats, or command-line arguments. Passkey registration and emergency pairing each use a separate, one-time ten-minute code in a URL fragment, removed by the page immediately. Treat that link as a temporary credential. Do not attach screens containing entered values or real messages to issues. Application logs are configured to omit message bodies and tokens; review diagnostic material before sharing it as well.
+영구 키를 URL·채팅·명령행 인수로 전달하지 마세요. 패스키 등록과 긴급 연결은 각각 별도의 일회용 10분 코드를 URL fragment에 넣고 페이지가 즉시 지웁니다. 해당 링크도 임시 인증 정보입니다. 입력값·실제 메시지가 있는 화면을 이슈에 첨부하지 마세요. 앱 로그는 본문과 토큰을 제외하도록 설정되어 있지만 진단 자료도 공유 전에 확인하세요.
 
-## MCP permissions
+<a id="mcp-permissions"></a>
 
-OAuth validates PKCE S256, exact redirect URIs and resource audiences, and one-time approval records. Access tokens last 30 minutes; refresh grants last 30 days. Detected refresh-token reuse revokes the associated grant.
+## MCP 권한
 
-The plugin receives the API read token and its own OAuth/passkey-assertion secrets, without mounting Android volumes or the admin key. It exposes no message-sending tool. `acknowledge_messages` changes only the plugin's internal processing position. Separate Docker networks restrict it to the read API, assertion endpoints and public ingress. It has no direct container-network connection to admin, the private gateway or Android. The shared ingress does expose authenticated admin routes. Message bodies are external data; do not execute instructions within them as system commands.
+OAuth는 PKCE S256, 정확한 리디렉션 URI·리소스 대상, 일회용 승인을 검증합니다. 접근 토큰은 30분, 갱신 승인은 30일입니다. 갱신 토큰 재사용을 발견하면 해당 승인을 철회합니다.
 
-## Owner access and connection approval
+플러그인에는 API 읽기 토큰과 자체 OAuth·패스키 검증 키만 주며 Android 볼륨·관리 키는 마운트하지 않습니다. 메시지 전송 도구는 없고 `acknowledge_messages`는 내부 처리 위치만 바꿉니다. 별도 Docker 네트워크로 읽기 API·검증 경로·공개 ingress에만 연결하고 admin·비공개 gateway·Android에는 직접 연결하지 않습니다. 공용 ingress는 인증된 관리 경로를 제공합니다. 메시지 본문은 외부 데이터이므로 그 안의 지시를 시스템 명령으로 실행하지 마세요.
 
-The optional [personal OpenAI tunnel](openai-tunnel.md) uses a separate internal
-listener and an outbound tunnel client. Only the client and listener receive the
-local service credential. It is sent in `X-Bridge-Tunnel-Authorization` so
-connector-forwarded `Authorization` cannot replace it. Neither container has an
-Android or admin/control network connection. The listener has read-API and
-passkey-assertion access, and shares encrypted MCP state with the public service.
+<a id="owner-access-and-connection-approval"></a>
 
-Approval in the authenticated admin console creates a grant without automatic
-expiration, bound to the configured tunnel ID and current passkey policy.
-Tools and event operations check
-this grant on every request. Revocation, policy changes and tunnel-ID changes
-block access; normal restarts retain approval. Older 30-day approvals retain their
-expiry until the owner explicitly removes it in admin. Public OAuth grant expiry
-is unchanged. Credential-authenticated protocol discovery can succeed
-before approval for the official client's startup probe; it exposes schemas and
-instructions only. The private listener has no browser OAuth or passkey routes.
-The existing public listener continues to require OAuth.
+## 소유자 접근과 연결 승인
 
-This is a single-owner connection: every caller permitted to use that tunnel by
-OpenAI receives the same approved collector access. Bridge cannot determine the
-individual OpenAI user. Restrict the tunnel to yourself in OpenAI; shared-workspace
-user isolation is not implemented. Admin approval does not subscribe to events.
-The existing public service runs the one shared event worker, including for tunnel
-grants. Outbound webhook delivery still requires a reachable destination.
+선택적 [개인 OpenAI 터널](openai-tunnel.md)은 내부 리스너와 외부로 연결하는 클라이언트를 사용합니다. 둘만 로컬 서비스 키를 받고 `X-Bridge-Tunnel-Authorization`으로 보내므로 전달된 `Authorization`이 이를 대체할 수 없습니다. 두 컨테이너 모두 Android·관리 제어 네트워크에 연결하지 않습니다. 리스너는 읽기 API·패스키 검증에 접근하고 공개 서비스와 암호화한 MCP 상태를 공유합니다.
 
-[Passkeys](passkeys.md) are the default. Only the server CLI can issue the one-time, ten-minute initial or recovery registration link. Fresh user verification is required to add or remove a key through admin. The public MCP endpoint cannot register an owner.
+인증된 관리 화면에서 승인하면 설정한 터널 ID·현재 패스키 정책에 묶인 자동 만료 없는 승인을 만듭니다. 도구·이벤트 요청마다 검사하며 철회·정책 변경·터널 ID 변경 시 차단합니다. 정상 재시작은 승인을 유지합니다. 이전 30일 승인은 소유자가 직접 만료를 없애기 전까지 그대로 유지하며 공개 OAuth 만료도 변하지 않습니다. 공식 클라이언트의 시작 점검을 위해 서비스 키로 인증한 프로토콜 목록 조회는 승인 전에도 가능하지만 스키마·지시만 제공합니다. 비공개 리스너에는 브라우저 OAuth·패스키 경로가 없고 기존 공개 리스너는 계속 OAuth가 필요합니다.
 
-`dot-control` owns encrypted credentials in `passkey-state`, with an encryption key derived from `mcp_approval_token`. It has no published port. Public `dot-plugin` receives only the separate assertion-only `mcp_passkey_token`; it cannot register, list, remove or configure credentials and has neither the credential volume nor its encryption key.
+터널은 단일 소유자용입니다. OpenAI에서 해당 터널 사용을 허용받은 호출자는 모두 같은 수집 접근 권한을 얻으며 Bridge는 개별 OpenAI 사용자를 구분하지 못합니다. OpenAI에서 본인만 사용하도록 제한하세요. 공유 워크스페이스 사용자 격리는 구현하지 않았습니다. 관리 승인이 이벤트 구독을 만들지는 않습니다. 공개 서비스의 공용 이벤트 작업자가 터널 승인의 이벤트도 처리하며 웹훅 목적지는 외부에서 접근 가능해야 합니다.
 
-Each WebAuthn challenge binds the browser, purpose, exact origin and pending OAuth request and can be verified once. Registration and authentication require user verification. Cross-origin/iframe ceremonies are rejected. One passkey works on the shared admin/MCP origin and also across ports of the same hostname. Ports do not isolate cookies.
+기본 인증은 [패스키](passkeys.md)입니다. 서버 CLI만 최초·복구용 일회용 10분 등록 링크를 발급할 수 있습니다. 관리 화면에서 키를 추가·제거하려면 새 사용자 검증이 필요하고 공개 MCP는 소유자를 등록할 수 없습니다.
 
-A successful assertion opens a separate consent page. No MCP code is issued until a same-origin POST explicitly allows the listed permissions. Cancel returns `access_denied`. The client, callback, scope, resource and PKCE challenge remain bound throughout. Client names are self-reported, so the page also shows the client ID and callback origin. The MCP application has no admin routes or admin volume; the separate ingress routes `/admin/*` to the admin service. Admin sessions use a `/admin` cookie. A separate Caddy ingress strips all private admin cookies from requests and private `Set-Cookie` values from responses before forwarding public traffic. Keep this ingress outside the public application container with a read-only configuration. Only ingress and admin join `admin-ingress-net`; ingress never joins the device, API or control networks. Cookie filtering prevents the MCP upstream from receiving or overwriting admin cookies, but a configured shared HTTPS port means both frontends share a browser origin. A compromised frontend or same-origin script can act through a signed-in browser; this setup does not claim browser-origin isolation. Use a separate admin origin and deny admin paths at the public proxy when that isolation is required.
+`dot-control`은 `mcp_approval_token`에서 도출한 키로 암호화한 인증 정보를 `passkey-state`에 보관하며 포트를 공개하지 않습니다. 공개 `dot-plugin`은 별도의 검증 전용 `mcp_passkey_token`만 받아 등록·목록·제거·설정을 할 수 없고 인증 정보 볼륨·암호화 키도 없습니다.
 
-Fresh installs publish a separate admin-only HTTP listener on `127.0.0.1`. It accepts only the configured `localhost:<port>` Host and denies MCP, collector and passkey-control routes. Remote owners reach it through SSH forwarding. HTTP is never enabled for LAN or public hosts. Local sessions use distinct HttpOnly, SameSite=Strict cookies with server-side origin/port binding; HTTPS sessions retain Secure cookies. Neither session type can be replayed as the other. The local exception does not trust forwarded scheme headers.
+WebAuthn challenge는 브라우저·목적·정확한 출처·대기 OAuth 요청에 묶여 한 번만 검증할 수 있습니다. 등록·인증에는 사용자 검증이 필요하며 다른 출처·iframe은 거부합니다. 패스키 하나로 공용 관리·MCP 출처와 같은 호스트의 다른 포트를 사용할 수 있습니다. 포트는 쿠키를 격리하지 않습니다.
 
-With separate admin and public MCP hosts, OAuth uses code approval in admin. New grants are bound to the admin passkey policy and invalidated by recovery/removal; no public assertion of a localhost passkey is attempted.
+검증 성공 후 별도 동의 페이지가 열리며 같은 출처의 POST로 표시된 권한을 명시적으로 허용하기 전에는 MCP 코드를 발급하지 않습니다. 취소는 `access_denied`를 반환합니다. 클라이언트·콜백·범위·리소스·PKCE challenge의 연결은 계속 유지합니다. 클라이언트 이름은 자체 신고값이므로 ID와 콜백 출처도 표시합니다.
 
-Browser cookie IDs and emergency pairing values are stored as digests. Private session records are encrypted and checked for revocation on every request. Sessions last 30 minutes, or seven days when explicitly remembered; emergency access is limited to 30 minutes. Passwords use salted scrypt only in explicit `ADMIN_AUTH_MODE=local`. Password/key login is disabled in passkey mode.
+MCP 앱에는 관리 경로·볼륨이 없고 별도 ingress가 `/admin/*`를 admin으로 전달합니다. 관리 세션 쿠키의 경로는 `/admin`입니다. 별도 Caddy ingress는 공개 요청에서 모든 비공개 관리 쿠키를, 응답에서 해당 `Set-Cookie`를 제거합니다. ingress는 공개 앱 컨테이너 밖에 두고 설정을 읽기 전용으로 유지하세요. ingress·admin만 `admin-ingress-net`에 참여하며 ingress는 기기·API·제어 네트워크에 참여하지 않습니다.
 
-Removing a credential or completing CLI recovery invalidates passkey sessions and MCP grants. The last credential cannot be removed through the UI. Keep `admin-state` paired with the original admin recovery key and preserve `mcp_approval_token` with `passkey-state`. Do not rotate these encryption inputs by hand.
+쿠키 필터는 MCP가 관리 쿠키를 받거나 덮어쓰지 못하게 하지만 공용 HTTPS 포트의 두 화면은 같은 브라우저 출처를 공유합니다. 침해된 화면·같은 출처 스크립트는 로그인한 브라우저를 통해 작업할 수 있으므로 브라우저 출처 격리를 보장하지 않습니다. 격리가 필요하면 별도 관리 출처를 사용하고 공개 프록시에서 관리 경로를 차단하세요.
 
-Kakao OAuth has been removed. Startup deletes its encrypted configuration, pending flows and provider-bound sessions/grants while retaining passkey and local-mode records. Normal source/image updates do not rotate the passkey policy. The October 5 security migration rejects browser sessions created before cookie isolation and requires one admin sign-in; registered passkeys and MCP grants are retained.
+새 설치는 `127.0.0.1`에 관리 전용 HTTP를 별도로 공개합니다. 설정된 `localhost:<port>` Host만 허용하고 MCP·수집·패스키 제어 경로는 거부합니다. 원격 소유자는 SSH 포워딩으로 접근합니다. LAN·공개 호스트에는 HTTP를 허용하지 않습니다. 로컬 세션은 서버의 출처·포트 검사와 별도 HttpOnly·SameSite=Strict 쿠키를, HTTPS는 Secure 쿠키를 사용하며 서로 재사용할 수 없습니다. 로컬 예외는 전달된 scheme 헤더를 신뢰하지 않습니다.
 
-Full snapshot restoration verifies AES-GCM before extraction and uses new volumes. It retains passkey credentials but clears pending enrollment, browser sessions, OAuth grants and webhook callbacks. Keep the backup key separately. Restored Android data cannot guarantee Kakao's servers will accept the saved session.
+관리 호스트와 공개 MCP 호스트가 다르면 OAuth는 관리 화면의 코드 승인을 사용합니다. 새 승인은 관리 패스키 정책에 묶이고 복구·제거 시 무효화됩니다. localhost 패스키로 공개 호스트 검증을 시도하지 않습니다.
 
-## Security fixes: 2026-10-05
+브라우저 쿠키 ID·긴급 연결 값은 다이제스트로 저장하고 비공개 세션은 암호화하며 요청마다 철회를 검사합니다. 세션은 30분, 명시적으로 기억하면 7일이며 긴급 접근은 30분입니다. 비밀번호의 salted scrypt는 명시적 `ADMIN_AUTH_MODE=local`에만 사용합니다. 패스키 모드에서는 비밀번호·키 로그인을 끕니다.
 
-The following records describe the earlier split-port deployment. The shared-port
-change exposes authenticated admin routes and changes the browser trust boundary
-as described above; historical public-admin 404 results are not its current behavior.
+인증 정보 제거·CLI 복구 완료 시 패스키 세션과 MCP 승인을 무효화합니다. 마지막 패스키는 화면에서 제거할 수 없습니다. `admin-state`와 원래 복구 키, `passkey-state`와 `mcp_approval_token`을 함께 보관하고 이 암호화 입력을 수동 교체하지 마세요.
 
-The October 4–5 review found missing Iris caller authentication, a conditional public-to-admin escalation path, anonymous OAuth registration exhaustion, outdated dependencies and Android patch debt. Application fixes and dependency updates are deployed on the existing ARM64 Lima host. **Android patch debt remains unresolved.** This was a bounded review, not evidence that every possible vulnerability has been found.
+카카오 OAuth는 제거했습니다. 시작 시 해당 암호화 설정·대기 흐름·공급자 세션·승인을 지우고 패스키·로컬 기록은 유지합니다. 일반 소스·이미지 갱신은 패스키 정책을 바꾸지 않습니다. 10월 5일 보안 이전은 쿠키 격리 이전 브라우저 세션을 거부해 한 번의 재로그인이 필요하지만 등록 패스키·MCP 승인은 유지합니다.
 
-| Finding | Applied change | Verification |
+전체 스냅샷 복구는 추출 전 AES-GCM을 검증하고 새 볼륨을 사용합니다. 패스키 인증 정보는 유지하며 대기 등록·브라우저 세션·OAuth 승인·웹훅 콜백은 초기화합니다. 백업 키는 별도로 보관하세요. 복구한 Android 데이터의 저장 세션을 카카오 서버가 계속 허용한다고 보장할 수는 없습니다.
+
+<a id="security-fixes-2026-10-05"></a>
+
+## 보안 수정: 2026-10-05
+
+다음은 이전 분리 포트 구성의 기록입니다. 이후 공용 포트 구성은 인증된 관리 경로를 제공하고 위에서 설명한 브라우저 신뢰 경계를 사용합니다. 과거 공개 관리 경로의 404 결과가 현재 동작을 뜻하지는 않습니다.
+
+10월 4–5일 검토에서 Iris 호출자 인증 부재, 조건부 공개→관리 권한 상승, 익명 OAuth 등록 고갈, 오래된 의존성과 Android 패치 문제를 발견했습니다. 기존 ARM64 Lima에 앱 수정·의존성 갱신을 배포했습니다. **Android 패치 문제는 아직 해결되지 않았습니다.** 제한된 검토이며 모든 취약점을 발견했다는 증거는 아닙니다.
+
+| 발견 사항 | 적용한 변경 | 검증 |
 | --- | --- | --- |
-| Iris data readable without caller authentication | Per-enrollment random bearer in a root-only Android file; authenticate before database access. A nonce/HMAC challenge verifies the listener before sending the credential. | Missing/bad bearer and Android UID 2000 return 401; authenticated empty-page read succeeds; UID 2000 cannot read the secret |
-| Public process could capture admin cookies and reach device controls | Separate API-read, assertion and private-control networks; `/admin` session cookie; old browser sessions rejected; separate public ingress filters private cookies in both directions and blocks private routes | Direct private IP/DNS probes fail; synthetic ingress tests cover duplicate Cookie headers and preserve OAuth cookies; old session replay rejected |
-| Unauthenticated root ADB on the Android network | `adb-init` seeds only the two collector public keys offline; enable `ro.adb.secure=1`; private keys remain in their original volumes | A disposable Android instance accepted both seeded keys and rejected an unseeded client; production handshake requires AUTH |
-| Anonymous DCR fills persistent client quota | Short-lived encrypted registration tickets, persisted only after owner consent; atomic quota check for approved clients | 150 anonymous registrations create no stored clients; expired/tampered tickets fail; approved and legacy clients still work |
-| Vulnerable dependency versions | Aligned Netty `4.1.138.Final`, Caddy `2.11.7`, distribution updates; current pinned pip in build stage, no pip/ensurepip in runtime | Retained Gradle report, OSV and final image scans; see scope below |
-| Unbounded container process/memory usage | Explicit memory and PID limits for application services and both proxies | Effective Compose/container configuration checked |
+| 호출자 인증 없이 Iris 데이터 조회 가능 | 등록별 무작위 bearer를 root 전용 파일에 저장하고 DB 접근 전 인증. nonce/HMAC으로 키 전송 전 리스너 검증 | 누락·오류 bearer와 UID 2000은 401, 인증한 빈 페이지 조회 성공, UID 2000의 키 읽기 거부 |
+| 공개 프로세스의 관리 쿠키 수집·기기 제어 가능성 | 읽기 API·검증·비공개 제어망 분리, `/admin` 쿠키, 이전 세션 거부, 별도 ingress의 양방향 쿠키 제거·비공개 경로 차단 | 직접 IP·DNS 접근 실패, 중복 Cookie 헤더·OAuth 쿠키 보존 테스트, 이전 세션 재사용 거부 |
+| Android 네트워크의 미인증 root ADB | `adb-init`이 수집기 공개 키 두 개만 오프라인 등록, `ro.adb.secure=1`, 개인 키는 기존 볼륨 유지 | 일회용 Android가 등록 키 둘을 허용하고 미등록 키 거부, 운영 handshake에서 AUTH 요구 |
+| 익명 DCR의 영구 클라이언트 할당량 고갈 | 단기 암호화 등록 티켓, 소유자 동의 후에만 저장, 승인 클라이언트 할당량 원자적 검사 | 익명 150회 등록 후 저장 클라이언트 0, 만료·변조 거부, 승인·기존 클라이언트 정상 |
+| 취약한 의존성 | Netty `4.1.138.Final`, Caddy `2.11.7`, 배포판 갱신, 빌드 pip 고정·실행 이미지 pip/ensurepip 제거 | Gradle 보고서·OSV·최종 이미지 검사. 아래 범위 참고 |
+| 무제한 프로세스·메모리 | 앱·두 프록시에 메모리·PID 제한 | 실제 Compose·컨테이너 설정 확인 |
 
-Implementation: [Iris authentication](../iris/CollectorAuth.kt), [credential provisioning](../device/iris.py), [ADB initialization](../device/adb_auth.py), [network boundaries](../compose.yaml), [public proxy](../docker/Caddyfile.public), [admin sessions](../webui/app.py), [OAuth registration](../dot_plugin/auth.py).
+구현: [Iris 인증](../iris/CollectorAuth.kt), [키 준비](../device/iris.py), [ADB 초기화](../device/adb_auth.py), [네트워크](../compose.yaml), [공개 프록시](../docker/Caddyfile.public), [관리 세션](../webui/app.py), [OAuth 등록](../dot_plugin/auth.py).
 
-The public process still holds the API read token because reading messages is its purpose. If that process is compromised, the messages available to that token are exposed. These changes restrict escalation to administration; they cannot make a compromised authorized reader harmless. A compromised ingress, host/root operator, passkey device or privileged Android instance also remains inside a relevant trust boundary.
+공개 프로세스는 메시지 조회를 위해 API 읽기 토큰을 계속 보유하므로 침해 시 토큰으로 읽을 수 있는 메시지는 노출됩니다. 수정은 관리 권한 상승을 제한하며 승인된 읽기 프로세스 침해 자체를 무해하게 만들지는 않습니다. ingress, 호스트 root, 패스키 장치, 특권 Android 침해도 관련 신뢰 경계 안에 있습니다.
 
-### Dependency results and remaining Android risk
+<a id="dependency-results-and-remaining-android-risk"></a>
 
-Final images are `server:security-20261005-r2`, `device:security-20261005-r2` and `gateway:security-20261005` under `kakaotalk-collector/`. Grype 0.120.0 used its valid `2026-10-04T08:11:47Z` database. Raw package/advisory matches changed from 289 → 276 for server, 370 → 357 for device, and 213 → 5 for Caddy. **No High/Critical match with an available distribution fix remained in those three images.** Raw counts include unused features and repeated advisories; they are not counts of exploitable application paths. Unfixed/distribution-accepted matches and Medium Python runtime matches remain; their applicability has not been exhaustively reviewed. Redroid is not included in this three-image result.
+### 의존성 검사와 남은 Android 위험
 
-All 14 resolved Netty modules are aligned to `4.1.138.Final`; individual OSV queries returned no advisories for that version on this date. The retained `/opt/iris-dependencies.txt` records the resolved Gradle dependency graph. The [Netty release](https://github.com/netty/netty/releases/tag/netty-4.1.138.Final) and [Caddy 2.11.7 release](https://github.com/caddyserver/caddy/releases/tag/v2.11.7) replace versions flagged during the review. Official-library Caddy image publication lagged the HTTP/2 fix, so the gateway Dockerfile verifies the official release binary's SHA-512 before copying it into the updated image.
+최종 이미지는 `kakaotalk-collector/`의 `server:security-20261005-r2`, `device:security-20261005-r2`, `gateway:security-20261005`입니다. Grype 0.120.0과 유효한 `2026-10-04T08:11:47Z` DB로 검사했습니다. 패키지·권고 원시 매칭 수는 server 289→276, device 370→357, Caddy 213→5였습니다. **세 이미지에 배포판 수정이 제공된 High/Critical 매칭은 남지 않았습니다.** 수에는 미사용 기능·중복 권고가 포함되어 실제 악용 경로 수와 다릅니다. 미수정·배포판 허용 항목과 Medium Python 항목은 남으며 적용 가능성을 모두 검토하지는 않았습니다. redroid는 이 세 이미지 결과에 포함하지 않습니다.
 
-The deployed Redroid Android 14 image still reports security patch `2024-05-05`, userdebug and disabled SELinux, and requires a privileged container. Enabling authenticated ADB removes an exposed root entry point; it does not patch the Android OS. Inspected official Android 15 and 16 images report `2024-11-05` and `2025-06-05`, respectively, so moving to a higher Android version alone would not bring security patches current. The logged-in Android data was not migrated to an unverified major version. Resolving this requires a maintained, security-patched compatible build and a separate migration test; it remains open.
+실제 Netty 모듈 14개는 모두 `4.1.138.Final`이며 해당 날짜의 개별 OSV 조회에서 권고가 없었습니다. `/opt/iris-dependencies.txt`에 실제 Gradle 의존성을 보관합니다. [Netty 릴리스](https://github.com/netty/netty/releases/tag/netty-4.1.138.Final)와 [Caddy 2.11.7](https://github.com/caddyserver/caddy/releases/tag/v2.11.7)이 검토에서 지적된 버전을 대체합니다. 공식 라이브러리 Caddy 이미지 게시가 HTTP/2 수정에 늦어 gateway Dockerfile은 공식 바이너리 SHA-512를 검증한 뒤 갱신 이미지에 복사합니다.
 
-Run this workload in its dedicated VM without host directory or Docker socket mounts, install no unrelated Android applications, and keep host disk encryption enabled. The inspected Lima deployment has no host-directory mounts and the Mac has FileVault enabled. These controls reduce exposure; they do not repair missing Android patches. The review did not attempt a malicious APK, kernel exploitation, destructive load testing or exhaustive native-code analysis.
+배포된 redroid Android 14는 보안 패치 `2024-05-05`, userdebug, SELinux 비활성 상태이며 특권 컨테이너가 필요합니다. ADB 인증은 노출된 root 진입점을 막지만 OS를 패치하지 않습니다. 확인한 공식 Android 15·16 이미지의 패치는 각각 `2024-11-05`, `2025-06-05`여서 버전만 올려도 최신 패치가 되지 않습니다. 로그인된 데이터를 미검증 주요 버전으로 이전하지 않았습니다. 유지보수되는 호환 패치 빌드와 별도 이전 검증이 필요하며 아직 미해결입니다.
 
-### Verification record
+호스트 디렉터리·Docker 소켓을 마운트하지 않은 전용 VM에서 실행하고 무관한 Android 앱을 설치하지 않으며 디스크 암호화를 유지하세요. 확인한 Lima에는 호스트 마운트가 없고 Mac은 FileVault가 켜져 있었습니다. 이는 노출을 줄이지만 Android 패치를 대신하지 않습니다. 악성 APK, 커널 공격, 파괴적 부하, 모든 네이티브 코드 분석은 수행하지 않았습니다.
 
-Commands run from the repository root:
+<a id="verification-record"></a>
 
-| Command/check | Actual result |
+### 검증 기록
+
+저장소 루트에서 실행한 결과입니다. 명령 출력은 원문을 유지합니다.
+
+| 명령·검사 | 실제 결과 |
 | --- | --- |
-| `uv run pytest -q` | `227 passed, 1 warning` (Starlette test-client deprecation) |
+| `uv run pytest -q` | `227 passed, 1 warning` (Starlette 테스트 클라이언트 지원 중단 예고) |
 | `uv run ruff check .` | `All checks passed!` |
-| Device image build | Bridge release checks, Iris Kotlin tests and APK build passed; resolved Netty report retained |
-| `SMOKE_SERVER_IMAGE=kakaotalk-collector/server:security-20261005-r2 SMOKE_GATEWAY_IMAGE=kakaotalk-collector/gateway:security-20261005 uv run python scripts/smoke-ingress.py` | 15 cookie cases, 5 denied private paths; private request/response cookie values removed, OAuth cookies retained; published loopback port tested |
-| `node tests/passkey_browser.cjs` with bundled Playwright and Chrome | Native virtual-authenticator registration/login, scoped seven-day session, same passkey on both ports, explicit consent, PKCE, refresh, MCP discovery, denial and code replay rejection passed |
-| `grype docker:<final-image> -o json --file <report>` for the three images | Counts and limits above; reports retained locally |
-| Production read-only checks | Iris missing/bad credentials return 401; authenticated empty page succeeds; untrusted ADB requires AUTH; direct public-to-private network probes fail; public admin routes return 404 and unauthenticated MCP returns 401 |
-| Existing connected MCP `get_profile` and `get_collector_status` | Both succeeded after deployment; `collecting_partial`, Iris connected, no warnings, no pending deliveries |
+| 기기 이미지 빌드 | Bridge 릴리스 검사, Iris Kotlin 테스트·APK 빌드 통과. Netty 보고서 보관 |
+| `SMOKE_SERVER_IMAGE=kakaotalk-collector/server:security-20261005-r2 SMOKE_GATEWAY_IMAGE=kakaotalk-collector/gateway:security-20261005 uv run python scripts/smoke-ingress.py` | 쿠키 15개 사례, 비공개 경로 5개 차단, 비공개 요청·응답 쿠키 제거 및 OAuth 쿠키 유지, 실제 루프백 포트 검사 |
+| Playwright·Chrome으로 `node tests/passkey_browser.cjs` | 가상 인증기의 등록·로그인, 7일 세션, 두 포트 패스키, 명시적 동의, PKCE, 갱신, 도구 조회, 거부, 코드 재사용 차단 통과 |
+| 세 이미지의 `grype docker:<final-image> -o json --file <report>` | 위 수치·한계. 원본 보고서는 로컬 보관 |
+| 운영 읽기 전용 검사 | Iris 인증 누락·오류 401, 인증한 빈 페이지 성공, 미등록 ADB AUTH 요구, 공개→비공개 직접 접근 실패, 당시 공개 관리 경로 404·미인증 MCP 401 |
+| 기존 MCP의 `get_profile`, `get_collector_status` | 배포 후 모두 성공. `collecting_partial`, Iris 연결됨, 경고·대기 전송 없음 |
 
-Raw reports, build output and deployment checks are retained in ignored `artifacts/security-fix-20261005/`. Probes did not request message bodies, send messages, change acknowledgments or create event subscriptions. Browser and ADB negative tests used synthetic data/disposable Android volumes.
+원본 보고서·빌드·배포 검사는 Git 제외 경로 `artifacts/security-fix-20261005/`에 보관합니다. 점검 중 본문 조회·메시지 전송·처리 확인 변경·이벤트 구독은 하지 않았습니다. 브라우저·ADB 거부 검사는 합성 데이터와 일회용 Android 볼륨을 사용했습니다.
 
-Before migration, a full AES-GCM snapshot including Android, all seven state volumes, configuration and secrets was authenticated without extracting plaintext. It is kept on the deployment host at `backups/security-20261005-r1/snapshot.kcs` with mode 0600. The initial backup verification hit a permissions error before service changes; the corrected retry passed. Both Iris migrations checked old/new APK hashes and retained the prior binary. Passkey identities, MCP grants and profile identity were compared before and after. Secure ADB required one Android restart; the final dependency/ingress rollout did not restart Android. The owner must sign in to admin once again with the existing passkey. Phone session continuity still requires the owner's manual check.
+이전 전에 Android·상태 볼륨 7개·설정·키를 포함한 AES-GCM 스냅샷을 평문 추출 없이 인증했습니다. 배포 호스트의 `backups/security-20261005-r1/snapshot.kcs`에 0600으로 보관합니다. 최초 백업 검증은 권한 오류로 서비스 변경 전에 멈췄고 수정 후 통과했습니다. Iris 교체 두 번 모두 이전·새 APK 해시를 검사하고 이전 바이너리를 남겼습니다. 패스키·MCP 승인·프로필 식별자를 전후 비교했습니다. ADB 인증에는 Android 재시작 한 번이 필요했지만 마지막 의존성·ingress 배포는 Android를 재시작하지 않았습니다. 소유자는 기존 패스키로 관리 화면에 한 번 다시 로그인해야 하며 휴대폰 로그인 유지는 직접 확인해야 합니다.
 
-The first ingress rollout briefly returned 502: its copied configuration had mode 0600, and Docker did not publish ports when its only network was internal. The configuration is now readable by its non-root UID, with private writable tmpfs directories. A separate edge network enables host-loopback publishing without joining any admin/device/control network. A health check and an actual published-port smoke test cover this deployment failure; final public-route and existing MCP calls passed.
+최초 ingress 배포는 잠시 502를 반환했습니다. 복사한 설정이 0600이었고 내부 네트워크만 있을 때 Docker 포트가 공개되지 않았기 때문입니다. 현재는 비root UID가 설정을 읽고 비공개 쓰기용 tmpfs를 사용합니다. 별도 외부 네트워크로 관리·기기·제어망에 참여하지 않고 호스트 루프백 포트를 공개합니다. 상태 검사와 실제 포트 smoke 테스트를 추가했으며 최종 공개 경로·기존 MCP 호출은 통과했습니다.
 
-## Web connection setup
+<a id="web-connection-setup"></a>
 
-The authenticated admin UI can request a finite set of connection operations:
-keep current setup, generate stdio configuration, configure HTTPS/OAuth, configure
-Tailscale Funnel, configure/approve a personal OpenAI tunnel, or check services.
-Requests require an admin session, same-origin checks and the session’s CSRF token.
-The shared input contract rejects arbitrary commands, paths, extra fields and
-implicit approval. Tunnel approval and Tailscale installation/public exposure each
-require an explicit checkbox.
+## 웹 연결 설정
 
-`bridge up` installs a root systemd service in the installation host (inside the
-managed Linux VM on Mac). It listens only on a mode-0600 Unix socket in a
-mode-0700 directory. Only that directory is mounted into the admin container,
-read-only; the Docker socket and installation directory are not mounted there.
-Treat the admin console and installation source as trusted administration
-surfaces: approved setup operations can install Tailscale and change MCP access.
-The agent exposes no TCP listener or general shell/Docker proxy. Other MCP and
-public ingress services do not receive its socket mount.
+인증된 관리 화면은 기존 설정 유지, stdio 설정 생성, HTTPS·OAuth, Tailscale Funnel, 개인 OpenAI 터널 설정·승인, 서비스 점검만 요청할 수 있습니다. 관리자 세션·같은 출처·CSRF 토큰이 필요하며 공유 입력 검증은 임의 명령·경로·추가 필드·암묵적 승인을 거부합니다. 터널 승인과 Tailscale 설치·공개에는 각각 명시적 체크가 필요합니다.
 
-Workers receive keys through stdin, use mode-0600 temporary key files and remove
-them after provisioning. The persistent tunnel credential uses the existing
-protected secrets directory. HTTP responses and job history contain no keys;
-provider errors are replaced with fixed, stage-specific recovery messages.
-Progress files contain only a matching request ID, an allowed stage and its fixed
-message. The saved preferred method contains no credential and changes only after
-a successful non-check job. Tailscale approval links are kept in memory, not job
-history. Setup status survives page refresh; interrupted jobs retain their method
-for review and require a retry. A process-group timeout stops a worker and its descendants.
-This does not promise transactional rollback after a machine crash. Existing
-tunnel rollback behavior still applies to ordinary provisioning failures.
+`bridge up`은 설치 호스트(Mac은 관리 Linux VM)에 root systemd 서비스를 설치합니다. 0700 디렉터리 안의 0600 Unix 소켓에서만 수신합니다. 해당 디렉터리만 관리 컨테이너에 읽기 전용으로 마운트하고 Docker 소켓·설치 디렉터리는 마운트하지 않습니다. 허용된 설정 작업이 Tailscale 설치·MCP 접근을 바꿀 수 있으므로 관리 화면과 설치 소스는 신뢰할 수 있어야 합니다. TCP 리스너나 범용 셸·Docker 프록시는 없으며 다른 MCP·공개 ingress에 소켓을 제공하지 않습니다.
 
-## Connection activity metadata
+작업자는 stdin으로 키를 받고 0600 임시 키 파일을 사용한 뒤 제거합니다. 영구 터널 키는 기존 보호된 키 디렉터리에 저장합니다. HTTP 응답·작업 기록에는 키를 넣지 않으며 공급자 오류는 단계별 고정 복구 안내로 바꿉니다. 진행 파일에는 일치하는 요청 ID, 허용 단계, 고정 안내만 저장합니다. 선호 방식에는 키가 없고 점검 외 작업 성공 후에만 바뀝니다. Tailscale 승인 링크는 작업 기록 대신 메모리에만 보관합니다. 새로고침 후에도 상태가 유지되며 중단 작업은 방식을 남기고 재시도를 요구합니다. 프로세스 그룹 제한 시간이 작업자와 하위 프로세스를 종료합니다. 기기 충돌 후 트랜잭션 수준 롤백을 보장하지는 않으며 일반 설정 실패에는 기존 터널 롤백을 적용합니다.
 
-Successful remote MCP tool calls store a `last_tool_at` timestamp per grant in
-encrypted `dot-state`, separately from the grant. No tool arguments or returned
-message content are added to this record. Metadata discovery and failed calls do
-not count. The admin API returns activity for active approvals; revoking and
-reapproving creates a new grant without the prior activity display. Local stdio
-calls are not recorded here, and older calls are not backfilled.
+<a id="connection-activity-metadata"></a>
 
-An activity timestamp is not an authentication decision, a live connectivity
-probe or proof of event delivery. Each request still validates its current grant.
-The overview's phone timestamp remains a manual observation; refreshing the
-tablet inspection does not confirm the phone session.
+## 연결 활동 정보
+
+성공한 원격 MCP 도구 호출은 암호화한 `dot-state`에 승인별 `last_tool_at`을 승인 정보와 별도로 저장합니다. 인수·반환 본문은 추가하지 않습니다. 목록 조회·실패는 제외하고 관리 API는 활성 승인만 표시합니다. 철회 후 재승인하면 이전 활동이 없는 새 승인을 만듭니다. 로컬 stdio·과거 호출은 이 기록에 포함하지 않습니다.
+
+활동 시각은 인증 결정·실시간 연결 검사·이벤트 전달 증거가 아닙니다. 요청마다 현재 승인을 검사합니다. 요약의 휴대폰 시각은 수동 관측이며 태블릿 점검을 갱신해도 휴대폰 로그인이 확인되는 것은 아닙니다.

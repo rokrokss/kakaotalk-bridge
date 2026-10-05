@@ -228,16 +228,16 @@ class OAuth:
         permissions = []
         if "kakao.read" in scope.split():
             permissions.append(
-                "<li>Read and search stored messages and check collection status</li>"
+                "<li>저장된 메시지 조회·검색 및 수집 상태 확인</li>"
             )
         if "kakao.events" in scope.split():
             permissions.append(
-                "<li>Subscribe to requested new-message events and record processing progress</li>"
+                "<li>요청한 새 메시지 이벤트 구독 및 처리 진행 상황 기록</li>"
             )
         return (
             "<ul>" + "".join(permissions) + "</ul>"
-            "<p>Retrieved messages are shared with the connected client. These permissions do not "
-            "allow sending KakaoTalk messages or controlling the device.</p>"
+            "<p>조회한 메시지는 연결된 클라이언트와 공유됩니다. "
+            "카카오톡 메시지 전송이나 기기 조작 권한은 포함되지 않습니다.</p>"
         )
 
     def approval(self, ticket, cookie, *, db=None):
@@ -312,13 +312,13 @@ class OAuth:
         if self.config.approval_mode == "passkey":
             return (
                 render_page(
-                    "Connect KakaoTalk Bridge",
-                    f'''<h1>Connect KakaoTalk Bridge</h1>
-<p>Confirm it's you, then review access for <strong>{esc(client["client_name"])}</strong>.</p>
+                    "KakaoTalk Bridge 연결",
+                    f'''<h1>KakaoTalk Bridge 연결</h1>
+<p>본인 인증 후 <strong>{esc(client["client_name"])}</strong>의 접근 권한을 확인하세요.</p>
 <form id="passkey-mcp"><input type="hidden" name="ticket" value="{esc(ticket)}">
-<button type="submit">Continue with a passkey</button></form>
+<button type="submit">패스키로 계속</button></form>
 <p id="passkey-status" role="status"></p>
-<p class="hint">Use your device, phone or security key. If this browser cannot use passkeys, restart the connection in your system browser.</p>
+<p class="hint">기기, 휴대폰 또는 보안 키로 인증하세요. 패스키를 사용할 수 없는 브라우저라면 시스템 브라우저에서 다시 연결하세요.</p>
 <script src="/assets/passkey.js" defer></script><script src="/assets/passkey-login.js" defer></script>''',
                 ),
                 cookie,
@@ -327,44 +327,44 @@ class OAuth:
         permissions = []
         if "kakao.read" in scope.split():
             permissions.append(
-                "<li>Read and search stored messages and check collection status</li>"
+                "<li>저장된 메시지 조회·검색 및 수집 상태 확인</li>"
             )
         if "kakao.events" in scope.split():
             permissions.append(
-                "<li>Subscribe to requested new-message events and record processing progress</li>"
+                "<li>요청한 새 메시지 이벤트 구독 및 처리 진행 상황 기록</li>"
             )
         page = render_page(
-            "Approve connection",
-            f'''<h1>Approve connection</h1>
-<p>Allow <strong>{esc(client["client_name"])}</strong> the following permissions:</p>
+            "연결 승인",
+            f'''<h1>연결 승인</h1>
+<p><strong>{esc(client["client_name"])}</strong>에 다음 권한을 허용합니다:</p>
 <ul>{"".join(permissions)}</ul>
-<p>Retrieved messages are shared with the connected client. These permissions do not allow sending KakaoTalk messages or controlling the device.</p>
+<p>조회한 메시지는 연결된 클라이언트와 공유됩니다. 카카오톡 메시지 전송이나 기기 조작 권한은 포함되지 않습니다.</p>
 <form method="post" action="/authorize">
 <input type="hidden" name="ticket" value="{esc(ticket)}">
-<label for="link-key">Server connection key</label>
+<label for="link-key">서버 연결 키</label>
 <input id="link-key" type="password" name="link_key" autocomplete="off" required aria-describedby="key-help">
-<p id="key-help" class="hint">Use the key stored in <code>secrets/mcp_link_key</code>, not your Kakao password.</p>
-<button type="submit">Allow connection</button>
+<p id="key-help" class="hint"><code>secrets/mcp_link_key</code>에 저장된 키를 입력하세요. 카카오 비밀번호를 입력하는 곳이 아닙니다.</p>
+<button type="submit">연결 허용</button>
 </form>
-<p class="hint">Connecting does not create event subscriptions or automated tasks.</p>''',
+<p class="hint">연결만으로 이벤트 구독이나 자동 작업이 생성되지는 않습니다.</p>''',
         )
         if self.config.approval_mode == "admin":
             record = self.state.get("approval", digest(ticket))
             page = render_page(
-                "Connect ChatGPT",
-                f'''<h1>Confirm in your admin console</h1>
-<p>Open the private admin console, then choose <strong>Connections</strong>.</p>
-<p>Match this code and the client before approving:</p>
+                "ChatGPT 연결",
+                f'''<h1>관리 화면에서 확인</h1>
+<p>비공개 관리 화면을 열고 <strong>AI 연결</strong>을 선택하세요.</p>
+<p>승인 전에 아래 코드와 클라이언트가 일치하는지 확인하세요:</p>
 <code class="endpoint">{record["display_code"]}</code>
 <p><strong>{esc(client["client_name"])}</strong> · {esc(query["client_id"])}</p>
-<p>Callback: {esc(redirect_origin(query["redirect_uri"]))}</p>
+<p>돌아갈 주소: {esc(redirect_origin(query["redirect_uri"]))}</p>
 <ul>{"".join(permissions)}</ul>
-<p>Messages retrieved by this client are shared with it. Device controls are not included.</p>
+<p>이 클라이언트가 조회한 메시지는 해당 클라이언트와 공유됩니다. 기기 조작 권한은 포함되지 않습니다.</p>
 <form id="approval" method="post" action="/authorize">
 <input type="hidden" name="ticket" value="{esc(ticket)}">
-<button type="submit">Continue after approval</button>
-</form><p id="status" role="status">Waiting for approval. Expires in 10 minutes.</p>
-<p class="hint">Connecting does not create event subscriptions or automated tasks.</p>
+<button type="submit">승인 후 계속</button>
+</form><p id="status" role="status">승인 대기 중입니다. 10분 후 만료됩니다.</p>
+<p class="hint">연결만으로 이벤트 구독이나 자동 작업이 생성되지는 않습니다.</p>
 <script src="/assets/approval.js" defer></script>''',
             )
         return page, cookie, redirect_origin(query["redirect_uri"])

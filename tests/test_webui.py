@@ -335,7 +335,7 @@ def test_login_check_reports_existing_approval_without_restarting_setup(console)
     client.post("/admin/api/action", json={"name": "login-check"}, headers=headers)
     result = wait_job(client)
     assert result["job"]["state"] == "done"
-    assert "Collection is already approved" in result["job"]["message"]
+    assert "이미 수집이 승인되었습니다" in result["job"]["message"]
     android.session_status.assert_called_once()
     android.bootstrap.assert_not_called()
     android.confirm.assert_not_called()
@@ -348,7 +348,7 @@ def test_login_check_failure_explains_required_screen_without_leaking_content(co
     client.post("/admin/api/action", json={"name": "login-check"}, headers=headers)
     result = wait_job(client)
     assert result["job"]["state"] == "failed"
-    assert "before signing in" in result["job"]["message"]
+    assert "로그인 전에" in result["job"]["message"]
     assert "private account" not in json.dumps(result)
 
 

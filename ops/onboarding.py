@@ -15,13 +15,13 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from ops import cli
-from ops.setup_output import SetupOutput, run
+from ops.setup_output import SetupOutput, provider_line, run
 
 STEPS = (
-    ("environment", "Preparing the execution environment"),
-    ("runtime", "Starting your private bridge"),
-    ("network", "Preparing optional AI connections"),
-    ("browser", "Opening KakaoTalk setup"),
+    ("environment", "실행 환경 준비"),
+    ("runtime", "개인 Bridge 시작"),
+    ("network", "선택한 AI 연결 준비"),
+    ("browser", "카카오톡 설정 화면 열기"),
 )
 
 
@@ -52,36 +52,32 @@ def network_config():
 
 def add_arguments(parser):
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--source", action="store_true", help="Build this checkout")
-    mode.add_argument("--manifest", help="Use a verified release manifest")
-    parser.add_argument("--plan", action="store_true", help="Show steps without changing anything")
-    parser.add_argument("--verbose", action="store_true", help="Show detailed installation output")
-    parser.add_argument(
-        "--no-install", action="store_true", help="Do not install host dependencies"
-    )
-    parser.add_argument(
-        "--no-browser", action="store_true", help="Print links for a remote browser"
-    )
+    mode.add_argument("--source", action="store_true", help="현재 소스 빌드")
+    mode.add_argument("--manifest", help="검증된 릴리스 매니페스트 사용")
+    parser.add_argument("--plan", action="store_true", help="변경 없이 진행 단계만 표시")
+    parser.add_argument("--verbose", action="store_true", help="진단용 원문 출력 표시")
+    parser.add_argument("--no-install", action="store_true", help="호스트 의존성 자동 설치 안 함")
+    parser.add_argument("--no-browser", action="store_true", help="원격 브라우저에서 열 링크 표시")
     parser.add_argument("--vm", default="kakaotalk-bridge")
     parser.add_argument(
-        "--admin-port", type=int, help="Internal maintenance port; Mac selects a free port"
+        "--admin-port", type=int, help="내부 유지 관리 포트 (Mac에서는 빈 포트 자동 선택)"
     )
     parser.add_argument(
-        "--mcp-port", type=int, help="Local shared ingress port; Mac selects a free port"
+        "--mcp-port", type=int, help="로컬 공용 진입 포트 (Mac에서는 빈 포트 자동 선택)"
     )
-    parser.add_argument("--apk-folder", help="Import your official APK set on first setup")
-    parser.add_argument("--url", help="Shared HTTPS origin for an existing reverse proxy")
+    parser.add_argument("--apk-folder", help="첫 설정에서 공식 APK 세트 가져오기")
+    parser.add_argument("--url", help="기존 리버스 프록시의 공용 HTTPS 주소")
     parser.add_argument(
-        "--admin-url", help="Admin HTTPS origin or http://localhost:<port> (advanced)"
+        "--admin-url", help="관리 화면 HTTPS 주소 또는 http://localhost:<port> (고급)"
     )
-    parser.add_argument("--public-url", help="Public MCP HTTPS origin for an existing proxy")
+    parser.add_argument("--public-url", help="기존 프록시의 공개 MCP HTTPS 주소")
     parser.add_argument(
         "--connection",
         choices=("none", "tailscale", "https", "openai-tunnel"),
-        help="Optional AI connection; default keeps existing connections and adds none",
+        help="선택할 AI 연결 (기본값: 기존 연결 유지, 새 연결 추가 안 함)",
     )
-    parser.add_argument("--tunnel-id", help="Personal OpenAI tunnel ID (first configuration)")
-    parser.add_argument("--api-key-file", help="Private file containing the tunnel runtime API key")
+    parser.add_argument("--tunnel-id", help="개인 OpenAI 터널 ID (첫 설정)")
+    parser.add_argument("--api-key-file", help="터널 실행용 API 키를 담은 비공개 파일")
 
 
 def validate(args):
@@ -184,7 +180,14 @@ def install_script(url, *, interactive=False):
 def require_install(args, description):
     if args.no_install:
         raise RuntimeError(f"Missing {description}. Install it or rerun without --no-install.")
-    print(f"Installing {description}. Your OS may request administrator approval.", flush=True)
+    label = {
+        "the Mac execution environment": "Mac 실행 환경",
+        "the Intel Mac virtual machine driver": "Intel Mac 가상 머신 드라이버",
+        "Tailscale for your secure browser connection": "보안 연결용 Tailscale",
+        "Docker Engine and Compose": "Docker Engine 및 Compose",
+        "Linux runtime packages": "Linux 실행 패키지",
+    }.get(description, "필수 구성 요소")
+    print(f"{label} 설치 중… 운영체제에서 관리자 승인을 요청할 수 있습니다.", flush=True)
 
 
 def prepare_mac(args):
@@ -198,21 +201,24 @@ def prepare_mac(args):
         require_install(args, "the Mac execution environment")
         if not shutil.which("brew"):
             install_script(
-                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh", interactive=True
+                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh",
+                interactive=True,
             )
         run(["brew", "install", "lima"])
     if platform.machine() == "x86_64" and not shutil.which("qemu-system-x86_64"):
         require_install(args, "the Intel Mac virtual machine driver")
         if not shutil.which("brew"):
             install_script(
-                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh", interactive=True
+                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh",
+                interactive=True,
             )
         run(["brew", "install", "qemu"])
     if args.connection == "tailscale" and not cli.tailscale_binary():
         require_install(args, "Tailscale for your secure browser connection")
         if not shutil.which("brew"):
             install_script(
-                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh", interactive=True
+                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh",
+                interactive=True,
             )
         run(["brew", "install", "--formula", "tailscale"])
         privileged(["brew", "services", "start", "tailscale"])
@@ -405,7 +411,7 @@ def connect_network(args, runtime):
         status = network_status([*prefix, tailscale, "status", "--json"])
     if status.get("BackendState") != "Running":
         print(
-            "Sign in to the secure connection service in your browser. Waiting up to 10 minutes…",
+            "브라우저에서 Tailscale에 로그인하세요. 최대 10분 동안 기다리는 중…",
             flush=True,
         )
         # Tailscale owns the login flow. Never save its one-time links in checkpoints/logs.
@@ -415,10 +421,9 @@ def connect_network(args, runtime):
         ) as proc:
             try:
                 for line in proc.stdout:
-                    print(line, end="", flush=True)
-                    match = re.search(r"https://login\.tailscale\.com/[A-Za-z0-9/_?=&.-]+", line)
-                    if match and not args.no_browser:
-                        webbrowser.open(match.group())
+                    for link in provider_line(line):
+                        if not args.no_browser:
+                            webbrowser.open(link)
                 if proc.wait():
                     raise RuntimeError(
                         "Secure connection sign-in did not finish. Rerun bridge up to continue."
@@ -450,11 +455,11 @@ def open_setup(args, runtime):
         port = urlsplit(base).port
         target = network_config().get("ADMIN_LOCAL_PORT") or "18789"
         print(
-            f"\nOn your computer, keep this SSH forwarding session open:\n"
+            f"\n사용할 컴퓨터에서 아래 SSH 포워딩을 실행한 상태로 두세요:\n"
             f"  ssh -N -L 127.0.0.1:{port}:127.0.0.1:{target} user@your-server\n"
-            "Then open the localhost setup link on that computer."
+            "그 컴퓨터에서 localhost 설정 링크를 여세요."
         )
-    print("\nOpen your setup page:\n" + link, flush=True)
+    print("\n설정 화면을 여세요:\n" + link, flush=True)
     if not args.no_browser:
         webbrowser.open(link)
 
@@ -462,29 +467,27 @@ def open_setup(args, runtime):
 def up(args):
     validate(args)
     if args.plan:
-        print("KakaoTalk Bridge · setup plan (no changes)")
+        print("KakaoTalk Bridge · 설정 계획 (변경 없음)")
         print(
-            "Runtime: "
+            "실행 환경: "
             + (
-                "private Ubuntu VM on macOS"
+                "macOS의 전용 Ubuntu VM"
                 if platform.system() == "Darwin"
-                else "local Linux Docker Engine with Android Binder"
+                else "Android Binder를 사용하는 로컬 Linux Docker Engine"
             )
         )
         for index, (_, label) in enumerate(STEPS, 1):
             print(f"{index}. {label}")
+        print("기존 설치와 로그인 정보를 재사용합니다. 이미지는 bridge update로만 변경됩니다.")
         print(
-            "Existing installation and login data are reused; images change only with bridge update."
+            "연결: "
+            + (args.connection or ("https" if args.public_url else "추가 없음 (기존 연결 유지)"))
         )
+        print("관리 화면: 로컬 브라우저 또는 SSH 포워딩 사용, 기존 HTTPS 주소 유지")
         print(
-            "Connection: "
-            + (args.connection or ("https" if args.public_url else "none (reuse existing)"))
+            "AI: 나중에 bridge setup-connection으로 stdio, 공개 HTTPS/OAuth 또는 OpenAI 터널 추가"
         )
-        print("Admin: local browser or SSH forwarding; an existing HTTPS address is reused.")
-        print(
-            "AI: add stdio, public HTTPS/OAuth or an OpenAI tunnel later with bridge setup-connection."
-        )
-        print("First use requires an admin passkey and KakaoTalk installation/login.")
+        print("처음 사용하면 관리자 패스키 등록과 카카오톡 설치·로그인이 필요합니다.")
         return
     with installation_lock(), SetupOutput(verbose=args.verbose) as output:
         current = "environment"
@@ -536,16 +539,16 @@ def up(args):
                 json.dumps({"step": current, "state": "interrupted"}),
             )
             print(
-                f"\nStopped during {current}. Run the same command to continue; your data is preserved.",
+                f"\n{dict(STEPS)[current]} 단계에서 중단되었습니다. 같은 명령으로 이어서 진행하세요. 데이터는 유지됩니다.",
                 file=sys.stderr,
             )
             if output.path:
-                print(f"Details: {output.path}", file=sys.stderr)
+                print(f"진단 로그: {output.path}", file=sys.stderr)
             raise
         cli.atomic(
             cli.ROOT / ".bridge/onboarding.json", json.dumps({"step": "browser", "state": "ready"})
         )
         print(
-            "\nBridge is ready. Continue in your browser. Next time, run the same command.\n"
-            "AI connections are optional: choose Connect your AI in admin when ready."
+            "\nBridge가 준비되었습니다. 브라우저에서 계속하세요. 다음에도 같은 명령을 실행하면 됩니다.\n"
+            "AI 연결은 선택 사항입니다. 필요할 때 관리 화면의 ‘AI 연결’에서 추가하세요."
         )

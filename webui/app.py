@@ -115,14 +115,14 @@ def collector_status():
 
 
 ERRORS = {
-    "kakao_signature_unverified": "KakaoTalk publisher signature could not be verified. Use the official app; see the installation guide for supported signatures.",
-    "aurora_artifact_unverified": "Aurora download did not match the pinned release. Retry or use APK import.",
-    "android_not_ready": "Android is still starting. Wait, then refresh setup.",
-    "screen_unavailable": "Could not retrieve the screen. Check that redroid has booted.",
-    "keyboard_unavailable": "Select “Connect keyboard”, then focus a KakaoTalk input field. If needed, install the components under Installation first.",
-    "focus_kakao_input": "Click an input field in KakaoTalk first.",
-    "input_result_unknown": "Could not confirm the input result. Check the screen before entering text again.",
-    "kakao_not_installed": "Complete the KakaoTalk installation first.",
+    "kakao_signature_unverified": "카카오톡 배포자 서명을 확인할 수 없습니다. 공식 앱을 사용하고 설치 안내에서 지원하는 서명을 확인하세요.",
+    "aurora_artifact_unverified": "다운로드한 Aurora가 지정된 릴리스와 일치하지 않습니다. 다시 시도하거나 APK 가져오기를 사용하세요.",
+    "android_not_ready": "Android가 시작 중입니다. 잠시 기다린 뒤 설정을 새로고침하세요.",
+    "screen_unavailable": "화면을 가져올 수 없습니다. redroid가 시작되었는지 확인하세요.",
+    "keyboard_unavailable": "‘키보드 연결’을 누른 뒤 카카오톡 입력란을 선택하세요. 필요하면 먼저 ‘설치’에서 구성 요소를 설치하세요.",
+    "focus_kakao_input": "먼저 카카오톡의 입력란을 누르세요.",
+    "input_result_unknown": "입력 결과를 확인할 수 없습니다. 다시 입력하기 전에 화면을 확인하세요.",
+    "kakao_not_installed": "먼저 카카오톡 설치를 완료하세요.",
 }
 
 
@@ -277,7 +277,7 @@ def create_app(
                 503,
                 ERRORS.get(
                     str(exc),
-                    "The device operation failed. Check the connection and installation status.",
+                    "기기 작업에 실패했습니다. 연결과 설치 상태를 확인하세요.",
                 ),
             ) from None
         finally:
@@ -309,18 +309,18 @@ def create_app(
     def login(body: Login, request: Request, response: Response):
         if auth_mode != "local":
             raise HTTPException(
-                403, "Use passkey sign-in. Server recovery requires ./bridge admin --recovery."
+                403, "패스키로 로그인하세요. 서버에서 복구하려면 ./bridge admin --recovery를 실행하세요."
             )
         with session_lock:
             now = time.monotonic()
             while failures and failures[0] <= now - 60:
                 failures.popleft()
             if len(failures) >= 5:
-                raise HTTPException(429, "Try again shortly.")
+                raise HTTPException(429, "잠시 후 다시 시도하세요.")
             if not hmac.compare_digest(body.token.encode(), token.encode()):
                 failures.append(now)
-                raise HTTPException(401, "The admin key is incorrect.")
-        return issue_session(request, response, session_ttl, "Recovery key", exclusive=True)
+                raise HTTPException(401, "관리자 키가 올바르지 않습니다.")
+        return issue_session(request, response, session_ttl, "복구 키", exclusive=True)
 
     def issue_session(request, response, ttl, label, exclusive=False, policy="local"):
         key, record = owner.create_session(
@@ -350,10 +350,10 @@ def create_app(
             return passkeys.call("admin", operation, data)
         except (ValueError, TypeError, KeyError, WebAuthnException):
             raise HTTPException(
-                400, "Passkey verification failed. Try again or open a fresh setup link."
+                400, "패스키 인증에 실패했습니다. 다시 시도하거나 새 설정 링크를 여세요."
             ) from None
         except (OSError, RuntimeError):
-            raise HTTPException(503, "Passkey service unavailable. Try again shortly.") from None
+            raise HTTPException(503, "패스키 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.") from None
 
     def current_policy():
         if auth_mode == "passkey":
@@ -364,7 +364,7 @@ def create_app(
         info = passkey_call("info")
         origin = request_origin(request)
         if auth_mode != "passkey" or not info["configured"] or origin != info["admin_origin"]:
-            raise HTTPException(403, "Open the admin address configured for passkeys.")
+            raise HTTPException(403, "패스키에 설정된 관리 화면 주소로 접속하세요.")
         return origin
 
     @app.post("/admin/api/passkeys/{operation}")
@@ -421,7 +421,7 @@ def create_app(
                     **data,
                     "enrollment": body.get("enrollment", ""),
                     "proof": body.get("proof", ""),
-                    "label": body.get("label", "Passkey"),
+                    "label": body.get("label", "패스키"),
                 },
             )
         if operation == "register-verify":
@@ -433,7 +433,7 @@ def create_app(
                 request,
                 response,
                 session_ttl,
-                "Passkey · " + request.headers.get("user-agent", "Browser"),
+                "패스키 · " + request.headers.get("user-agent", "브라우저"),
                 policy=result["policy"],
             )
         purpose = body.get("purpose", "login")
@@ -463,7 +463,7 @@ def create_app(
             request,
             response,
             7 * 86400 if context == "remember" else session_ttl,
-            "Passkey · " + request.headers.get("user-agent", "Browser"),
+            "패스키 · " + request.headers.get("user-agent", "브라우저"),
             policy=result["policy"],
         )
 
@@ -487,13 +487,13 @@ def create_app(
     def owner_login(body: OwnerLogin, request: Request, response: Response):
         policy = current_policy()
         if auth_mode != "local" and not body.pair:
-            raise HTTPException(403, "Use the configured sign-in method.")
+            raise HTTPException(403, "설정된 로그인 방식을 사용하세요.")
         with session_lock:
             now = time.monotonic()
             while failures and failures[0] <= now - 60:
                 failures.popleft()
             if len(failures) >= 5:
-                raise HTTPException(429, "Try again shortly.")
+                raise HTTPException(429, "잠시 후 다시 시도하세요.")
             # Count before password hashing to bound concurrent authentication work.
             failures.append(now)
             valid = (
@@ -502,13 +502,13 @@ def create_app(
                 else owner.check_password(body.password)
             )
             if not valid:
-                raise HTTPException(401, "Password or pairing link is invalid or expired.")
+                raise HTTPException(401, "비밀번호가 올바르지 않거나 연결 링크가 만료되었습니다.")
             failures.pop()
         return issue_session(
             request,
             response,
             7 * 86400 if body.remember and auth_mode == "local" else session_ttl,
-            request.headers.get("user-agent", "Browser"),
+            request.headers.get("user-agent", "브라우저"),
             policy=policy,
         )
 
@@ -526,11 +526,11 @@ def create_app(
             return connections.call(method, path, data)
         except RequestChanged:
             raise HTTPException(
-                409, "Code is incorrect or the request expired. Refresh Connections."
+                409, "코드가 올바르지 않거나 요청이 만료되었습니다. ‘AI 연결’을 새로고침하세요."
             ) from None
         except (OSError, ValueError):
             raise HTTPException(
-                503, "Connection service unavailable. Start the dot profile."
+                503, "연결 서비스를 사용할 수 없습니다. dot 프로필을 시작하세요."
             ) from None
 
     @app.get("/admin/api/connections")
@@ -542,17 +542,17 @@ def create_app(
             return setup_client.call(method, data)
         except SetupBusy:
             raise HTTPException(
-                409, "Connection setup is already running. Wait for it to finish."
+                409, "연결 설정이 이미 진행 중입니다. 완료될 때까지 기다리세요."
             ) from None
         except (OSError, ValueError):
             if method == "GET":
                 return {
                     "available": False,
-                    "message": "Web setup service is unavailable. On the installation machine, update Bridge and run ./bridge up, or ./bridge setup-agent install. CLI setup remains available.",
+                    "message": "웹 설정 서비스를 사용할 수 없습니다. 설치된 컴퓨터에서 Bridge를 업데이트하고 ./bridge up 또는 ./bridge setup-agent install을 실행하세요. CLI 설정은 계속 사용할 수 있습니다.",
                 }
             raise HTTPException(
                 503,
-                "Setup service is unavailable. Reopen Connections to check its status before retrying.",
+                "설정 서비스를 사용할 수 없습니다. ‘AI 연결’을 다시 열어 상태를 확인한 뒤 재시도하세요.",
             ) from None
 
     @app.get("/admin/api/connection-setup")
@@ -565,7 +565,7 @@ def create_app(
             validated = validate_connection_setup(data)
         except ValueError:
             raise HTTPException(
-                422, "Check the connection settings and required permissions."
+                422, "연결 설정과 필요한 권한을 확인하세요."
             ) from None
         return setup_call("POST", validated)
 
@@ -580,10 +580,10 @@ def create_app(
             checkpoint = event_source.checkpoint()
             page = event_source.conversations(q=q, cursor=cursor)
         except QueryError:
-            raise HTTPException(400, "Refresh the conversation list and try again.") from None
+            raise HTTPException(400, "대화 목록을 새로고침한 뒤 다시 시도하세요.") from None
         except (OSError, ValueError, RuntimeError):
             raise HTTPException(
-                503, "Conversation list unavailable. Check collection status."
+                503, "대화 목록을 가져올 수 없습니다. 수집 상태를 확인하세요."
             ) from None
         epoch = checkpoint["cursor_epoch"]
         items = []
@@ -616,7 +616,7 @@ def create_app(
                 checkpoint = event_source.checkpoint()
             except (OSError, ValueError, RuntimeError):
                 raise HTTPException(
-                    503, "Cannot enable events until collection is available."
+                    503, "수집이 가능해진 뒤 이벤트를 켤 수 있습니다."
                 ) from None
             data.update(cursor_epoch=checkpoint["cursor_epoch"], after_cursor=checkpoint["cursor"])
         return connection_call("POST", "/events/settings", data)
@@ -704,7 +704,7 @@ def create_app(
             frame = current["frames"].get(body.frame)
         if not frame or time.monotonic() - frame[2] > 10:
             raise HTTPException(
-                409, "The screen is outdated. Wait for a new frame before trying again."
+                409, "화면이 오래되었습니다. 새 화면을 받은 뒤 다시 시도하세요."
             )
         if (body.end_x is None) != (body.end_y is None):
             raise HTTPException(422, "invalid_swipe")
@@ -769,53 +769,53 @@ def create_app(
                     session_snapshot = device.session_status()
                     snapshot_invalidated = False
             message = {
-                "prepare": "Aurora is ready. Choose anonymous sign-in and install KakaoTalk."
+                "prepare": "Aurora가 준비되었습니다. 익명 로그인을 선택하고 카카오톡을 설치하세요."
                 if changed
-                else "Existing installation preserved. Continue with the next setup step.",
-                "configure": "Components installed. Open KakaoTalk and check login options."
+                else "기존 설치를 유지했습니다. 다음 설정 단계를 진행하세요.",
+                "configure": "구성 요소를 설치했습니다. 카카오톡을 열고 로그인 옵션을 확인하세요."
                 if changed
-                else "Existing enrollment and collection approval preserved.",
-                "open-store": "Aurora opened. Search for KakaoTalk by Kakao Corp.",
-                "setup-check": "Setup status refreshed.",
-                "setup-poll": "Setup status refreshed.",
-                "bootstrap": "Installation complete. Open KakaoTalk and check login options.",
-                "open-kakao": "KakaoTalk opened.",
-                "keyboard": "Keyboard connected. Select an input field on the tablet.",
+                else "기존 기기 등록과 수집 승인을 유지했습니다.",
+                "open-store": "Aurora를 열었습니다. Kakao Corp.의 카카오톡을 검색하세요.",
+                "setup-check": "설정 상태를 새로고침했습니다.",
+                "setup-poll": "설정 상태를 새로고침했습니다.",
+                "bootstrap": "설치가 완료되었습니다. 카카오톡을 열고 로그인 옵션을 확인하세요.",
+                "open-kakao": "카카오톡을 열었습니다.",
+                "keyboard": "키보드를 연결했습니다. 태블릿의 입력란을 선택하세요.",
                 "login-check": (
-                    "Collection is already approved. Use “Check status” to see the current state."
+                    "이미 수집이 승인되었습니다. ‘상태 확인’에서 현재 상태를 확인하세요."
                     if already_approved
-                    else "Secondary-login options verified. Sign in on the tablet now."
+                    else "보조 기기 로그인 옵션을 확인했습니다. 이제 태블릿에 로그인하세요."
                 ),
-                "confirm-secondary": "Both sessions confirmed. Starting message collection.",
-                "session-check": "Checked the current screen and login confirmation records.",
-                "phone-active": "Updated the time of your manual phone confirmation.",
-                "phone-lost": "Phone sign-out recorded. Iris collection approval revoked.",
+                "confirm-secondary": "두 기기의 로그인이 확인되었습니다. 메시지 수집을 시작합니다.",
+                "session-check": "현재 화면과 로그인 확인 기록을 점검했습니다.",
+                "phone-active": "휴대폰을 직접 확인한 시간을 갱신했습니다.",
+                "phone-lost": "휴대폰 로그아웃을 기록하고 Iris 수집 승인을 취소했습니다.",
             }[body.name]
             job.update(state="done", message=message)
         except Exception as exc:  # noqa: BLE001 — isolate background jobs without leaking credentials
             # Login UI dumps, input strings, filesystem paths and exception bodies stay private.
             message = (
-                "Could not verify login options. Select “Use with other devices” on the Korean KakaoTalk login screen before signing in. Existing collection approval is unchanged."
+                "로그인 옵션을 확인할 수 없습니다. 로그인 전에 한국어 카카오톡 화면에서 ‘다른 기기와 함께 사용’을 선택하세요. 기존 수집 승인은 유지됩니다."
                 if body.name == "login-check"
-                else "Secondary-login confirmation failed. Check the precheck expiry and both sessions."
+                else "보조 기기 로그인 확인에 실패했습니다. 사전 확인 유효 시간과 두 기기의 로그인을 확인하세요."
                 if body.name in ("confirm-secondary", "phone-active")
-                else "Could not stop collection. Check the device connection and Iris collection status."
+                else "수집을 중지하지 못했습니다. 기기 연결과 Iris 수집 상태를 확인하세요."
                 if body.name == "phone-lost"
-                else "The operation failed. Check the redroid connection, APK files, and installation status."
+                else "작업에 실패했습니다. redroid 연결, APK 파일과 설치 상태를 확인하세요."
             )
             job.update(state="failed", message=ERRORS.get(str(exc), message))
 
     @app.post("/admin/api/action", status_code=202)
     def action(body: Action, current: Annotated[dict, Depends(authenticated)]):
         if body.name == "confirm-secondary" and not (body.phone_active and body.tablet_active):
-            raise HTTPException(422, "Manually confirm both the phone and redroid login sessions.")
+            raise HTTPException(422, "휴대폰과 redroid의 로그인을 모두 직접 확인하세요.")
         if body.name == "phone-active" and not body.phone_active:
-            raise HTTPException(422, "Manually confirm that your existing phone session is active.")
+            raise HTTPException(422, "휴대폰의 기존 로그인이 유지되는지 직접 확인하세요.")
         with session_lock:
             if job["state"] == "running":
                 raise HTTPException(409, "device_busy")
             invalidate_snapshot()
-            job.update(state="running", action=body.name, message="Working…")
+            job.update(state="running", action=body.name, message="작업 중…")
             pool.submit(run_action, body)
         return {"accepted": True}
 

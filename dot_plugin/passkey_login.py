@@ -68,15 +68,15 @@ def install_routes(app, auth):
         redirect = redirect_origin(record["query"]["redirect_uri"])
         return browser_page(
             page(
-                "Allow connection",
-                f'''<h1>Allow connection?</h1>
-<p>Allow <strong>{esc(record["client_name"])}</strong> to access this KakaoTalk Bridge?</p>
-<p class="hint">Client: {esc(record["query"]["client_id"])}<br>Returns to: {esc(redirect)}</p>
+                "연결 허용",
+                f'''<h1>연결을 허용할까요?</h1>
+<p><strong>{esc(record["client_name"])}</strong>가 이 KakaoTalk Bridge에 접근하도록 허용할까요?</p>
+<p class="hint">클라이언트: {esc(record["query"]["client_id"])}<br>돌아갈 주소: {esc(redirect)}</p>
 {auth.permissions(record["scope"])}
 <form method="post" action="/authorize"><input type="hidden" name="ticket" value="{esc(ticket)}">
-<button type="submit" name="decision" value="allow">Allow connection</button>
-<button type="submit" name="decision" value="deny">Cancel</button></form>
-<p class="hint">Connecting does not create event subscriptions or automated tasks.</p>''',
+<button type="submit" name="decision" value="allow">연결 허용</button>
+<button type="submit" name="decision" value="deny">취소</button></form>
+<p class="hint">연결만으로 이벤트 구독이나 자동 작업이 생성되지는 않습니다.</p>''',
             ),
             redirect,
         )

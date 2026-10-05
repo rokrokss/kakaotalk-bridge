@@ -1,69 +1,74 @@
-# Passkey sign-in
+# 패스키 로그인
 
-Passkeys authenticate admin and MCP connection approvals without a Kakao Developers app or a hosted identity broker. The tablet still needs its normal KakaoTalk login. Passkeys are the default for admin and MCP approvals. Kakao OAuth is no longer supported.
+패스키로 관리 화면 로그인과 MCP 연결을 승인합니다. Kakao Developers 앱이나 별도 인증 중계 서버는 필요하지 않습니다. 태블릿에서는 카카오톡에 정상적으로 로그인해야 합니다. 패스키가 기본 인증 방식이며 카카오 OAuth는 더 이상 지원하지 않습니다.
 
-## Set up
+<a id="set-up"></a>
+## 설정
 
-New installs use `http://localhost:18789` (Mac can choose another free port). On a remote server use [SSH forwarding](quickstart.md#local-and-ssh-admin-access). No certificate or Tailscale account is needed for localhost. Existing HTTPS origins are retained.
+신규 설치는 `http://localhost:18789`를 사용합니다(Mac에서는 다른 빈 포트를 선택할 수 있습니다). 원격 서버는 [SSH 포워딩](quickstart.md#local-and-ssh-admin-access)을 사용하세요. localhost에는 인증서나 Tailscale 계정이 필요하지 않으며 기존 HTTPS 주소는 유지됩니다.
 
-For shared HTTPS admin and MCP, choose one stable hostname before registration. For example, use `https://your-node.ts.net/admin/` and `https://your-node.ts.net/mcp` through Funnel on the same HTTPS port 443. Run `./bridge expose` or configure the reverse proxies yourself. Never publish the admin gateway through Funnel.
+관리 화면과 MCP를 같은 HTTPS 주소로 사용하려면 등록 전에 고정할 호스트 이름을 정하세요. 예를 들어 Funnel의 443 포트에서 `https://your-node.ts.net/admin/`과 `https://your-node.ts.net/mcp`를 사용합니다. `./bridge expose` 또는 직접 구성한 프록시를 사용하되 관리 게이트웨이를 Funnel에 공개하지 마세요.
 
-A trusted certificate and the same hostname let one passkey work on both ports. A passkey registered on `localhost` cannot be used at your public hostname. Setup rejects IP addresses and non-local HTTP. If admin and MCP use different hosts, web/CLI connection setup keeps the admin passkey and configures code approval in admin instead of public passkey login.
+신뢰할 수 있는 인증서와 같은 호스트 이름을 사용하면 포트가 달라도 같은 패스키를 사용할 수 있습니다. `localhost`에 등록한 패스키는 공개 호스트 이름에서 사용할 수 없습니다. IP 주소와 localhost 이외의 HTTP는 허용하지 않습니다. 관리 화면과 MCP의 호스트가 다르면 웹·CLI 연결 설정이 기존 관리자 패스키를 유지하고 관리 화면의 코드 승인 방식을 설정합니다.
 
-Route public traffic through `dot-ingress`, never directly to `dot-plugin`. The shared ingress forwards admin routes to the authenticated admin service and removes admin cookies from requests and responses on OAuth/MCP routes. Its dedicated admin network does not connect the public MCP process to admin. Both web applications share a browser origin; this is not browser-origin isolation.
+공개 요청은 `dot-plugin`에 직접 보내지 말고 `dot-ingress`를 거쳐야 합니다. 공용 진입점은 관리 요청을 인증된 관리 서비스로 전달하고 OAuth/MCP 요청·응답에서 관리자 쿠키를 제거합니다. 전용 관리 네트워크는 공개 MCP 프로세스를 관리 서비스에 직접 연결하지 않습니다. 두 웹 앱이 같은 브라우저 출처를 공유하므로 브라우저 출처가 격리되는 구조는 아닙니다.
 
-Update the checkout and images to a version that includes passkeys, then run:
+패스키 지원 버전으로 소스와 이미지를 갱신한 뒤 실행하세요.
 
 ```bash
 ./bridge passkey-login --url https://your-node.ts.net --public-url https://your-node.ts.net
 ```
 
-The command starts the private authentication service, enables passkey mode, and opens a one-use registration link that expires in ten minutes. On a headless server it prints the link. Keep the link private. Open it on your computer or phone and choose **Create a passkey**. Your device or password manager asks you to unlock it; the server receives the credential's public key.
+비공개 인증 서비스를 시작하고 패스키 모드로 전환한 뒤 10분 후 만료되는 일회용 등록 링크를 엽니다. 화면 없는 서버에서는 링크를 출력합니다. 링크를 비공개로 보관하고 컴퓨터나 휴대폰에서 열어 **패스키 만들기**를 누르세요. 기기나 비밀번호 관리자가 잠금 해제를 요청하며 서버는 공개 키만 받습니다.
 
-The public MCP endpoint cannot register an owner. A fresh installation can only be claimed using the link issued by the server CLI.
+공개 MCP 접속 주소에서는 소유자를 등록할 수 없습니다. 신규 설치의 소유자 등록은 서버 CLI가 발급한 링크로만 가능합니다.
 
-## Use
+<a id="use"></a>
+## 사용
 
-Bookmark the configured admin address. Choose **Sign in with a passkey** when asked. **Keep me signed in** creates a revocable seven-day session; otherwise it lasts thirty minutes. The headless server needs no fingerprint reader: the browser's device, phone or security key performs authentication.
+설정한 관리 주소를 북마크하고 **패스키로 로그인**을 선택하세요. **로그인 유지**를 선택하면 취소 가능한 7일 세션을 만들고, 선택하지 않으면 30분 동안 유지됩니다. 서버에 지문 인식기는 필요하지 않습니다. 브라우저가 실행되는 기기·휴대폰·보안 키에서 인증합니다.
 
-Add the public `/mcp` URL to your MCP client with OAuth authentication. For a shared HTTPS hostname, confirm with your passkey, inspect the client and permissions, then choose **Allow connection**. For localhost/private admin, match the connecting browser’s code in admin **AI connections** and approve there. Cancelling issues no authorization code. PKCE, refresh-token rotation, revocation and explicit event-subscription rules remain in place.
+MCP 클라이언트에 공개 `/mcp` URL을 추가하고 OAuth를 선택하세요. 같은 HTTPS 호스트라면 패스키로 인증하고 클라이언트와 권한을 확인한 뒤 **연결 허용**을 누르세요. localhost·비공개 관리 화면을 사용한다면 **AI 연결**에서 연결 브라우저의 코드와 일치하는 요청을 승인하세요. 취소하면 인가 코드를 발급하지 않습니다. PKCE, 갱신 토큰 교체, 권한 취소, 명시적 이벤트 구독 규칙은 그대로 적용됩니다.
 
-Some embedded browsers do not support third-party passkeys. Restart the connection in a supported system browser. Copying a partially completed approval URL to another browser does not transfer the browser-bound request.
+일부 내장 브라우저는 패스키를 지원하지 않습니다. 지원되는 시스템 브라우저에서 처음부터 연결하세요. 진행 중인 승인 URL을 다른 브라우저로 복사해도 브라우저에 묶인 요청은 이전되지 않습니다.
 
-## Recover
+<a id="recover"></a>
+## 복구
 
-In admin, open **Tablet & settings → Passkeys and recovery** and add a passkey on another device or security key. Adding or removing a credential requires fresh passkey confirmation. At least one credential must remain. Removing a credential invalidates existing passkey admin sessions and MCP grants; reconnect clients afterward.
+**태블릿 및 설정 → 패스키 및 복구**에서 다른 기기나 보안 키에 백업 패스키를 추가하세요. 추가·삭제할 때 기존 패스키로 다시 인증해야 하며 최소 한 개는 남아 있어야 합니다. 삭제하면 기존 관리자 세션과 MCP 권한이 무효화되므로 클라이언트를 다시 연결하세요.
 
-If every passkey is unavailable, run this on the server:
+패스키를 모두 사용할 수 없다면 서버에서 실행하세요.
 
 ```bash
 ./bridge passkey-login --enroll
 ```
 
-Register a replacement using the new one-use link. Successful recovery invalidates old sessions and grants. Remove the missing device's credential afterward. Old credentials remain registered until explicitly removed.
+새 일회용 링크로 대체 패스키를 등록하세요. 복구에 성공하면 이전 세션과 연결 권한이 무효화됩니다. 분실한 기기의 패스키는 직접 삭제하기 전까지 등록되어 있으므로 이후 삭제하세요.
 
-Full encrypted snapshots include `passkey-state`. Restore retains registered keys and clears pending enrollment links, challenges, reauthentication proofs, browser sessions and OAuth grants. Keep the hostname stable and preserve `mcp_approval_token`: it also derives the private passkey storage encryption key. Do not rotate it by hand.
+전체 암호화 백업에는 `passkey-state`가 포함됩니다. 복원하면 등록된 키는 유지하고 대기 중인 등록 링크·챌린지·재인증 증명·브라우저 세션·OAuth 권한은 지웁니다. 호스트 이름을 유지하고 `mcp_approval_token`도 보존하세요. 패스키 저장소 암호화 키를 이 값에서 파생하므로 수동 교체하지 마세요.
 
-## Existing deployments
+<a id="existing-deployments"></a>
+## 기존 설치
 
-The October 5 security update requires one new admin sign-in with your existing passkey. Older browser sessions are rejected after migration to the `/admin` cookie. Registered passkeys and existing MCP grants are preserved; do not enroll again just because admin asks you to sign in.
+10월 5일 보안 업데이트 후 기존 패스키로 한 번 다시 로그인해야 합니다. `/admin` 쿠키로 이전하면서 이전 브라우저 세션은 거부하지만 등록된 패스키와 MCP 권한은 유지합니다. 다시 로그인을 요구한다고 패스키를 재등록하지 마세요.
 
-Update the source and both server and device images before running `./bridge passkey-login`. For a deployment still configured with `ADMIN_AUTH_MODE=kakao` or `DOT_APPROVAL_MODE=kakao`, the command switches authentication to passkeys and issues initial enrollment. Old Kakao OAuth configuration and its sessions/grants are retired on startup. Existing passkey credentials, sessions and grants are preserved when the configured origins remain unchanged. The tablet's KakaoTalk app data is unaffected.
+`./bridge passkey-login` 전에 소스와 서버·기기 이미지를 함께 업데이트하세요. `ADMIN_AUTH_MODE=kakao` 또는 `DOT_APPROVAL_MODE=kakao`인 설치는 패스키로 전환하고 초기 등록 링크를 발급합니다. 이전 카카오 OAuth 설정과 세션·권한은 시작 시 폐기합니다. 출처가 같으면 기존 패스키와 해당 세션·권한은 유지되며 태블릿의 카카오톡 앱 데이터는 바뀌지 않습니다.
 
-For the older manually managed `kakaotalk-test` VM, run the CLI inside the existing runtime rather than using the Mac installer's separate VM:
+수동 관리하던 `kakaotalk-test` VM에서는 Mac 설치 프로그램의 별도 VM 대신 기존 VM 내부에서 실행하세요.
 
 ```bash
 limactl shell --workdir=/ kakaotalk-test sudo python3 /srv/kakaotalk-collector/ops/cli.py passkey-login \
   --url https://your-node.ts.net --public-url https://your-node.ts.net
 ```
 
-Configure the shared HTTPS route first. Once registration is complete, use the hostname above for admin. Do not repeat enrollment when an existing passkey still works.
+공용 HTTPS 경로를 먼저 설정하고 등록 후에는 해당 호스트 이름으로 관리 화면에 접속하세요. 기존 패스키가 작동하면 재등록하지 마세요.
 
-## Boundaries and verification
+<a id="boundaries-and-verification"></a>
+## 인증 경계와 검증
 
-`dot-control` owns encrypted SQLite credentials in `passkey-state`, reachable only on the internal network. Admin uses the existing private control token. The public process receives a separate `mcp_passkey_token` restricted to assertions and setup status. It cannot enroll, remove, configure or enumerate credentials, and has neither the credential volume nor its encryption key.
+`dot-control`은 내부 네트워크에서만 접근 가능한 `passkey-state`의 암호화된 SQLite 인증 정보를 관리합니다. 관리 서비스는 비공개 제어 토큰을 사용합니다. 공개 프로세스는 인증 확인과 설정 상태 조회만 가능한 별도 `mcp_passkey_token`을 받습니다. 인증 정보 등록·삭제·설정·목록 조회는 할 수 없고 인증 볼륨이나 암호화 키도 받지 않습니다.
 
-Every ceremony is single-use, short-lived, bound to a browser, exact origin, purpose and (for MCP) pending OAuth ticket. User presence and verification are required; counters are updated centrally. Configuration and initial/recovery link issuance are CLI-only. Admin and MCP keep distinct sessions; ports alone do not isolate cookies. Local admin cookies have separate names, are HttpOnly and SameSite=Strict, and their stored sessions are bound to the configured localhost origin and port. HTTPS cookies retain their Secure prefixes and attributes. HTTP is accepted only for the explicitly configured localhost origin.
+인증 요청은 일회용이며 짧은 유효 시간 동안 브라우저·정확한 출처·목적·MCP의 대기 중 OAuth 티켓에 묶입니다. 사용자 존재와 본인 확인이 필요하고 카운터는 중앙에서 갱신합니다. 초기·복구 링크 발급과 설정은 CLI에서만 가능합니다. 관리 화면과 MCP는 별도 세션을 사용합니다. 포트만으로 쿠키가 격리되지는 않습니다. 로컬 관리 쿠키는 별도 이름, HttpOnly, SameSite=Strict를 사용하고 세션을 설정된 localhost 출처·포트에 묶습니다. HTTPS 쿠키의 Secure 접두사와 속성도 유지합니다. HTTP는 명시적으로 설정한 localhost 출처에서만 허용합니다.
 
 ```bash
 uv run pytest -q
@@ -73,4 +78,4 @@ uv run python -m tests.passkey_preview
 node tests/passkey_browser.cjs
 ```
 
-`PLAYWRIGHT_MODULE` and `CHROME_EXECUTABLE` can point to installed tools. The disposable fixture uses native Chromium WebAuthn with a virtual CTAP2 authenticator and real signature verification. It covers registration, login persistence, one credential on both origins, consent, PKCE, refresh and MCP access. The client callback is intercepted and all data is synthetic. It does not establish compatibility with a user's Touch ID, phone provider or actual ChatGPT browser.
+설치된 도구 경로는 `PLAYWRIGHT_MODULE`, `CHROME_EXECUTABLE`로 지정할 수 있습니다. 임시 테스트 환경은 Chromium WebAuthn, 가상 CTAP2 인증기와 실제 서명 검증으로 등록, 로그인 유지, 두 출처의 같은 인증 정보, 동의, PKCE, 갱신, MCP 접근을 확인합니다. 콜백은 가로채며 모든 데이터는 가상입니다. 실제 Touch ID·휴대폰 제공업체·ChatGPT 브라우저 호환성을 검증한 것은 아닙니다.

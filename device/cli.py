@@ -89,7 +89,7 @@ def report(payload):
 
 
 def bootstrap(rotate_epoch=False, *, preserve=False):
-    print("Waiting for Android boot (up to 180 seconds).", flush=True)
+    print("Android 시작 대기 중… 최대 180초가 걸릴 수 있습니다.", flush=True)
     deadline = time.monotonic() + 180
     while sample()["state"] in ("offline", "booting"):
         if time.monotonic() >= deadline:
@@ -155,10 +155,10 @@ def bootstrap(rotate_epoch=False, *, preserve=False):
         state.write_text(json.dumps(identity))
     if not has_config and is_installed(PKG):
         # A preinstalled but never enrolled Bridge is permitted. Its empty outbox has no epoch.
-        print("Existing Bridge will be enrolled; existing app data is retained.")
+        print("기존 Bridge를 등록합니다. 기존 앱 데이터는 유지됩니다.")
     apks = sorted(Path("/inputs/kakao").glob("*.apk"))
     if apks and not preserve:
-        print("Installing supplied KakaoTalk APK set (no login actions).")
+        print("제공된 카카오톡 APK 세트 설치 중… 로그인은 수행하지 않습니다.")
         for apk in apks:
             with apk.open("rb") as source:
                 print(f"APK SHA256 {hashlib.file_digest(source, 'sha256').hexdigest()}")
@@ -183,10 +183,10 @@ def bootstrap(rotate_epoch=False, *, preserve=False):
     provision(config)
     Path("/state/prelogin.json").unlink(missing_ok=True)
     print(
-        "Setup complete. Collection is LOCKED. Before login run login-check on the selected secondary-device option."
+        "설치가 완료되었습니다. 수집은 잠겨 있습니다. 로그인 전에 보조 기기 옵션을 선택하고 login-check를 실행하세요."
     )
     print(
-        "Never continue a primary-device transfer login. No KakaoTalk login action was performed."
+        "주 기기 이전 로그인은 진행하지 마세요. 카카오톡 로그인 작업은 수행하지 않았습니다."
     )
     return True
 
@@ -238,7 +238,7 @@ def login_check():
         session_status.enrollment_evidence(config, {}, signature)["collection_approval"]
         == "approved"
     ):
-        print("Collection is already approved. Use session-check to inspect its status.")
+        print("이미 수집이 승인되었습니다. session-check로 상태를 확인하세요.")
         return False
     # A failed inspection must leave the existing approval and proof untouched.
     proof = login_guard.prelogin(adb)
@@ -250,9 +250,9 @@ def login_check():
     proof_path.write_text(json.dumps(proof))
     proof_path.chmod(0o600)
     print(
-        "PASS: tablet configuration and selected secondary-login checkbox observed. No login was submitted."
+        "확인 완료: 태블릿 설정과 보조 기기 로그인 옵션 선택을 확인했습니다. 로그인은 수행하지 않았습니다."
     )
-    print("After manual login, verify both devices stay logged in before confirm-secondary.")
+    print("직접 로그인한 뒤 두 기기의 로그인이 유지되는지 확인하고 confirm-secondary를 실행하세요.")
     return True
 
 
@@ -276,7 +276,7 @@ def confirm_secondary(phone_active=False, tablet_active=False):
         provision(config)
     proof_path.unlink()
     print(
-        "Collection enabled based on operator confirmation of both sessions; ongoing phone status is not monitored."
+        "두 기기의 로그인을 직접 확인하여 수집을 허용했습니다. 이후 휴대폰 상태는 자동으로 감시하지 않습니다."
     )
 
 
@@ -302,10 +302,10 @@ def main():
     parser.add_argument(
         "--rotate-epoch",
         action="store_true",
-        help="After restoring Android state, start a new identity epoch without clearing the outbox",
+        help="Android 상태 복구 후 outbox를 유지하면서 새 식별자 세대 시작",
     )
     parser.add_argument(
-        "--expected-iris-sha256", help="Previous APK hash for an explicit Iris-only migration"
+        "--expected-iris-sha256", help="Iris만 이전할 때 사용하는 이전 APK 해시"
     )
     args = parser.parse_args()
     command = args.command

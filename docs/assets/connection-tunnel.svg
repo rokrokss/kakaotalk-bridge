@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="562" viewBox="0 0 1120 562" role="img" aria-labelledby="title desc">
-<title id="title">Personal OpenAI tunnel</title>
-<desc id="desc">The tunnel client on your server opens outbound HTTPS to OpenAI. ChatGPT MCP requests and results travel over that existing connection. The client authenticates to a private MCP listener with a local service credential. Separately, the owner signs into the admin console over localhost, SSH forwarding or HTTPS with a passkey and approves access without automatic expiration.</desc>
+<title id="title">개인 OpenAI 터널</title>
+<desc id="desc">서버의 터널 클라이언트가 OpenAI에 HTTPS로 연결하고 이 연결로 ChatGPT의 MCP 요청과 결과를 전달합니다. 내부 인증 정보로 비공개 MCP에 접근합니다. 소유자는 별도로 localhost·SSH·HTTPS 관리 화면에서 패스키로 로그인하고 자동 만료 없는 접근을 승인합니다.</desc>
 <defs>
 <marker id="arrow-line" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M2 1.5 7 4.5 2 7.5" fill="none" stroke="#85857b" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
 <marker id="arrow-blue" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M2 1.5 7 4.5 2 7.5" fill="none" stroke="#3b697f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
@@ -10,51 +10,51 @@
 <rect x="0" y="0" width="1120" height="562" rx="20" fill="#faf9f6" stroke="none"/>
 <rect x="32" y="30" width="44" height="34" rx="9" fill="#f6df80" stroke="none"/>
 <text x="54" y="53" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="15" font-weight="700" fill="#242320" text-anchor="middle">02</text>
-<text x="92" y="55" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="25" font-weight="650" fill="#242320" text-anchor="start">Personal OpenAI tunnel</text>
-<text x="32" y="88" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="14" font-weight="400" fill="#6f7069" text-anchor="start">The server opens the connection. ChatGPT uses it to reach your private MCP.</text>
+<text x="92" y="55" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="25" font-weight="650" fill="#242320" text-anchor="start">개인 OpenAI 터널</text>
+<text x="32" y="88" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="14" font-weight="400" fill="#6f7069" text-anchor="start">서버가 연결을 시작하면 ChatGPT가 이 연결로 비공개 MCP에 접근합니다.</text>
 <rect x="876" y="32" width="212" height="30" rx="15.0" fill="#ffffff" stroke="none"/>
-<text x="982.0" y="50.85" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="600" fill="#6f7069" text-anchor="middle">NO PUBLIC MCP ADDRESS</text>
+<text x="982.0" y="50.85" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="600" fill="#6f7069" text-anchor="middle">공개 MCP 주소 불필요</text>
 <rect x="360" y="116" width="728" height="402" rx="14" fill="#f1efe7" stroke="#dedad0"/>
-<text x="384" y="143" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="600" fill="#6f7069" text-anchor="start">Your server / VM</text>
-<text x="1064" y="143" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#6f7069" text-anchor="end">No published tunnel port</text>
+<text x="384" y="143" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="600" fill="#6f7069" text-anchor="start">내 서버 / VM</text>
+<text x="1064" y="143" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#6f7069" text-anchor="end">터널 포트 공개 없음</text>
 <rect x="32" y="202" width="232" height="100" rx="12" fill="#ffffff" stroke="#dedad0"/>
 <rect x="48" y="221" width="5" height="24" rx="2" fill="#3b697f" stroke="none"/>
 <text x="64" y="242" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="23" font-weight="600" fill="#242320" text-anchor="start">ChatGPT</text>
-<text x="50" y="280" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">OpenAI tunnel service</text>
+<text x="50" y="280" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">OpenAI 터널 서비스</text>
 <rect x="392" y="202" width="192" height="100" rx="12" fill="#ffffff" stroke="#dedad0"/>
 <rect x="408" y="221" width="5" height="24" rx="2" fill="#3b697f" stroke="none"/>
-<text x="424" y="242" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="19" font-weight="600" fill="#242320" text-anchor="start">Tunnel client</text>
-<text x="410" y="280" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">OpenAI runtime key</text>
+<text x="424" y="242" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="19" font-weight="600" fill="#242320" text-anchor="start">터널 클라이언트</text>
+<text x="410" y="280" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">OpenAI 실행용 키</text>
 <rect x="704" y="202" width="176" height="100" rx="12" fill="#ffffff" stroke="#dedad0"/>
 <rect x="720" y="221" width="5" height="24" rx="2" fill="#f6df80" stroke="none"/>
-<text x="736" y="242" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="18" font-weight="600" fill="#242320" text-anchor="start">Private MCP</text>
-<text x="722" y="280" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">Local service access</text>
+<text x="736" y="242" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="18" font-weight="600" fill="#242320" text-anchor="start">비공개 MCP</text>
+<text x="722" y="280" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">내부 서비스 접근</text>
 <rect x="960" y="202" width="104" height="100" rx="12" fill="#ffffff" stroke="#dedad0"/>
 <rect x="976" y="221" width="5" height="24" rx="2" fill="#f6df80" stroke="none"/>
-<text x="992" y="242" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="17" font-weight="600" fill="#242320" text-anchor="start">Data</text>
-<text x="978" y="280" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">Messages</text>
+<text x="992" y="242" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="17" font-weight="600" fill="#242320" text-anchor="start">데이터</text>
+<text x="978" y="280" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">메시지</text>
 <path d="M488 191 L488 178 L148 178 L148 191" fill="none" stroke="#8c691e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 5" marker-end="url(#arrow-goldink)"/>
-<text x="305" y="166" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="600" fill="#8c691e" text-anchor="middle">Server opens outbound HTTPS</text>
+<text x="305" y="166" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="600" fill="#8c691e" text-anchor="middle">서버에서 HTTPS 연결 시작</text>
 <path d="M275 251 L381 251" fill="none" stroke="#3b697f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#arrow-blue)" marker-end="url(#arrow-blue)"/>
-<text x="328" y="237" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#3b697f" text-anchor="middle">MCP traffic</text>
-<text x="328" y="276" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="400" fill="#6f7069" text-anchor="middle">existing connection</text>
+<text x="328" y="237" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#3b697f" text-anchor="middle">MCP 요청·응답</text>
+<text x="328" y="276" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="400" fill="#6f7069" text-anchor="middle">기존 연결 사용</text>
 <path d="M595 251 L693 251" fill="none" stroke="#85857b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#arrow-line)" marker-end="url(#arrow-line)"/>
-<text x="644" y="236" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#6f7069" text-anchor="middle">Local credential</text>
+<text x="644" y="236" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#6f7069" text-anchor="middle">내부 인증 정보</text>
 <path d="M891 251 L949 251" fill="none" stroke="#85857b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#arrow-line)" marker-end="url(#arrow-line)"/>
-<text x="920" y="236" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="400" fill="#6f7069" text-anchor="middle">Read API</text>
+<text x="920" y="236" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="400" fill="#6f7069" text-anchor="middle">조회 API</text>
 <rect x="32" y="408" width="232" height="84" rx="12" fill="#ffffff" stroke="#dedad0"/>
 <rect x="48" y="427" width="5" height="24" rx="2" fill="#47735e" stroke="none"/>
-<text x="64" y="448" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="19" font-weight="600" fill="#242320" text-anchor="start">Your browser</text>
-<text x="50" y="470" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">Private admin access</text>
+<text x="64" y="448" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="19" font-weight="600" fill="#242320" text-anchor="start">내 브라우저</text>
+<text x="50" y="470" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">비공개 관리 접근</text>
 <rect x="392" y="408" width="192" height="84" rx="12" fill="#ffffff" stroke="#dedad0"/>
 <rect x="408" y="427" width="5" height="24" rx="2" fill="#47735e" stroke="none"/>
-<text x="424" y="448" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="18" font-weight="600" fill="#242320" text-anchor="start">Admin console</text>
-<text x="410" y="470" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">Passkey sign-in</text>
+<text x="424" y="448" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="18" font-weight="600" fill="#242320" text-anchor="start">관리 화면</text>
+<text x="410" y="470" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">패스키 로그인</text>
 <path d="M275 450 L381 450" fill="none" stroke="#47735e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
-<text x="328" y="433" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#47735e" text-anchor="middle">Admin access</text>
-<text x="328" y="475" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="400" fill="#6f7069" text-anchor="middle">Local · SSH · HTTPS</text>
+<text x="328" y="433" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#47735e" text-anchor="middle">관리 화면 접근</text>
+<text x="328" y="475" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="400" fill="#6f7069" text-anchor="middle">로컬 · SSH · HTTPS</text>
 <path d="M595 450 L792 450 L792 313" fill="none" stroke="#47735e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 5" marker-end="url(#arrow-green)"/>
-<text x="812" y="368" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="15" font-weight="600" fill="#47735e" text-anchor="start">Owner approval</text>
-<text x="812" y="390" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">No automatic expiry</text>
-<text x="32" y="541" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#6f7069" text-anchor="start">Dashed lines: connection setup and approval. Solid lines: MCP traffic and browser access.</text>
+<text x="812" y="368" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="15" font-weight="600" fill="#47735e" text-anchor="start">소유자 승인</text>
+<text x="812" y="390" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">자동 만료 없음</text>
+<text x="32" y="541" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#6f7069" text-anchor="start">점선: 연결 설정·승인 / 실선: MCP 요청·응답과 브라우저 접근</text>
 </svg>

@@ -1,30 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="336" viewBox="0 0 960 336" role="img" aria-labelledby="title desc">
-  <title id="title">From KakaoTalk to Your AI</title>
-  <desc id="desc">Iris reads KakaoTalk messages inside a secondary redroid tablet on your server and stores them through the collection API in SQLite. Your AI optionally retrieves stored messages through HTTPS with OAuth, a personal OpenAI tunnel or stdio MCP. Admin uses localhost, SSH forwarding or existing HTTPS. AI connections and event subscriptions are not created automatically.</desc>
+  <title id="title">카카오톡에서 내 AI까지</title>
+  <desc id="desc">서버의 보조 redroid 태블릿에서 Iris가 카카오톡 메시지를 읽고 수집 API를 거쳐 SQLite에 저장합니다. AI는 HTTPS/OAuth, 개인 OpenAI 터널 또는 stdio MCP로 메시지를 조회합니다. 관리 화면은 localhost·SSH·기존 HTTPS를 사용합니다. AI 연결과 이벤트 구독은 자동 생성되지 않습니다.</desc>
   <defs>
     <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="m1 1 5 3-5 3" fill="none" stroke="#807b6c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>
   </defs>
   <rect width="960" height="336" rx="16" fill="#faf9f6"/>
   <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" fill="#242320">
-    <text x="32" y="43" font-size="21" font-weight="650">From KakaoTalk to Your AI</text>
+    <text x="32" y="43" font-size="21" font-weight="650">카카오톡에서 내 AI까지</text>
     <rect x="24" y="68" width="614" height="194" rx="12" fill="#f1efe7" stroke="#dedad0"/>
-    <text x="44" y="97" fill="#717069" font-size="13">Your server</text>
+    <text x="44" y="97" fill="#717069" font-size="13">내 서버</text>
     <rect x="44" y="116" width="242" height="122" rx="8" fill="#fff" stroke="#dedad0"/>
     <rect x="360" y="116" width="254" height="122" rx="8" fill="#fff" stroke="#dedad0"/>
     <rect x="718" y="116" width="218" height="122" rx="8" fill="#fff" stroke="#dedad0"/>
     <rect x="64" y="137" width="30" height="36" rx="5" fill="#f6df80"/>
     <rect x="72" y="144" width="14" height="21" rx="2" fill="none" stroke="#242320" stroke-width="1.8"/>
-    <text x="107" y="162" font-size="21" font-weight="600">Secondary tablet</text>
-    <text x="64" y="210" font-size="14" fill="#717069">redroid · KakaoTalk · Iris</text>
+    <text x="107" y="162" font-size="21" font-weight="600">보조 태블릿</text>
+    <text x="64" y="210" font-size="14" fill="#717069">redroid · 카카오톡 · Iris</text>
     <path d="M296 177h53" stroke="#807b6c" stroke-width="1.8" marker-end="url(#arrow)"/>
-    <text x="323" y="159" text-anchor="middle" font-size="12" fill="#717069">Collect</text>
-    <text x="380" y="162" font-size="21" font-weight="600">Message storage</text>
-    <text x="380" y="210" font-size="14" fill="#717069">Collection API · SQLite</text>
+    <text x="323" y="159" text-anchor="middle" font-size="12" fill="#717069">수집</text>
+    <text x="380" y="162" font-size="21" font-weight="600">메시지 저장소</text>
+    <text x="380" y="210" font-size="14" fill="#717069">수집 API · SQLite</text>
     <path d="M624 177h83" stroke="#807b6c" stroke-width="1.8" marker-end="url(#arrow)"/>
-    <text x="677" y="158" text-anchor="middle" font-size="12" fill="#717069">Read on request</text>
-    <text x="738" y="162" font-size="21" font-weight="600">Your AI</text>
-    <text x="738" y="210" font-size="14" fill="#717069">Optional MCP connection</text>
-    <text x="44" y="292" font-size="13" fill="#717069">Admin: localhost / SSH / HTTPS</text>
-    <text x="622" y="292" font-size="13" fill="#717069">MCP: HTTPS + OAuth / tunnel / stdio</text>
+    <text x="677" y="158" text-anchor="middle" font-size="12" fill="#717069">요청 시 조회</text>
+    <text x="738" y="162" font-size="21" font-weight="600">내 AI</text>
+    <text x="738" y="210" font-size="14" fill="#717069">선택적 MCP 연결</text>
+    <text x="44" y="292" font-size="13" fill="#717069">관리: localhost / SSH / HTTPS</text>
+    <text x="622" y="292" font-size="13" fill="#717069">MCP: HTTPS + OAuth / 터널 / stdio</text>
   </g>
 </svg>

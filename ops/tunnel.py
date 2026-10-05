@@ -13,15 +13,11 @@ TUNNEL_ID = r"tunnel_[a-z0-9]{32}"
 
 def add_arguments(parser):
     commands = parser.add_subparsers(dest="tunnel_command", required=True)
-    configure = commands.add_parser(
-        "configure", help="Start a personal tunnel; approve it in admin"
-    )
+    configure = commands.add_parser("configure", help="개인 터널 시작 (관리 화면에서 승인 필요)")
     configure.add_argument("--tunnel-id", required=True)
     configure.add_argument("--api-key-file", required=True)
-    commands.add_parser(
-        "status", help="Show tunnel configuration and readiness without credentials"
-    )
-    commands.add_parser("disable", help="Revoke the personal tunnel and stop its services")
+    commands.add_parser("status", help="인증 정보를 제외한 터널 설정 및 준비 상태 표시")
+    commands.add_parser("disable", help="개인 터널 권한 취소 및 서비스 중지")
 
 
 def credentials(identity, key_file):
@@ -170,10 +166,16 @@ def configure(identity, key_file):
         raise RuntimeError(
             "Tunnel setup failed; previous configuration restored. If changing tunnel IDs, approve the previous tunnel again in admin."
         ) from None
+    show_configured(identity)
+
+
+def show_configured(identity):
     print(
-        "Personal tunnel configured. Open admin → Connections → Allow personal tunnel.\n"
-        "Then choose Tunnel in ChatGPT and select " + identity + ". No OAuth login is needed.\n"
-        "The admin address and public OAuth connections were preserved."
+        "개인 터널을 설정했습니다. 관리 화면 → AI 연결 → 개인 터널 허용을 누르세요.\n"
+        "ChatGPT에서 터널(Tunnel)을 선택하고 다음 ID를 지정하세요: "
+        + identity
+        + ". OAuth 로그인은 필요하지 않습니다.\n"
+        "관리 화면 주소와 공개 OAuth 연결은 유지됩니다."
     )
 
 
@@ -190,4 +192,4 @@ def run(args):
             cli.env_update({"OPENAI_TUNNEL_ENABLED": "0"})
             cli.compose("up", "-d", "--no-build", "--no-deps", "dot-control", "dot-plugin")
         (cli.ROOT / ".bridge/tunnel.json").unlink(missing_ok=True)
-        print("Personal tunnel disabled. Public OAuth connections were preserved.")
+        print("개인 터널을 비활성화했습니다. 공개 OAuth 연결은 유지됩니다.")

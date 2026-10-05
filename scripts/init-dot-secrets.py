@@ -18,8 +18,8 @@ for name, value in (
     try:
         descriptor = os.open(root / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        print(f"Preserved secrets/{name}")
+        print(f"기존 secrets/{name} 유지")
     else:
         with os.fdopen(descriptor, "w") as stream:
             stream.write(value + "\n")
-        print(f"Created secrets/{name}; value not printed")
+        print(f"secrets/{name} 생성 완료 (키 값은 표시하지 않습니다)")

@@ -1,7 +1,7 @@
 [project]
 name = "kakaotalk-bridge"
 version = "0.1.0"
-description = "Self-hosted KakaoTalk message collection and MCP access for AI agents"
+description = "직접 호스팅하는 카카오톡 메시지 수집 및 AI 에이전트용 MCP 연결"
 requires-python = ">=3.12,<3.15"
 dependencies = [
     "fastapi>=0.115,<1",

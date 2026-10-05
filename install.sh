@@ -6,15 +6,15 @@ umask 077
 case "$(uname -s)" in
   Darwin) bridge_default_home="$HOME/Library/Application Support/KakaoTalk Bridge" ;;
   Linux) bridge_default_home="${XDG_DATA_HOME:-$HOME/.local/share}/kakaotalk-bridge" ;;
-  *) echo 'Use install.ps1 on Windows, or run this installer on macOS/Linux.' >&2; exit 1 ;;
+  *) echo 'Windows에서는 install.ps1을 사용하세요. 이 설치 프로그램은 macOS/Linux용입니다.' >&2; exit 1 ;;
 esac
 bridge_install_home="${BRIDGE_HOME:-$bridge_default_home}"
 bridge_version="${BRIDGE_VERSION:-main}"
 if [[ ! "$bridge_version" =~ ^[A-Za-z0-9_.-]+$ ]]; then
-  echo 'BRIDGE_VERSION must be a release tag or commit ID.' >&2; exit 1
+  echo 'BRIDGE_VERSION에 릴리스 태그 또는 커밋 ID를 지정하세요.' >&2; exit 1
 fi
 if ! command -v curl >/dev/null; then
-  echo 'curl is required to download the installer. Install curl and run this command again.' >&2
+  echo '설치 프로그램 다운로드에 curl이 필요합니다. curl을 설치하고 다시 실행하세요.' >&2
   exit 1
 fi
 
@@ -32,13 +32,13 @@ bridge_run() {
   else
     if [[ -z "$bridge_bootstrap_log" ]]; then
       bridge_bootstrap_log="$(mktemp "${TMPDIR:-/tmp}/kakaotalk-bridge-setup.XXXXXX")"
-      echo "Installer log: $bridge_bootstrap_log"
+      echo "설치 진단 로그: $bridge_bootstrap_log"
     fi
     if "$@" >>"$bridge_bootstrap_log" 2>&1; then
       return 0
     else
       bridge_status=$?
-      echo "Installer preparation failed. Details: $bridge_bootstrap_log" >&2
+      echo "설치 준비에 실패했습니다. 진단 로그: $bridge_bootstrap_log" >&2
       return "$bridge_status"
     fi
   fi
@@ -61,7 +61,7 @@ for bridge_candidate in python3.14 python3.13 python3.12 python3; do
   fi
 done
 if [[ -z "$bridge_python" ]]; then
-  echo 'Preparing the installer runtime…'
+  echo '설치 실행 환경 준비 중…'
   bridge_uv="$(command -v uv || true)"
   if [[ -z "$bridge_uv" && -x "$HOME/.local/bin/uv" ]]; then bridge_uv="$HOME/.local/bin/uv"; fi
   if [[ -z "$bridge_uv" ]]; then
@@ -75,7 +75,7 @@ if [[ -z "$bridge_python" ]]; then
   fi
   bridge_run "$bridge_uv" python install 3.12
   bridge_python="$("$bridge_uv" python find --managed-python 3.12)"
-  echo 'Installer runtime ready.'
+  echo '설치 실행 환경 준비 완료'
 fi
 
 if [[ -f "${BASH_SOURCE[0]:-}" ]]; then
@@ -86,7 +86,7 @@ if [[ -f "${BASH_SOURCE[0]:-}" ]]; then
 fi
 
 if [[ ! -f "$bridge_install_home/bridge" ]]; then
-  echo 'Installing KakaoTalk Bridge…'
+  echo 'KakaoTalk Bridge 다운로드 및 설치 중…'
   bridge_run "$bridge_python" - "$bridge_install_home" "$bridge_version" <<'PY'
 import os, pathlib, shutil, sys, tarfile, tempfile, urllib.request
 target, version = pathlib.Path(sys.argv[1]).expanduser().absolute(), sys.argv[2]
@@ -110,7 +110,7 @@ with tempfile.TemporaryDirectory(prefix='.bridge-download-', dir=target.parent) 
         raise SystemExit('This source version does not include the one-command installer.')
     roots[0].rename(target)
 PY
-  echo 'KakaoTalk Bridge downloaded.'
+  echo 'KakaoTalk Bridge 다운로드 완료'
 fi
-echo "Bridge location: $bridge_install_home"
+echo "Bridge 설치 위치: $bridge_install_home"
 bridge_launch "$bridge_install_home" "$@"

@@ -1,26 +1,26 @@
-# Contributing
+# 기여하기
 
-[README](README.md) · [Development](docs/development.md) · [Validation scope](docs/implementation.md)
+[README](README.md) · [개발](docs/development.md) · [검증 범위](docs/implementation.md)
 
-Bug reports, documentation improvements, and reports from additional environments help make the project easier to run. For a larger change, open an issue to discuss the scope first.
+버그 제보, 문서 개선, 다른 실행 환경에서의 검증 결과를 환영합니다. 큰 변경은 먼저 이슈를 열어 범위를 논의해 주세요.
 
-## Report a problem
+## 문제 제보
 
-[Open an issue](https://github.com/rokrokss/kakaotalk-bridge/issues) with:
+[이슈](https://github.com/rokrokss/kakaotalk-bridge/issues)에 다음 내용을 포함해 주세요.
 
-- Your host OS and architecture, and whether you use Lima.
-- The project revision, redroid image, and KakaoTalk version when relevant.
-- Steps to reproduce, expected behavior, and observed behavior.
-- Relevant error messages or sanitized logs.
+- 호스트 운영체제·아키텍처와 Lima 사용 여부
+- 프로젝트 리비전, 관련 redroid 이미지와 카카오톡 버전
+- 재현 절차, 기대 동작, 실제 동작
+- 관련 오류 메시지나 민감한 정보를 제거한 로그
 
-Remove tokens, account details, and private messages before sharing logs or screenshots. Use synthetic messages in reproduction examples. See [Security](docs/security.md) for data and credential boundaries.
+로그나 화면을 공유하기 전에 토큰, 계정 정보, 개인 메시지를 제거하세요. 재현 예시에는 가상 메시지를 사용하세요. 데이터와 인증 정보의 경계는 [보안](docs/security.md) 문서를 참고하세요.
 
-For compatibility reports, state which steps you actually verified: image build, Android boot, secondary login, phone session continuity, message collection, or MCP client connection. Identify manual confirmations explicitly.
+호환성 보고에는 실제로 확인한 단계를 구분해 적어 주세요. 이미지 빌드, Android 시작, 보조 기기 로그인, 휴대폰 로그인 유지, 메시지 수집, MCP 클라이언트 연결을 각각 명시하고 직접 확인한 내용도 구분하세요.
 
-## Propose a change
+## 변경 제안
 
-Keep each pull request focused and explain the behavior it changes. Include the checks you ran and their results; distinguish fixture-based tests from checks with a real device or account.
+PR은 하나의 변경에 집중하고 동작이 어떻게 달라지는지 설명해 주세요. 실행한 검사와 결과를 포함하고, 가상 데이터 테스트와 실제 기기·계정 검증을 구분하세요.
 
-Follow the [contribution guidelines](docs/development.md#contribution-guidelines) and run the relevant [local checks](docs/development.md#local-checks). Documentation and project-owned UI text use English. Preserve Korean literals used to recognize the supported KakaoTalk screen and multilingual test data.
+[기여 지침](docs/development.md#contribution-guidelines)에 따라 관련 [로컬 검사](docs/development.md#local-checks)를 실행하세요. **문서, 프로젝트가 제공하는 화면, 터미널 안내는 한국어를 기본으로 합니다. 코드 주석, 내부 예외·로그, API 오류 코드와 프로토콜 식별자는 영어로 유지합니다.** 내부 진단 내용을 사용자에게 그대로 노출하기보다 한국어로 상태와 다음 조치를 안내하세요. 카카오톡 화면 인식용 문자열과 다국어 테스트 데이터는 보존하세요.
 
-For admin or OAuth changes, use the [local browser previews](docs/development.md#preview-the-web-console) to check forms and user-visible behavior without a real account. For installation or collection changes, keep [Validation scope](docs/implementation.md) accurate and document remaining limitations.
+관리 화면이나 OAuth를 변경하면 [로컬 브라우저 미리보기](docs/development.md#preview-the-web-console)로 실제 계정 없이 폼과 사용자 동작을 확인하세요. 설치나 수집을 변경하면 [검증 범위](docs/implementation.md)를 갱신하고 남은 제한을 기록하세요.

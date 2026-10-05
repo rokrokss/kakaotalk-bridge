@@ -1,19 +1,15 @@
-# Operations and recovery
+# 운영과 복구
 
-For the new installer, passkey admin login, Aurora setup and full encrypted snapshots, see [Set up a personal bridge](onboarding.md). The commands below describe the existing manual deployment path.
+새 설치 프로그램, 패스키, Aurora 설정, 전체 암호화 백업은 [개인 Bridge 설정](onboarding.md)을 참고하세요. 아래는 기존 수동 배포 절차입니다.
 
-[README](../README.md) · [Security](security.md)
+[README](../README.md) · [보안](security.md)
 
-The commands below run on a Linux host. On a Mac, the containers run inside Lima, so use `./scripts/lima-compose.sh` instead of `docker compose`.
+Linux 호스트 기준 명령입니다. Mac의 Lima에서는 `docker compose` 대신 `./scripts/lima-compose.sh`를 사용하세요.
 
-## Check status
+<a id="check-status"></a>
+## 상태 확인
 
-Start with **Your bridge** in admin. Collection, remote AI activity and manual
-phone confirmation are independent. Open **AI connections → Add or change a
-connection → Check server connection** for service verification; **Refresh
-connections** reloads approvals and activity. A successful tool-call timestamp
-records past use, not current reachability. Ask your connected client for
-collector status to test the complete request path.
+관리 화면의 **내 Bridge**에서 시작하세요. 수집, 원격 AI 사용 기록, 휴대폰 직접 확인은 독립된 상태입니다. 서비스는 **AI 연결 → 연결 추가 또는 변경 → 서버 연결 확인**, 승인·활동은 **연결 새로고침**으로 확인합니다. 성공 시각은 과거 사용 기록이며 현재 연결을 보장하지 않습니다. 전체 요청 경로를 검증하려면 연결된 AI에 수집 상태를 요청하세요.
 
 ```bash
 docker compose --profile dot ps
@@ -21,112 +17,95 @@ docker compose --profile dot ps
 docker compose logs --tail 30 iris-collector
 ```
 
-`collecting_partial` means recent Iris database access and secondary-login approval are valid. It does not mean the system has checked for missing chat history or verified the phone session automatically.
+`collecting_partial`은 최근 Iris DB 접근과 보조 기기 승인이 유효하다는 뜻입니다. 전체 기록의 누락 검사나 휴대폰 자동 확인을 뜻하지 않습니다.
 
-| Symptom | What to check |
+| 증상 | 확인할 내용 |
 | --- | --- |
-| Android screen is unavailable | redroid boot status and host binder devices |
-| Collection approval is locked | Login precheck and confirmation of both sessions in the admin console |
-| Collection stops after an app update | A changed versionCode requires new login confirmation |
-| Decryption or JSON error | Iris logs; collection stops rather than skipping invalid rows |
-| Database replaced or IDs move backwards | Android restore or database recreation; investigate before registering a new epoch |
-| HTTPS/OAuth connection fails | dot-ingress, dot-plugin and dot-control status, public HTTPS and consent. Shared HTTPS uses passkeys; localhost/private admin uses matching-code approval. Ensure the ingress config is readable by UID 10001. See [Connection setup](dot-plugin.md) |
-| OpenAI tunnel connection fails | Tunnel readiness, runtime key permission, configured ID and admin approval. See [Tunnel checks](openai-tunnel.md#check-revoke-and-restore) |
-| AI access is allowed but no successful call is recorded | Finish client setup and ask for collector status. Discovery does not count, and earlier calls are not backfilled |
-| Inspection out of date | Run **Check status** in **Tablet & settings**. Stale screen inspection does not itself revoke approval |
-| Phone says Recheck needed | Check the phone manually, then update **Phone confirmation**. Refresh tablet inspection if the button asks for it |
-| Event room says Allowed but no alert arrives | Check the room's client subscription, expiry and receiving client's execution. Permission alone creates no subscription; see [Events](events.md) |
-| ADB reports unauthorized | Preserve the original device-state and iris-state keys. Stop Android, rerun adb-init and start Android through Compose to provision those keys; do not disable ADB authentication |
+| Android 화면 없음 | redroid 시작과 호스트 binder 기기 |
+| 수집 승인 잠김 | 로그인 사전 점검과 두 기기 직접 확인 |
+| 앱 업데이트 후 수집 중단 | versionCode가 바뀌면 새 로그인 확인 필요 |
+| 복호화·JSON 오류 | Iris 로그. 잘못된 메시지를 건너뛰지 않고 수집 중단 |
+| DB 교체·ID 역행 | Android 복구·DB 재생성 여부. 새 세대 등록 전에 원인 확인 |
+| HTTPS/OAuth 실패 | dot-ingress·dot-plugin·dot-control, 공개 HTTPS·동의. 같은 HTTPS는 패스키, 분리된 관리 화면은 코드 승인. 진입점 설정을 UID 10001이 읽을 수 있어야 함. [연결 설정](dot-plugin.md) |
+| OpenAI 터널 실패 | 준비 상태, 실행용 키 권한, ID, 관리자 승인. [터널 점검](openai-tunnel.md#check-revoke-and-restore) |
+| 허용되었지만 성공 호출 없음 | AI 설정 완료 후 수집 상태 요청. 목록 조회·이전 호출은 집계하지 않음 |
+| 점검 결과 갱신 필요 | **태블릿 및 설정 → 상태 확인**. 오래된 화면 점검만으로 승인이 취소되지는 않음 |
+| 휴대폰 재확인 필요 | 휴대폰을 직접 확인하고 **휴대폰 확인** 갱신. 필요하면 태블릿 점검 새로고침 |
+| 이벤트 허용 후 알림 없음 | 클라이언트 구독·만료·실행 상태 확인. 허용만으로 구독되지 않음. [이벤트](events.md) |
+| ADB unauthorized | 원래 device-state·iris-state 키 유지. Android 중지 후 adb-init을 다시 실행하고 Compose로 시작해 키 준비. ADB 인증을 끄지 말 것 |
 
-By default, Iris reads up to 50 rows every 3 seconds and continues fetching while a backlog remains. Delivery latency depends on the KakaoTalk and redroid connection state.
+기본적으로 Iris는 3초마다 최대 50건을 읽고 대기 기록이 있으면 계속 가져옵니다. 지연은 카카오톡·redroid 연결 상태에 따라 달라집니다.
 
-## Web connection setup
+<a id="web-connection-setup"></a>
+## 웹 연결 설정
 
-For installer-managed deployments, update the source and application images,
-then run `./bridge up` from the existing installation. It installs/restarts the
-private setup agent under systemd and retains the admin origin. `up` alone does
-not upgrade existing images. Use the matching update procedure and keep existing
-keys, volumes and deployment identifiers.
+설치 프로그램이 관리하는 배포는 소스와 앱 이미지를 업데이트한 뒤 기존 설치에서 `./bridge up`을 실행하세요. systemd의 비공개 설정 에이전트를 설치·재시작하고 관리 출처를 유지합니다. `up`만으로 이미지를 업데이트하지는 않습니다. 기존 키·볼륨·배포 식별자를 보존하세요.
 
-On Mac, the agent runs inside the managed Linux VM. An older manual VM is not
-adopted by the Mac installer: operate inside that VM's existing installation.
-Without systemd, run `./bridge --local setup-agent serve` under your service
-manager as root from the installation directory. The agent needs Docker access;
-the admin container receives only its protected Unix socket directory.
+Mac에서는 관리되는 Linux VM 안에서 실행합니다. 이전 수동 VM을 자동으로 인계하지 않으므로 그 VM의 기존 설치 안에서 작업하세요. systemd가 없다면 설치 폴더에서 root로 `./bridge --local setup-agent serve`를 서비스 관리자로 실행하세요. 에이전트에는 Docker 접근 권한이 필요하며 관리 컨테이너에는 보호된 Unix 소켓 폴더만 전달합니다.
 
-If the web form reports that setup is unavailable, follow its recovery message.
-For a running job, the stage and elapsed time can be checked after reopening the
-page. Only one job runs at a time. A page reload does not cancel it; a setup-agent
-restart marks in-flight work interrupted. Use **Review and retry** to review and
-resubmit after fixing the displayed problem. Use **Check again** for a failed
-server check. Repeated failures can be diagnosed with `./bridge doctor`.
+폼이 사용 불가를 알리면 표시된 복구 안내를 따르세요. 작업은 한 번에 하나만 진행하며 화면을 다시 열어 단계·경과 시간을 볼 수 있습니다. 새로고침은 취소하지 않지만 에이전트 재시작은 진행 중 작업을 중단으로 표시합니다. 문제 해결 후 **확인 후 다시 시도**, 서버 점검 실패에는 **다시 확인**을 사용하세요. 반복되면 `./bridge doctor`로 진단하세요.
 
-Setup history and the last successful method selection are stored separately
-under `.bridge/`; they do not contain runtime keys. Checks and failed jobs do not
-replace that selection. Saved HTTPS/tunnel instructions are derived from the
-current configuration, not the last job. Unsaved form edits are not restored.
-See [web setup security](security.md#web-connection-setup).
+단계 안내는 한국어이며 내부 명령 출력과 오류를 그대로 표시하지 않습니다. 터미널 설정의 원문 진단은 비공개 `.bridge/logs/`에 보관합니다. 작업 기록과 마지막 성공 방식은 별도로 저장하며 실행용 키를 포함하지 않습니다. 점검·실패는 성공한 방식 선택을 바꾸지 않습니다. HTTPS·터널 안내는 현재 설정에서 생성하고 저장하지 않은 폼 편집은 복원하지 않습니다. [웹 설정 보안](security.md#web-connection-setup)
 
-## Upgrading to the security update
+<a id="upgrading-to-the-security-update"></a>
+## 보안 업데이트 적용
 
-Existing owners sign in to admin once again with their current passkey. Older browser sessions are rejected after the cookie migration. Registered passkeys and approved MCP connections are retained; the tablet setup and collection controls keep the same workflow. Collector ADB keys are provisioned automatically, so operators using the web UI do not enter another token. Direct ADB/scrcpy clients need an authorized key.
+기존 패스키로 관리 화면에 한 번 다시 로그인하세요. 쿠키 이전으로 오래된 브라우저 세션은 거부하지만 패스키와 승인된 MCP 연결은 유지합니다. 수집기 ADB 키는 자동 준비하므로 웹 사용자에게 추가 토큰을 요구하지 않습니다. 직접 ADB·scrcpy를 사용하려면 승인된 키가 필요합니다.
 
-This release also changes the Iris binary and Compose topology. Before updating an existing deployment:
+Iris 바이너리와 Compose 구조도 바뀌므로 다음 순서를 따르세요.
 
-1. Create and verify a full encrypted backup of all seven volumes, configuration and keys. Preserve the old image references and APK hash for rollback.
-2. Build/load the server, device and gateway images and update the Compose files together. For published images, use a manifest containing all three image digests.
-3. Follow the [explicit Iris component migration](mcp-queries.md#updating-the-iris-component), preserving enrollment and KakaoTalk app data. `./bridge update` deliberately stops if the bundled Iris APK changes; it does not perform this migration automatically. Do not use a fresh bootstrap to upgrade a signed-in tablet.
-4. Recreate Android through the updated Compose configuration so `adb-init` provisions the collector keys before `ro.adb.secure=1` takes effect. Preserve `android-data`, `device-state` and `iris-state` together. This step restarts Android; check the tablet and phone sessions afterward.
-5. Start the matching application services and `dot-ingress`. Point public HTTPS at its loopback port (18787 by default), and keep the admin gateway private. The ingress config must be readable by UID 10001; do not expose dot-plugin directly.
-6. Sign in to admin with the existing passkey, check collection status and query the connected MCP client's profile/status. Check that unauthenticated `/mcp` returns 401 and public `/admin/` returns 404.
+1. 상태 볼륨 7개, 설정, 키를 포함한 전체 암호화 백업을 생성·검증하고 롤백용 이전 이미지 참조·APK 해시를 보관하세요.
+2. 서버·기기·게이트웨이 이미지와 Compose 파일을 함께 갱신하세요. 공개 이미지는 세 이미지 다이제스트를 모두 담은 매니페스트를 사용하세요.
+3. [명시적 Iris 이전](mcp-queries.md#updating-the-iris-component)을 수행하고 등록·카카오톡 데이터를 유지하세요. `./bridge update`는 Iris APK가 바뀌면 중단하며 자동 이전하지 않습니다. 로그인된 태블릿에 새 bootstrap을 실행하지 마세요.
+4. 갱신된 Compose로 Android를 다시 생성해 `ro.adb.secure=1` 적용 전에 `adb-init`이 수집기 키를 준비하게 하세요. `android-data`, `device-state`, `iris-state`를 함께 유지하세요. Android 재시작 후 휴대폰·태블릿 로그인을 확인하세요.
+5. 맞는 버전의 서비스와 `dot-ingress`를 시작하세요. 공개 HTTPS는 기본 루프백 18787로 전달하고 관리 게이트웨이는 비공개로 유지하세요. 진입점 설정은 UID 10001이 읽을 수 있어야 하며 dot-plugin을 직접 공개하지 마세요.
+6. 기존 패스키로 로그인해 수집 상태와 연결된 MCP의 프로필·상태를 조회하세요. 인증 없는 `/mcp`는 401이어야 합니다. 관리 경로를 차단한 공개 프록시에서는 `/admin/`이 404인지 확인하세요.
 
-The [security report](security.md#security-fixes-2026-10-05) records the tested ARM64 migration and its limits. The automatic installer/release upgrade has not been validated end to end on every host. Redroid's old Android patch level remains a separate risk after this update.
+[보안 기록](security.md#security-fixes-2026-10-05)에 ARM64 이전 검증과 제한을 기록했습니다. 자동 설치·릴리스 업데이트의 전체 과정은 모든 호스트에서 검증하지 않았습니다. 오래된 redroid 보안 패치는 별도의 남은 위험입니다.
 
-## Stop and restart
+<a id="stop-and-restart"></a>
+## 중지와 재시작
 
 ```bash
 docker compose down
 docker compose up -d --no-build
 ```
 
-`down` preserves volumes. **`down -v` deletes the login state and database.** Do not use it for routine shutdown.
+`down`은 볼륨을 유지합니다. **`down -v`는 로그인 상태와 DB를 삭제하므로 일상적인 종료에 사용하지 마세요.**
 
-For installations with remote MCP, include `--profile dot`; include
-`--profile tunnel` as well when the personal OpenAI tunnel is configured. The
-installer's `./bridge stop` and `./bridge start` use the saved connection modes.
-Public HTTPS traffic must pass through the separate `dot-ingress` service. Its
-read-only `docker/Caddyfile.public` mount contains no secrets and must be readable
-by UID 10001 (normally mode 0644).
+원격 MCP가 있으면 `--profile dot`, 개인 터널도 있으면 `--profile tunnel`을 추가하세요. `./bridge stop`, `./bridge start`는 저장된 모드를 사용합니다. 공개 HTTPS는 별도 `dot-ingress`를 거쳐야 합니다. 읽기 전용 `docker/Caddyfile.public`에는 비밀값이 없고 UID 10001이 읽을 수 있어야 합니다(일반적으로 0644).
 
-`adb-init` runs before Android creation and provisions only the two collector public keys. An authorized collector can still request root ADB. Back up and restore Android, device-state and iris-state together; do not replace keys in a running deployment. The Iris credential file is managed automatically and rotates with enrollment.
+`adb-init`은 Android 생성 전에 수집기 공개 키 두 개만 준비합니다. 승인된 수집기는 root ADB를 사용할 수 있습니다. Android·device-state·iris-state를 함께 백업·복구하고 실행 중 키를 교체하지 마세요. Iris 인증 파일은 자동 관리하며 등록과 함께 교체됩니다.
 
-Automatic restarts are disabled for redroid to avoid repeated failures. Start it with `docker compose start redroid` when needed. Other long-running services use `unless-stopped`. For automatic recovery on Linux, adjust the paths in `deploy/kakaocollector-supervisor.service.example` and install it. The supervisor limits redroid restarts to three within 30 minutes.
+반복 실패를 피하기 위해 redroid 자동 재시작은 꺼져 있습니다. 필요하면 `docker compose start redroid`를 사용하세요. 다른 장기 실행 서비스는 `unless-stopped`입니다. Linux 자동 복구는 `deploy/kakaocollector-supervisor.service.example`의 경로를 수정해 설치하세요. 감독 서비스는 30분 내 redroid 재시작을 3회로 제한합니다.
 
-## Storage locations
+<a id="storage-locations"></a>
+## 저장 위치
 
-KakaoTalk Bridge retains existing deployment identifiers for compatibility: `kakaotalk-collector` in Compose project and local image names, the Android package `dev.kakaocollector.bridge`, and the manual Lima path `/srv/kakaotalk-collector`. The new installer's VM path is `/srv/kakaotalk-bridge`; release images use `ghcr.io/rokrokss/kakaotalk-bridge-*`. Keep `COMPOSE_PROJECT_NAME` in your existing `.env` when applying the rename so that the same login and message volumes are used.
+호환성을 위해 Compose 프로젝트·로컬 이미지의 `kakaotalk-collector`, Android 패키지 `dev.kakaocollector.bridge`, 수동 Lima 경로 `/srv/kakaotalk-collector`는 유지합니다. 새 설치의 VM 경로는 `/srv/kakaotalk-bridge`, 릴리스 이미지는 `ghcr.io/rokrokss/kakaotalk-bridge-*`입니다. 이름 변경을 적용해도 기존 `.env`의 `COMPOSE_PROJECT_NAME`을 유지해야 같은 볼륨을 사용합니다.
 
-| Volume | Contents |
+| 볼륨 | 내용 |
 | --- | --- |
-| `android-data` | KakaoTalk session and local database; registration app data |
-| `collector-data` | Collected messages and server cursors |
-| `device-state` | Registration epoch and ADB keys |
-| `iris-state` | Iris collector ADB keys |
-| `admin-state` | Encrypted optional local password and revocable browser sessions |
-| `passkey-state` | Encrypted public credentials, RP/origin configuration and temporary authentication state |
-| `dot-state` | OAuth/tunnel grants, successful remote tool-call timestamps, conversation event permissions, subscriptions, acknowledged cursors, and webhook queue |
+| `android-data` | 카카오톡 로그인·로컬 DB·등록 앱 데이터 |
+| `collector-data` | 수집된 메시지와 서버 커서 |
+| `device-state` | 등록 세대와 ADB 키 |
+| `iris-state` | Iris 수집기 ADB 키 |
+| `admin-state` | 암호화된 선택적 로컬 비밀번호와 취소 가능한 브라우저 세션 |
+| `passkey-state` | 암호화된 공개 인증 정보, RP·출처 설정, 임시 인증 상태 |
+| `dot-state` | OAuth·터널 승인, 원격 호출 성공 시각, 대화 이벤트 권한·구독·처리 커서·웹훅 대기열 |
 
-The server prunes observations older than 30 days every hour. Adjust this period with `RETENTION_DAYS`. Retransmission deduplication also applies within this retention window. The Android database, legacy notification quarantine, and backup files are excluded from this cleanup. Container logs are limited to three 10 MB files each.
+서버는 매시간 기본 30일 이전 메시지를 정리합니다. `RETENTION_DAYS`로 변경하세요. 재전송 중복 제거도 이 기간 안에 적용합니다. Android DB, 이전 알림 격리 데이터, 백업 파일은 정리하지 않습니다. 컨테이너 로그는 각각 10 MB 파일 3개로 제한합니다.
 
-## Back up the collection database
+<a id="back-up-the-collection-database"></a>
+## 수집 DB 백업
 
 ```bash
 ./scripts/backup.sh
 ```
 
-The script creates a consistent copy using SQLite's online backup API and encrypts it with AES-256-GCM. Store `secrets/backup_key` separately from the backup files. Losing the key makes recovery impossible. Configure automatic backup deletion and remote replication yourself.
+SQLite 온라인 백업 API로 일관된 사본을 만들고 AES-256-GCM으로 암호화합니다. `secrets/backup_key`를 백업과 분리해 보관하세요. 키를 잃으면 복구할 수 없습니다. 자동 삭제·원격 복제는 직접 구성해야 합니다.
 
-Stop the API before restoring:
+복구 전에 API를 중지하세요.
 
 ```bash
 docker compose stop api
@@ -135,26 +114,28 @@ docker compose start api
 ./scripts/status.sh
 ```
 
-Restore checks the authentication tag, database integrity, and schema. Because `cursor_epoch` changes, API consumers must reset their pagination cursors. Iris resumes from the restored server cursor.
+인증 태그·DB 무결성·스키마를 검사합니다. `cursor_epoch`가 바뀌므로 API 소비자는 페이지 커서를 초기화해야 합니다. Iris는 복구된 서버 커서부터 이어갑니다.
 
-The backup script uses the Docker Engine on the host where it runs. For Lima deployments, run it inside the VM at `/srv/kakaotalk-collector`:
+스크립트가 실행되는 호스트의 Docker Engine을 사용합니다. 수동 Lima에서는 VM 내부에서 실행하세요.
 
 ```bash
 limactl shell --workdir=/srv/kakaotalk-collector kakaotalk-test sudo ./scripts/backup.sh
 ```
 
-## Back up Android and MCP state
+<a id="back-up-android-and-mcp-state"></a>
+## Android·MCP 상태 백업
 
-Prefer the [full snapshot command](onboarding.md#maintain-and-recover), which preserves all seven volumes with their matching configuration and keys. For a manually managed Android snapshot, stop redroid, admin and both device collectors, then save `android-data`, `device-state` and `iris-state` together with the matching collector state and secrets in an encrypted host snapshot. Android contains the Iris bearer; the two collector volumes contain its authorized ADB identities. Do not run the original and restored instances simultaneously with the same account. A manual restoration that requires a new registration epoch uses:
+볼륨 7개와 맞는 설정·키를 함께 보관하는 [전체 백업](onboarding.md#maintain-and-recover)을 권장합니다. 수동 스냅샷은 redroid·admin·수집기 두 개를 중지하고 `android-data`, `device-state`, `iris-state`와 맞는 수집 상태·키를 함께 암호화해 보관하세요. Android에는 Iris bearer, 수집기 볼륨에는 승인된 ADB 식별 정보가 있습니다. 같은 계정으로 원본·복원 인스턴스를 동시에 실행하지 마세요. 새 등록 세대가 필요한 수동 복구에는 다음을 사용합니다.
 
 ```bash
 docker compose --profile setup run --rm bootstrap bootstrap --rotate-epoch
 ```
 
-This requires secondary-login confirmation again. Iris rereads remaining database rows under the new epoch, which may duplicate previously stored records.
+보조 기기 로그인을 다시 확인해야 합니다. 남은 DB 메시지를 새 세대로 다시 읽으므로 기존 기록과 중복될 수 있습니다.
 
-`admin-state`, `dot-state` and `passkey-state` are not included in the collection database backup. Stop admin, dot-plugin and dot-control before copying them, or use SQLite's online backup API. Preserve the matching `secrets/admin_token`, `secrets/mcp_storage_key`, `secrets/mcp_approval_token` and `secrets/mcp_passkey_token`. Copying only a database file while it is running may omit data in the WAL. Full snapshot restoration also clears browser sessions, OAuth grants and callbacks while retaining passkey credentials; a manual file copy does not perform that cleanup.
+수집 DB 백업에는 `admin-state`, `dot-state`, `passkey-state`가 없습니다. 파일 복사 전에 admin·dot-plugin·dot-control을 중지하거나 SQLite 온라인 백업을 사용하세요. 맞는 `secrets/admin_token`, `secrets/mcp_storage_key`, `secrets/mcp_approval_token`, `secrets/mcp_passkey_token`도 유지하세요. 실행 중 DB 파일만 복사하면 WAL의 데이터가 빠질 수 있습니다. 전체 복원은 패스키를 유지하고 브라우저 세션·OAuth·콜백을 지우지만 수동 파일 복사는 정리 작업을 수행하지 않습니다.
 
-## Renew certificates
+<a id="renew-certificates"></a>
+## 인증서 갱신
 
-The default TLS certificate lasts 365 days. Include the same gateway IP in the SAN when renewing it, then restart the gateway. The registration app's trusted certificate must also be updated through bootstrap, so schedule time to reconfirm the login sessions. Changing the Bridge signing key prevents app updates.
+기본 TLS 인증서는 365일간 유효합니다. 갱신할 때 같은 게이트웨이 IP를 SAN에 넣고 게이트웨이를 재시작하세요. 등록 앱의 신뢰 인증서도 bootstrap으로 갱신해야 하므로 두 기기 로그인을 다시 확인할 시간을 확보하세요. Bridge 서명 키를 바꾸면 앱 업데이트가 불가능합니다.

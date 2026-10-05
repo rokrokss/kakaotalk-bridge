@@ -18,13 +18,13 @@ const preparationAttempts = new Set();
 let setupCheckedAt = 0;
 let inspectionRetries = 0, inspectionTimer = null;
 const messages = {
-  session_required: 'Your admin session has expired. Sign in again.',
-  device_busy: 'A device operation is in progress. Try again shortly.',
-  invalid_request: 'Check your input.',
-  invalid_csrf: 'Reopen the admin console.',
-  invalid_origin: 'Open the admin console at the same HTTPS address.',
-  invalid_swipe: 'Try dragging again.',
-  point_outside_screen: 'Select a point inside the screen.',
+  session_required: '관리자 로그인이 만료되었습니다. 다시 로그인하세요.',
+  device_busy: '기기 작업이 진행 중입니다. 잠시 후 다시 시도하세요.',
+  invalid_request: '입력 내용을 확인하세요.',
+  invalid_csrf: '관리 화면을 다시 여세요.',
+  invalid_origin: '같은 HTTPS 주소에서 관리 화면을 여세요.',
+  invalid_swipe: '다시 드래그해 보세요.',
+  point_outside_screen: '화면 안의 지점을 선택하세요.',
 };
 
 function feedback(message) {
@@ -46,7 +46,7 @@ function locked() {
   $('console').hidden = true;
   $('login-panel').hidden = false;
   $('logout').hidden = true;
-  $('connection').textContent = 'Authentication required';
+  $('connection').textContent = '로그인이 필요합니다';
   $('screen').hidden = true;
   $('screen').removeAttribute('src');
   $('device-text').value = '';
@@ -68,17 +68,17 @@ async function api(path, data) {
     credentials: 'same-origin', cache: 'no-store',
     headers: data === undefined ? {} : { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
     body: data === undefined ? undefined : JSON.stringify(data),
-  });
+  }).catch(() => { throw new Error('서버에 연결하지 못했습니다. 네트워크를 확인하고 다시 시도하세요.'); });
   if (!response.ok) {
-    let reason = 'The request failed. Try again shortly.';
+    let reason = '요청을 처리하지 못했습니다. 잠시 후 다시 시도하세요.';
     try {
       const error = await response.json();
-      reason = messages[error.detail] || (typeof error.detail === 'string' && error.detail.trim() ? error.detail : reason);
+      reason = messages[error.detail] || (typeof error.detail === 'string' && /[가-힣]/.test(error.detail) ? error.detail : reason);
     } catch {}
     if (response.status === 401) locked();
     const error = new Error(reason); error.status = response.status; throw error;
   }
-  return response.json();
+  return response.json().catch(() => { throw new Error('서버 응답을 확인하지 못했습니다. 잠시 후 다시 시도하세요.'); });
 }
 
 function unlocked(session) {
@@ -91,9 +91,9 @@ function unlocked(session) {
   $('console').hidden = false;
   $('logout').hidden = false;
   $('connection').textContent = session.expires_in > 86400
-    ? `Admin · ${Math.ceil(session.expires_in / 86400)} days remaining`
-    : `Admin · ${Math.ceil(session.expires_in / 60)} min remaining`;
-  $('pause').textContent = 'Pause';
+    ? `관리 · ${Math.ceil(session.expires_in / 86400)}일 남음`
+    : `관리 · ${Math.ceil(session.expires_in / 60)}분 남음`;
+  $('pause').textContent = '일시 정지';
   $('pause').setAttribute('aria-pressed', 'false');
   $('screen-placeholder').hidden = false;
   action('setup-check');
@@ -142,11 +142,11 @@ async function refresh(force = false) {
     pendingURL = null;
     $('screen').hidden = false;
     $('screen-placeholder').hidden = true;
-    $('screen-label').textContent = paused ? 'Paused' : `${next.width} × ${next.height}`;
+    $('screen-label').textContent = paused ? '일시 정지됨' : `${next.width} × ${next.height}`;
   } catch {
     if (requestedGeneration === generation) {
       frame = null;
-      $('screen-label').textContent = 'Waiting for connection';
+      $('screen-label').textContent = '연결 대기 중';
       $('screen-placeholder').hidden = false;
       $('screen').hidden = true;
     }
@@ -156,7 +156,7 @@ async function refresh(force = false) {
   }
 }
 
-const localTime = value => value ? new Date(value * 1000).toLocaleString() : 'No record';
+const localTime = value => value ? new Date(value * 1000).toLocaleString('ko-KR') : '기록 없음';
 function openPanel(id) {
   const panel = $(id);
   for (let parent = panel.parentElement; parent; parent = parent.parentElement) if (parent.tagName === 'DETAILS') parent.open = true;
@@ -169,27 +169,27 @@ $('tablet-workspace').addEventListener('toggle', () => { if ($('tablet-workspace
 function renderSessions(s, stale) {
   const fresh = !!s && !stale;
   $('session-inspected').textContent = s
-    ? `${localTime(s.checked_at)}${fresh ? ' · Checked' : ' · Check again'}`
-    : 'Select “Check status” to inspect the device.';
+    ? `${localTime(s.checked_at)}${fresh ? ' · 확인됨' : ' · 다시 확인 필요'}`
+    : '‘상태 확인’을 눌러 기기를 점검하세요.';
   const screens = {
-    login_required: 'Login screen', main_screen_observed: 'Signed-in screen',
-    not_visible: 'KakaoTalk is not open', not_installed: 'KakaoTalk is not installed', unknown: 'Cannot determine from screen',
+    login_required: '로그인 화면', main_screen_observed: '로그인된 화면',
+    not_visible: '카카오톡이 열려 있지 않음', not_installed: '카카오톡 미설치', unknown: '화면에서 판단할 수 없음',
   };
   $('tablet-status').textContent = fresh
-    ? s.device === 'offline' ? 'Disconnected' : s.device === 'booting' ? 'Booting' : screens[s.screen?.state] || 'Not checked'
-    : s ? 'Inspection out of date' : 'Not inspected yet';
-  $('tablet-detail').textContent = s?.tablet?.confirmed_at ? `Login manually confirmed: ${localTime(s.tablet.confirmed_at)}` : '';
+    ? s.device === 'offline' ? '연결 끊김' : s.device === 'booting' ? '시작 중' : screens[s.screen?.state] || '미확인'
+    : s ? '점검 결과 갱신 필요' : '아직 점검하지 않음';
+  $('tablet-detail').textContent = s?.tablet?.confirmed_at ? `직접 로그인 확인: ${localTime(s.tablet.confirmed_at)}` : '';
   const phone = s?.phone;
   const overdue = phone?.confirmed_at && Date.now() / 1000 - phone.confirmed_at > 86400;
   const phoneLabels = {
-    operator_confirmed: 'Confirmed active', recheck_due: 'Recheck needed',
-    reported_lost: 'Reported signed out', unknown: 'No confirmation record',
+    operator_confirmed: '로그인 유지 확인됨', recheck_due: '재확인 필요',
+    reported_lost: '로그아웃 신고됨', unknown: '확인 기록 없음',
   };
-  $('phone-status').textContent = phoneLabels[overdue && phone?.state === 'operator_confirmed' ? 'recheck_due' : phone?.state] || 'Not checked';
+  $('phone-status').textContent = phoneLabels[overdue && phone?.state === 'operator_confirmed' ? 'recheck_due' : phone?.state] || '미확인';
   $('phone-detail').textContent = phone?.state === 'reported_lost'
-    ? `${localTime(phone.reported_at)} · Manually reported`
-    : phone?.confirmed_at ? `${localTime(phone.confirmed_at)} · Manually confirmed` : 'Phone status reflects your manual confirmation.';
-  $('approval-status').textContent = ({ approved: 'Approved', locked: 'Awaiting confirmation', unknown: 'Unknown' }[s?.collection_approval] || 'Not checked') + (!fresh && s ? ' · last inspection' : '');
+    ? `${localTime(phone.reported_at)} · 직접 신고`
+    : phone?.confirmed_at ? `${localTime(phone.confirmed_at)} · 직접 확인` : '휴대폰 상태는 직접 확인한 내용을 표시합니다.';
+  $('approval-status').textContent = ({ approved: '승인됨', locked: '확인 대기 중', unknown: '알 수 없음' }[s?.collection_approval] || '미확인') + (!fresh && s ? ' · 마지막 점검 기준' : '');
   const proof = s?.precheck;
   // Typing makes the screen snapshot stale, but the precheck retains its own
   // 30-minute deadline. The server revalidates the device and app on approval.
@@ -197,15 +197,15 @@ function renderSessions(s, stale) {
   collectionApproved = fresh && s.collection_approval === 'approved';
   loginAlreadyApproved = s?.collection_approval === 'approved';
   $('login-check-help').textContent = loginAlreadyApproved
-    ? 'Collection is already approved. Use “Check status” to see the current state.'
-    : 'Use only before signing in. Sign in on the tablet within 30 minutes of a successful check.';
+    ? '이미 수집이 승인되었습니다. ‘상태 확인’에서 현재 상태를 확인하세요.'
+    : '로그인하기 전에만 사용하세요. 확인에 성공한 뒤 30분 이내에 태블릿에 로그인하세요.';
   $('approval-detail').textContent = precheckValid
-    ? `Confirm both sessions by ${localTime(proof.expires_at)}.`
-    : collectionApproved ? 'Approval matches the current app and device.'
-    : fresh ? 'Check login options and confirm both sessions.' : s ? `Last inspected ${localTime(s.checked_at)}. Refresh before changing confirmation.` : '';
-  $('setup-summary').textContent = loginAlreadyApproved ? 'Approved' : precheckValid ? 'Options checked' : '';
+    ? `${localTime(proof.expires_at)}까지 두 기기의 로그인을 확인하세요.`
+    : collectionApproved ? '현재 앱과 기기에 대한 승인이 유효합니다.'
+    : fresh ? '로그인 옵션을 점검하고 두 기기의 로그인을 확인하세요.' : s ? `마지막 점검: ${localTime(s.checked_at)}. 확인 내용을 변경하기 전에 새로고침하세요.` : '';
+  $('setup-summary').textContent = loginAlreadyApproved ? '승인됨' : precheckValid ? '옵션 확인됨' : '';
   $('overview-phone').textContent = $('phone-status').textContent;
-  $('overview-phone-detail').textContent = phone?.confirmed_at ? `Last manual confirmation ${localTime(phone.confirmed_at)}` : 'Confirm on your phone after signing in on the tablet.';
+  $('overview-phone-detail').textContent = phone?.confirmed_at ? `마지막 직접 확인: ${localTime(phone.confirmed_at)}` : '태블릿 로그인 후 휴대폰에서 직접 확인하세요.';
   if (fresh && !setupInitialized) {
     $('login-setup').open = s.collection_approval === 'locked';
     setupInitialized = true;
@@ -217,7 +217,7 @@ function updateControls() {
   $('login-check').disabled = busy || loginAlreadyApproved;
   $('confirm').disabled = busy || !precheckValid || !$('phone-active').checked || !$('tablet-active').checked;
   $('phone-recheck').disabled = busy || !collectionApproved || !$('phone-rechecked').checked;
-  $('phone-recheck-help').textContent = busy ? 'Wait for the current tablet operation.' : !loginAlreadyApproved ? 'Finish KakaoTalk sign-in and collection approval first.' : !collectionApproved ? 'Refresh the tablet inspection before updating your phone confirmation.' : !$('phone-rechecked').checked ? 'Check your phone, then select the confirmation box above.' : '';
+  $('phone-recheck-help').textContent = busy ? '진행 중인 태블릿 작업이 끝날 때까지 기다리세요.' : !loginAlreadyApproved ? '먼저 카카오톡 로그인과 수집 승인을 완료하세요.' : !collectionApproved ? '휴대폰 확인을 갱신하기 전에 태블릿 점검을 새로고침하세요.' : !$('phone-rechecked').checked ? '휴대폰을 확인한 뒤 위의 확인 항목을 선택하세요.' : '';
   $('phone-inspect').hidden = !loginAlreadyApproved || collectionApproved;
 }
 
@@ -235,7 +235,7 @@ async function updateState() {
     lastObservation = state.collector.last_observation_received_at || null;
     renderSetup();
     if (collectionBaseline !== null && lastObservation && Date.parse(lastObservation) > collectionBaseline) {
-      $('test-result').textContent = 'A new message row reached the collector. Check it in ChatGPT to confirm the content.';
+      $('test-result').textContent = '새 메시지가 수집되었습니다. ChatGPT에서 내용을 확인하세요.';
       collectionBaseline = null;
     }
     busy = state.job.state === 'running';
@@ -246,14 +246,14 @@ async function updateState() {
     $('login-check-result').hidden = !loginJob || !state.job.message;
     $('login-check-result').textContent = loginJob ? state.job.message : '';
     $('login-check-result').dataset.state = state.job.state;
-    $('login-check').textContent = busy && state.job.action === 'login-check' ? 'Checking…' : 'Check login options';
+    $('login-check').textContent = busy && state.job.action === 'login-check' ? '확인 중…' : '로그인 옵션 확인';
     const collector = state.collector.state;
     $('collector-status').dataset.state = collector;
-    $('collector-status').textContent = collector === 'collecting_partial' ? 'Collecting messages'
-      : collector === 'unavailable' ? 'Waiting for collection server' : 'Check collection status';
-    $('collector-status').title = 'Collects messages received on the tablet. This does not restore the entire chat history.';
+    $('collector-status').textContent = collector === 'collecting_partial' ? '메시지 수집 중'
+      : collector === 'unavailable' ? '수집 서버 대기 중' : '수집 상태 확인 필요';
+    $('collector-status').title = '태블릿에서 수신한 메시지를 수집합니다. 전체 대화 기록을 복원하지는 않습니다.';
     $('overview-collection').textContent = $('collector-status').textContent;
-    $('overview-last').textContent = lastObservation ? `Last collected ${new Date(lastObservation).toLocaleString()} · Partial history` : 'No collected messages recorded yet.';
+    $('overview-last').textContent = lastObservation ? `마지막 수집: ${new Date(lastObservation).toLocaleString('ko-KR')} · 일부 기록만 수집` : '아직 수집된 메시지가 없습니다.';
     renderSessions(state.sessions, state.sessions_stale);
     updateControls();
     // Decide only after busy/session state is updated. Mark the action before
@@ -271,7 +271,7 @@ async function updateState() {
     }
   } catch {
     if (active && requestedGeneration === generation) {
-      $('collector-status').textContent = 'Could not retrieve status';
+      $('collector-status').textContent = '상태를 가져오지 못했습니다';
       $('collector-status').dataset.state = 'unavailable';
       renderSessions(null, true);
       updateControls();
@@ -286,15 +286,15 @@ async function action(name, extra = {}) {
   busy = true;
   updateControls();
   if (name === 'login-check') {
-    $('login-check').textContent = 'Checking…';
-    $('login-check-result').textContent = 'Checking tablet settings and login options.';
+    $('login-check').textContent = '확인 중…';
+    $('login-check-result').textContent = '태블릿 설정과 로그인 옵션을 확인하고 있습니다.';
     $('login-check-result').dataset.state = 'running';
     $('login-check-result').hidden = false;
   }
   try { await api('action', { name, ...extra }); await updateState(); }
   catch (error) {
     busy = false;
-    $('login-check').textContent = 'Check login options';
+    $('login-check').textContent = '로그인 옵션 확인';
     if (name === 'login-check') {
       $('login-check-result').textContent = error.message;
       $('login-check-result').dataset.state = 'failed';
@@ -335,7 +335,7 @@ $('text-form').addEventListener('submit', async event => {
   if (!active || busy) return;
   const text = $('device-text').value;
   $('device-text').value = '';
-  try { await api('text', { text }); feedback('Text inserted. Check the tablet screen.'); await refresh(true); }
+  try { await api('text', { text }); feedback('텍스트를 입력했습니다. 태블릿 화면을 확인하세요.'); await refresh(true); }
   catch (error) { feedback(error.message); }
 });
 document.querySelectorAll('[data-key]').forEach(button => button.addEventListener('click', async () => {
@@ -375,9 +375,9 @@ $('refresh').addEventListener('click', () => refresh(true));
 $('pause').addEventListener('click', () => {
   paused = !paused;
   frame = null;
-  $('pause').textContent = paused ? 'Resume' : 'Pause';
+  $('pause').textContent = paused ? '재개' : '일시 정지';
   $('pause').setAttribute('aria-pressed', String(paused));
-  $('screen-label').textContent = paused ? 'Paused' : 'Connecting to screen';
+  $('screen-label').textContent = paused ? '일시 정지됨' : '화면 연결 중';
   if (!paused) refresh();
 });
 document.addEventListener('visibilitychange', () => {
@@ -399,13 +399,13 @@ async function initLogin() {
     $('passkey-panel').hidden = loginMode !== 'passkey' || !!pairing;
     $('passkeys-panel').hidden = loginMode !== 'passkey';
     if (loginMode === 'passkey') {
-      $('passkey-submit').textContent = passkeyEnrollment ? 'Create a passkey' : 'Sign in with a passkey';
+      $('passkey-submit').textContent = passkeyEnrollment ? '패스키 만들기' : '패스키로 로그인';
       $('passkey-submit').disabled = !info.configured || (!info.owner_registered && !passkeyEnrollment);
       $('passkey-remember').closest('label').hidden = !!passkeyEnrollment;
       $('passkey-help').textContent = passkeyEnrollment
-        ? 'Save a passkey to your device or password manager. This setup link works once.'
-        : !info.owner_registered ? 'Open the setup link issued by ./bridge passkey-login on your server.'
-        : 'Use your device, phone or security key.';
+        ? '기기나 비밀번호 관리자에 패스키를 저장하세요. 이 설정 링크는 한 번만 사용할 수 있습니다.'
+        : !info.owner_registered ? '서버에서 ./bridge passkey-login으로 발급한 설정 링크를 여세요.'
+        : '기기, 휴대폰 또는 보안 키로 인증하세요.';
     }
     $('recovery-panel').hidden = loginMode !== 'local';
     $('pair-help').hidden = loginMode !== 'local' && !pairing;
@@ -413,8 +413,8 @@ async function initLogin() {
     if (pairing) {
       const passwordNeeded = loginMode === 'local' && !info.configured;
       $('owner-form').hidden = false;
-      $('pair-help').textContent = passwordNeeded ? 'Choose an admin password (at least 12 characters).' : 'This server-issued recovery link works once. Access lasts 30 minutes.';
-      $('owner-submit').textContent = passwordNeeded ? 'Create password and continue' : 'Recover access';
+      $('pair-help').textContent = passwordNeeded ? '관리자 비밀번호를 정하세요(12자 이상).' : '서버에서 발급한 일회용 복구 링크입니다. 접근 권한은 30분 동안 유효합니다.';
+      $('owner-submit').textContent = passwordNeeded ? '비밀번호 생성 후 계속' : '접근 권한 복구';
       $('owner-password').hidden = $('password-label').hidden = !passwordNeeded;
       $('owner-password').required = passwordNeeded;
       $('owner-password').minLength = passwordNeeded ? 12 : 0;
@@ -424,7 +424,7 @@ async function initLogin() {
     } else if (passkeyEnrollment && loginMode === 'passkey') {
       locked();
     } else {
-      $('pair-help').textContent = 'Use your admin password or run ./bridge admin --recovery to pair a browser.';
+      $('pair-help').textContent = '관리자 비밀번호를 사용하거나 ./bridge admin --recovery로 브라우저를 연결하세요.';
       try { unlocked(await api('session')); } catch { locked(); }
     }
   } catch (error) { feedback(error.message); }
@@ -432,16 +432,16 @@ async function initLogin() {
 $('passkey-form').addEventListener('submit', async event => {
   event.preventDefault();
   $('passkey-submit').disabled = true;
-  $('passkey-status').textContent = 'Confirm with your device…';
+  $('passkey-status').textContent = '기기에서 인증하세요…';
   try {
     let session;
     if (passkeyEnrollment) {
-      const start = await api('passkeys/register-options', {enrollment: passkeyEnrollment, label: 'My passkey'});
+      const start = await api('passkeys/register-options', {enrollment: passkeyEnrollment, label: '내 패스키'});
       const credential = await BridgePasskey.run(start.options, true);
       session = await api('passkeys/register-verify', {flow: start.flow, credential});
       passkeyEnrollment = '';
       $('passkeys-panel').open = true;
-      $('passkey-submit').textContent = 'Sign in with a passkey';
+      $('passkey-submit').textContent = '패스키로 로그인';
       $('passkey-remember').closest('label').hidden = false;
     } else session = await authenticatePasskey('login');
     $('passkey-status').textContent = '';
@@ -459,12 +459,12 @@ $('passkey-add').addEventListener('click', async () => {
   $('passkey-add').disabled = true;
   try {
     const {proof} = await authenticatePasskey('manage');
-    const start = await api('passkeys/register-options', {proof, label: $('passkey-label').value.trim() || 'Backup passkey'});
+    const start = await api('passkeys/register-options', {proof, label: $('passkey-label').value.trim() || '백업 패스키'});
     const credential = await BridgePasskey.run(start.options, true);
     const session = await api('passkeys/register-verify', {flow: start.flow, credential});
     csrf = session.csrf;
     await refreshPasskeys();
-    feedback('Backup passkey added.');
+    feedback('백업 패스키를 추가했습니다.');
   } catch (error) { feedback(error.message); }
   finally { $('passkey-add').disabled = false; }
 });
@@ -475,12 +475,12 @@ async function refreshPasskeys() {
     const {items} = await api('passkeys/credentials', {});
     $('passkeys-list').replaceChildren(...items.map(row => {
       const card = document.createElement('div'); card.className = 'connection-card';
-      card.append(paragraph(row.label), paragraph(`Added ${localTime(row.created)} · Last used ${localTime(row.last_used)}`));
-      if (items.length > 1) card.append(button('Remove', async () => {
+      card.append(paragraph(row.label), paragraph(`추가: ${localTime(row.created)} · 마지막 사용: ${localTime(row.last_used)}`));
+      if (items.length > 1) card.append(button('삭제', async () => {
         const {proof} = await authenticatePasskey('manage');
         await api('passkeys/remove', {proof, identity: row.id});
         locked();
-        feedback('Passkey removed. Sign in again with a remaining passkey.');
+        feedback('패스키를 삭제했습니다. 남아 있는 패스키로 다시 로그인하세요.');
       }));
       return card;
     }));
@@ -498,8 +498,8 @@ $('owner-form').addEventListener('submit', async event => {
     $('owner-password').hidden = $('password-label').hidden = false;
     $('owner-password').required = true;
     $('owner-password').autocomplete = 'current-password';
-    $('owner-submit').textContent = 'Sign in';
-    $('pair-help').textContent = 'Use your admin password or run ./bridge admin --recovery to pair a browser.';
+    $('owner-submit').textContent = '로그인';
+    $('pair-help').textContent = '관리자 비밀번호를 사용하거나 ./bridge admin --recovery로 브라우저를 연결하세요.';
     unlocked(session);
   } catch (error) { feedback(error.message); }
 });
@@ -513,8 +513,8 @@ function renderSetup() {
   const collecting = latestState?.collector.state === 'collecting_partial';
   $('setup-store-guide').hidden = !ready || !!s.kakao_installed || !s.aurora_installed;
   const steps = [enrolled, approved, collecting];
-  const labels = ['Prepare', 'Sign in', 'Collect'];
-  $('guide-summary').textContent = collecting ? 'Collection is running' : 'Continue setup';
+  const labels = ['준비', '로그인', '수집'];
+  $('guide-summary').textContent = collecting ? '수집 실행 중' : '설정 계속';
   if (!overviewInitialized && s) {
     overviewInitialized = true;
     $('setup-guide').open = !collecting;
@@ -525,16 +525,16 @@ function renderSetup() {
     const item = document.createElement('li'); item.textContent = label;
     item.dataset.complete = String(steps[i]); return item;
   }));
-  let next = ['Server readiness is being checked.', '', ''];
-  if (s && !ready) next = ['Your private device is starting. This page will continue automatically.', '', ''];
+  let next = ['서버 준비 상태를 확인하고 있습니다.', '', ''];
+  if (s && !ready) next = ['개인 기기를 시작하고 있습니다. 준비되면 자동으로 계속됩니다.', '', ''];
   else if (ready && !s.kakao_installed) next = s.aurora_installed
-    ? ['Choose anonymous sign-in in the store and install KakaoTalk by Kakao Corp. Setup continues automatically.', 'open-store', 'Open store']
-    : ['Preparing your device and the app store…', 'prepare', 'Retry preparation'];
-  else if (ready && !enrolled) next = ['Finishing preparation for KakaoTalk sign-in…', 'configure', 'Retry preparation'];
-  else if (enrolled && !approved) next = ['Open KakaoTalk. Check “Use with other devices” before login, then confirm both phone and tablet sessions below.', 'open-kakao', 'Open KakaoTalk'];
-  else if (approved && !collecting) next = ['Both sessions were confirmed. Waiting for the collector; refresh status if needed.', 'session-check', 'Check status'];
-  else if (collecting) next = ['KakaoTalk collection is ready. AI connections are optional; add one whenever you need it.', '', ''];
-  if (latestState?.job.state === 'failed') next[0] = latestState.job.message || 'Preparation stopped. Check the result below and retry.';
+    ? ['스토어에서 익명 로그인을 선택하고 Kakao Corp.의 카카오톡을 설치하세요. 설정은 자동으로 계속됩니다.', 'open-store', '스토어 열기']
+    : ['기기와 앱 스토어 준비 중…', 'prepare', '준비 다시 시도'];
+  else if (ready && !enrolled) next = ['카카오톡 로그인 준비 마무리 중…', 'configure', '준비 다시 시도'];
+  else if (enrolled && !approved) next = ['카카오톡을 여세요. 로그인 전에 ‘다른 기기와 함께 사용’을 확인하고 아래에서 휴대폰과 태블릿의 로그인을 확인하세요.', 'open-kakao', '카카오톡 열기'];
+  else if (approved && !collecting) next = ['두 기기의 로그인이 확인되었습니다. 수집기를 기다리는 중입니다. 필요하면 상태를 새로고침하세요.', 'session-check', '상태 확인'];
+  else if (collecting) next = ['카카오톡 수집이 준비되었습니다. AI 연결은 선택 사항이며 필요할 때 추가할 수 있습니다.', '', ''];
+  if (latestState?.job.state === 'failed') next[0] = latestState.job.message || '준비가 중단되었습니다. 아래 결과를 확인하고 다시 시도하세요.';
   $('setup-next').textContent = next[0];
   $('setup-next-button').hidden = !next[1];
   $('setup-next-button').textContent = next[2];
@@ -561,21 +561,21 @@ async function refreshConnections() {
     connectionSetup.setConnections(data);
     const activity = Math.max(0, ...data.grants.map(row => row.last_tool_at || 0), data.tunnel?.approved ? data.tunnel.last_tool_at || 0 : 0);
     const allowed = data.grants.length + (data.tunnel?.approved ? 1 : 0);
-    $('overview-ai').textContent = activity ? 'Successful tool call recorded' : allowed ? 'Waiting for first AI request' : 'No AI access allowed';
-    $('overview-ai-detail').textContent = activity ? `Last success ${localTime(activity)} · Current reachability is checked separately.` : allowed ? 'Access is allowed. Ask your AI to check collector status.' : 'Optional. Local clients can also use the stdio configuration.';
+    $('overview-ai').textContent = activity ? '도구 호출 성공 기록 있음' : allowed ? '첫 AI 요청 대기 중' : '허용된 AI 연결 없음';
+    $('overview-ai-detail').textContent = activity ? `마지막 성공: ${localTime(activity)} · 현재 연결 가능 여부는 별도 확인이 필요합니다.` : allowed ? '접근이 허용되었습니다. AI에 수집 상태 확인을 요청하세요.' : '선택 사항입니다. 로컬 클라이언트는 stdio 설정도 사용할 수 있습니다.';
     $('mcp-address').textContent = data.resource;
     $('connection-help').textContent = data.approval_mode === 'passkey'
-      ? 'Add this MCP address in ChatGPT and choose OAuth. Confirm with your passkey, review access, then allow the connection. You can disconnect it here.'
+      ? 'ChatGPT에 이 MCP 주소를 추가하고 OAuth를 선택하세요. 패스키로 인증하고 접근 권한을 확인한 뒤 연결을 허용하세요. 여기에서 연결을 해제할 수 있습니다.'
       : data.approval_mode === 'key'
-        ? 'This server uses legacy connection-key approval. Enter its connection key in the connecting browser.'
-        : 'Add this MCP address in ChatGPT and choose OAuth. Approve only the request whose code matches that browser.';
+        ? '이 서버는 기존 연결 키 승인 방식을 사용합니다. 연결 중인 브라우저에 연결 키를 입력하세요.'
+        : 'ChatGPT에 이 MCP 주소를 추가하고 OAuth를 선택하세요. 브라우저의 코드와 일치하는 요청만 승인하세요.';
     if (data.resource.includes('.invalid/')) {
-      $('mcp-address').textContent = 'Public OAuth connection is not configured.';
+      $('mcp-address').textContent = '공개 OAuth 연결이 설정되지 않았습니다.';
       $('connection-help').textContent = data.tunnel?.configured
-        ? 'Approve your personal OpenAI tunnel below. You can also add other connections later.'
-        : 'Collection works without an AI connection. Choose “Set up an AI connection” to add one.';
+        ? '아래에서 개인 OpenAI 터널을 승인하세요. 나중에 다른 연결도 추가할 수 있습니다.'
+        : 'AI 연결 없이도 수집할 수 있습니다. ‘연결 추가 또는 변경’에서 AI를 연결하세요.';
     }
-    $('pending-count').textContent = data.pending.length ? `${data.pending.length} approval pending` : `${allowed} allowed`;
+    $('pending-count').textContent = data.pending.length ? `승인 대기 ${data.pending.length}개` : `허용 ${allowed}개`;
     renderSetup();
     const signature = JSON.stringify(data);
     if (signature === connectionSignature) return;
@@ -585,49 +585,49 @@ async function refreshConnections() {
     tunnelPanel.hidden = !tunnel?.configured;
     if (tunnel?.configured) {
       const card = document.createElement('div'); card.className = 'connection-card';
-      card.append(paragraph('OpenAI personal tunnel'), paragraph(tunnel.tunnel_id));
-      card.append(paragraph(tunnel.last_tool_at && tunnel.approved ? `Last successful tool call: ${localTime(tunnel.last_tool_at)}` : 'No successful tool call recorded for this approval.'));
+      card.append(paragraph('OpenAI 개인 터널'), paragraph(tunnel.tunnel_id));
+      card.append(paragraph(tunnel.last_tool_at && tunnel.approved ? `마지막 도구 호출 성공: ${localTime(tunnel.last_tool_at)}` : '이 승인 이후 성공한 도구 호출 기록이 없습니다.'));
       card.append(paragraph(tunnel.approved
-        ? `${tunnel.expires === null ? 'Access allowed with no automatic expiration.' : `Access allowed until ${localTime(tunnel.expires)}.`} In ChatGPT, choose Tunnel and select this ID. No OAuth login is needed.`
-        : 'Allow this personal tunnel to read collected messages and manage event subscriptions you request. Use a tunnel accessible only to you. Approval has no automatic expiration; you can disconnect it here.'));
+        ? `${tunnel.expires === null ? '자동 만료 없이 접근이 허용됩니다.' : `${localTime(tunnel.expires)}까지 접근이 허용됩니다.`} ChatGPT에서 터널(Tunnel)을 선택하고 이 ID를 지정하세요. OAuth 로그인은 필요하지 않습니다.`
+        : '이 개인 터널이 수집된 메시지를 읽고 요청한 이벤트 구독을 관리하도록 허용합니다. 본인만 접근할 수 있는 터널을 사용하세요. 승인은 자동 만료되지 않으며 여기에서 연결을 해제할 수 있습니다.'));
       if (tunnel.approved && tunnel.expires !== null) {
-        card.append(button('Remove approval expiration', async () => {
+        card.append(button('승인 만료 기한 없애기', async () => {
           await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: true});
           connectionSignature = ''; await refreshConnections();
         }));
       }
-      card.append(button(tunnel.approved ? 'Disconnect tunnel' : 'Allow personal tunnel', async () => {
+      card.append(button(tunnel.approved ? '터널 연결 해제' : '개인 터널 허용', async () => {
         await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: !tunnel.approved});
         connectionSignature = ''; await refreshConnections();
       }));
-      card.append(button('Connection instructions', () => connectionSetup.open('openai-tunnel')));
+      card.append(button('연결 안내', () => connectionSetup.open('openai-tunnel')));
       tunnelPanel.replaceChildren(card);
     }
     const nodes = data.pending.map(row => {
       const card = document.createElement('div'); card.className = 'connection-card';
-      card.append(paragraph(`${row.client_name} · ${row.client_id}`), paragraph(`Callback: ${row.redirect_origin}`), paragraph(`Permissions: ${row.scope}`));
-      const label = document.createElement('label'); label.textContent = 'Enter the 8-character code shown in the connecting browser';
+      card.append(paragraph(`${row.client_name} · ${row.client_id}`), paragraph(`돌아갈 주소: ${row.redirect_origin}`), paragraph(`권한: ${row.scope}`));
+      const label = document.createElement('label'); label.textContent = '연결 중인 브라우저에 표시된 8자리 코드 입력';
       const input = document.createElement('input'); input.maxLength = 8; input.autocomplete = 'off'; input.spellcheck = false;
       label.append(input); card.append(label);
-      card.append(button('Approve connection', async () => {
+      card.append(button('연결 승인', async () => {
         const code = input.value.trim().toUpperCase();
-        if (!/^[A-F0-9]{8}$/.test(code)) throw new Error('Enter the code from the connecting browser.');
+        if (!/^[A-F0-9]{8}$/.test(code)) throw new Error('연결 중인 브라우저의 코드를 입력하세요.');
         await api(`connections/${row.id}/decide`, {code, approve: true}); await refreshConnections();
-      }), button('Decline', async () => {
+      }), button('거절', async () => {
         await api(`connections/${row.id}/decide`, {code: row.code, approve: false}); await refreshConnections();
       }));
-      card.append(paragraph('Client names are self-reported. Check the callback and code before approving.'));
+      card.append(paragraph('클라이언트 이름은 해당 클라이언트가 제공한 값입니다. 승인 전에 돌아갈 주소와 코드를 확인하세요.'));
       return card;
     });
     for (const row of data.grants) {
       const card = document.createElement('div'); card.className = 'connection-card';
-      card.append(paragraph(row.last_tool_at ? `Last successful tool call: ${localTime(row.last_tool_at)}` : 'Access allowed · waiting for the first successful tool call.'));
-      card.append(paragraph(row.client_id), paragraph(`${row.scope} · Expires ${localTime(row.expires)}`), button('Disconnect', async () => {
+      card.append(paragraph(row.last_tool_at ? `마지막 도구 호출 성공: ${localTime(row.last_tool_at)}` : '접근 허용됨 · 첫 도구 호출 성공 대기 중'));
+      card.append(paragraph(row.client_id), paragraph(`${row.scope} · 만료: ${localTime(row.expires)}`), button('연결 해제', async () => {
         await api(`connections/${row.id}/revoke`, {}); await refreshConnections();
       })); nodes.push(card);
     }
-    $('connections-list').replaceChildren(...(nodes.length ? nodes : [paragraph('No pending or approved OAuth clients.')]));
-  } catch { if (active) { $('mcp-address').textContent = 'Connection status unavailable. Try Refresh connections.'; $('overview-ai').textContent = 'Could not retrieve AI status'; $('overview-ai-detail').textContent = 'Open AI connections and refresh to retry.'; } }
+    $('connections-list').replaceChildren(...(nodes.length ? nodes : [paragraph('대기 중이거나 승인된 OAuth 클라이언트가 없습니다.')]));
+  } catch { if (active) { $('mcp-address').textContent = '연결 상태를 가져올 수 없습니다. ‘연결 새로고침’을 눌러 보세요.'; $('overview-ai').textContent = 'AI 상태를 가져오지 못했습니다'; $('overview-ai-detail').textContent = '‘AI 연결’을 열고 새로고침하세요.'; } }
   finally { connectionsLoading = false; }
 }
 $('refresh-connections').addEventListener('click', refreshConnections);
@@ -636,9 +636,9 @@ let eventCursor = null, eventQuery = '', eventsLoading = false;
 function eventRoom(row) {
   const card = document.createElement('div'); card.className = 'event-room';
   const info = document.createElement('div'); info.className = 'event-room-info';
-  const name = row.name || 'Unnamed conversation';
+  const name = row.name || '이름 없는 대화';
   const title = paragraph(name);
-  const ref = document.createElement('details'); const refLabel = document.createElement('summary'); refLabel.textContent = 'Conversation identifier'; const refCode = document.createElement('code'); refCode.textContent = row.ref; ref.append(refLabel, refCode);
+  const ref = document.createElement('details'); const refLabel = document.createElement('summary'); refLabel.textContent = '대화 식별자'; const refCode = document.createElement('code'); refCode.textContent = row.ref; ref.append(refLabel, refCode);
   const status = paragraph(''); status.className = 'hint';
   const toggle = button('', async () => {
     const requestedGeneration = generation;
@@ -646,17 +646,17 @@ function eventRoom(row) {
     await api('events/conversations', {conversation_ref: row.ref, enabled});
     if (!active || requestedGeneration !== generation) return;
     row.enabled = enabled; render();
-    feedback(enabled ? `Events on for ${name}. A client subscription is also required.` : `Events off for ${name}. Queued events cancelled.`);
+    feedback(enabled ? `${name} 대화의 이벤트를 켰습니다. 클라이언트에서도 구독해야 합니다.` : `${name} 대화의 이벤트를 껐습니다. 대기 중인 이벤트가 취소되었습니다.`);
   });
   toggle.className = 'event-switch';
   toggle.setAttribute('role', 'switch');
-  toggle.setAttribute('aria-label', `Events for ${name} (${row.ref})`);
+  toggle.setAttribute('aria-label', `${name} 대화 이벤트 (${row.ref})`);
   function render() {
-    toggle.textContent = row.enabled ? 'Allowed' : 'Off';
+    toggle.textContent = row.enabled ? '허용' : '꺼짐';
     toggle.setAttribute('aria-checked', String(row.enabled));
-    status.textContent = !row.enabled ? 'Events off' : row.subscriptions
-      ? `${row.subscriptions} registered subscription${row.subscriptions === 1 ? '' : 's'} · receipt does not confirm an AI notification`
-      : 'Allowed · no AI subscription yet. Ask your connected AI to subscribe to new messages from this conversation.';
+    status.textContent = !row.enabled ? '이벤트 꺼짐' : row.subscriptions
+      ? `등록된 구독 ${row.subscriptions}개 · 수신 확인이 AI 알림을 보장하지는 않습니다`
+      : '허용됨 · 아직 AI 구독이 없습니다. 연결된 AI에 이 대화의 새 메시지 구독을 요청하세요.';
   }
   render(); info.append(title, ref, status); card.append(info, toggle); return card;
 }
@@ -669,7 +669,7 @@ async function refreshEvents(reset = true) {
     $('event-conversations').replaceChildren(); $('more-events').hidden = true;
   }
   ['event-search-button', 'refresh-events', 'more-events'].forEach(id => { $(id).disabled = true; });
-  $('event-list-status').textContent = 'Loading conversations…';
+  $('event-list-status').textContent = '대화 불러오는 중…';
   try {
     const query = new URLSearchParams();
     if (eventQuery) query.set('q', eventQuery);
@@ -680,8 +680,8 @@ async function refreshEvents(reset = true) {
     eventCursor = data.next_cursor;
     $('more-events').hidden = !(data.has_more && eventCursor);
     $('event-list-status').textContent = $('event-conversations').childElementCount
-      ? 'Only conversations retained by this collector are listed. Settings apply to all connected AI clients.'
-      : eventQuery ? 'No conversations match this name.' : 'No conversations collected yet. Send a message, then refresh.';
+      ? '수집기에 보관된 대화만 표시됩니다. 설정은 연결된 모든 AI 클라이언트에 적용됩니다.'
+      : eventQuery ? '이 이름과 일치하는 대화가 없습니다.' : '아직 수집된 대화가 없습니다. 메시지를 보낸 뒤 새로고침하세요.';
   } catch (error) {
     if (active && requestedGeneration === generation) $('event-list-status').textContent = error.message;
   } finally {
@@ -700,7 +700,7 @@ async function refreshBrowsers() {
     const data = await api('browsers');
     $('browsers-list').replaceChildren(...data.items.map(row => {
       const card = document.createElement('div'); card.className = 'connection-card';
-      card.append(paragraph(row.current ? 'This browser' : row.label), paragraph(`Expires ${localTime(row.expires)}`), button('Sign out', async () => {
+      card.append(paragraph(row.current ? '현재 브라우저' : row.label), paragraph(`만료: ${localTime(row.expires)}`), button('로그아웃', async () => {
         await api(`browsers/${row.id}/revoke`, {});
         if (row.current) locked(); else await refreshBrowsers();
       })); return card;
@@ -711,6 +711,6 @@ $('test-collection').addEventListener('click', async () => {
   try {
     await updateState();
     collectionBaseline = Math.max((latestState?.checked_at || Date.now() / 1000) * 1000, lastObservation ? Date.parse(lastObservation) : 0);
-    $('test-result').textContent = 'Now send yourself a message from your phone. Waiting for a new collected row…';
+    $('test-result').textContent = '휴대폰에서 나에게 메시지를 보내세요. 새 메시지 수집 대기 중…';
   } catch (error) { feedback(error.message); }
 });

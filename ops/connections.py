@@ -14,7 +14,7 @@ METHODS = ("none", "stdio", "https", "tailscale", "openai-tunnel")
 
 def add_arguments(parser):
     parser.add_argument("--method", choices=METHODS)
-    parser.add_argument("--url", help="Public HTTPS MCP origin; keeps your admin address")
+    parser.add_argument("--url", help="공개 HTTPS MCP 주소 (관리 화면 주소 유지)")
     parser.add_argument("--tunnel-id")
     parser.add_argument("--api-key-file")
     parser.add_argument("--no-browser", action="store_true")
@@ -31,14 +31,14 @@ def setup(args):
     method = args.method
     if method is None:
         print(
-            "AI connections are optional and can coexist. Existing connections are kept.\n"
-            "1. Later (keep current setup)\n"
-            "2. Local AI client — stdio\n"
-            "3. Public HTTPS — your reverse proxy + OAuth\n"
-            "4. Public HTTPS — Tailscale Funnel + OAuth\n"
-            "5. ChatGPT — personal OpenAI tunnel"
+            "AI 연결은 선택 사항이며 여러 방식을 함께 사용할 수 있습니다. 기존 연결은 유지됩니다.\n"
+            "1. 나중에 결정 (현재 설정 유지)\n"
+            "2. 로컬 AI 클라이언트 — stdio\n"
+            "3. 공개 HTTPS — 직접 구성한 리버스 프록시 + OAuth\n"
+            "4. 공개 HTTPS — Tailscale Funnel + OAuth\n"
+            "5. ChatGPT — 개인 OpenAI 터널"
         )
-        choice = ask("Choose [1]: ") or "1"
+        choice = ask("선택 [1]: ") or "1"
         if choice not in {"1", "2", "3", "4", "5"}:
             raise ValueError("Choose a number from 1 to 5")
         method = METHODS[int(choice) - 1]
@@ -47,10 +47,10 @@ def setup(args):
     if (args.tunnel_id or args.api_key_file) and method != "openai-tunnel":
         raise ValueError("Tunnel credentials require --method openai-tunnel")
     if method == "none":
-        print("No connection changes. Collection and admin work without an AI connection.")
+        print("연결을 변경하지 않았습니다. AI 연결 없이도 수집과 관리 화면을 사용할 수 있습니다.")
         return
     if method == "stdio":
-        print("Add this server to your local AI client's MCP configuration:")
+        print("로컬 AI 클라이언트의 MCP 설정에 아래 서버를 추가하세요:")
         print(
             json.dumps(
                 {
@@ -65,25 +65,25 @@ def setup(args):
             )
         )
         print(
-            "The client must have access to this installation's Docker Engine or managed Lima VM.\n"
-            "For a remote server, invoke the same bridge mcp command through SSH (without a TTY)."
+            "클라이언트가 설치된 Docker Engine 또는 전용 Lima VM에 접근할 수 있어야 합니다.\n"
+            "원격 서버에서는 SSH로 같은 bridge mcp 명령을 실행하세요(TTY 없이 실행)."
         )
         return
     with tempfile.TemporaryDirectory(prefix="bridge-connection-") as folder:
         if method == "https":
-            args.url = args.url or ask("Public HTTPS origin (https://your-host): ")
+            args.url = args.url or ask("공개 HTTPS 주소 (https://your-host): ")
             cli.validate_public_url(args.url)
         if method == "openai-tunnel":
             print(
-                "Use the tunnel ID and runtime API key from your OpenAI workspace.\n"
-                "Provider setup: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels"
+                "OpenAI 워크스페이스의 터널 ID와 실행용 API 키를 사용하세요.\n"
+                "제공업체 설정 안내: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels"
             )
-            args.tunnel_id = args.tunnel_id or ask("Tunnel ID: ")
+            args.tunnel_id = args.tunnel_id or ask("터널 ID: ")
             if not args.api_key_file:
                 if not sys.stdin.isatty():
                     raise ValueError("Supply --api-key-file when running non-interactively")
                 path = Path(folder) / "runtime-key"
-                cli.atomic(path, getpass.getpass("Runtime API key (hidden): ").strip() + "\n")
+                cli.atomic(path, getpass.getpass("실행용 API 키 (입력 내용 숨김): ").strip() + "\n")
                 args.api_key_file = str(path)
             tunnel.credentials(args.tunnel_id, args.api_key_file)
         options = argparse.Namespace(
@@ -113,6 +113,6 @@ def setup(args):
             onboarding.open_setup(options, runtime)
             if method in {"https", "tailscale"}:
                 print(
-                    "Add the public /mcp address in your AI client and select OAuth.\n"
-                    "Follow the consent screen; if it shows a code, match it in admin → Connections."
+                    "AI 클라이언트에 공개 /mcp 주소를 추가하고 OAuth를 선택하세요.\n"
+                    "동의 화면을 따라 진행하세요. 코드가 표시되면 관리 화면 → AI 연결에서 일치하는 요청을 승인하세요."
                 )

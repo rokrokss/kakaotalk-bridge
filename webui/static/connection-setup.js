@@ -16,13 +16,13 @@ if (typeof module !== 'undefined') module.exports = {connectionGuidance, connect
 function BridgeConnectionSetup({api, isActive, onChange, feedback}) {
   const el = id => document.getElementById(id);
   let state = null, timer = null, loading = false, sending = false, epoch = 0, initialized = false, connections = null;
-  const labels = {none: 'Keep current setup', stdio: 'Use this configuration', https: 'Configure HTTPS and OAuth',
-    tailscale: 'Set up Tailscale and OAuth', 'openai-tunnel': 'Set up and allow tunnel'};
-  const descriptions = {none: 'You can return to this page at any time.',
-    stdio: 'For desktop AI clients and clients that can start an SSH process.',
-    https: 'For AI clients that connect to an existing public HTTPS address.',
-    tailscale: 'For a public MCP address without managing your own reverse proxy.',
-    'openai-tunnel': 'An outbound connection to ChatGPT. No public MCP address or Tailscale is needed.'};
+  const labels = {none: '현재 설정 유지', stdio: '이 설정 사용', https: 'HTTPS 및 OAuth 설정',
+    tailscale: 'Tailscale 및 OAuth 설정', 'openai-tunnel': '터널 설정 및 허용'};
+  const descriptions = {none: '언제든 이 화면으로 돌아올 수 있습니다.',
+    stdio: '데스크톱 AI 클라이언트 또는 SSH 프로세스를 실행할 수 있는 클라이언트에서 사용합니다.',
+    https: '기존 공개 HTTPS 주소에 연결하는 AI 클라이언트에서 사용합니다.',
+    tailscale: '리버스 프록시를 직접 관리하지 않고 공개 MCP 주소를 만들 수 있습니다.',
+    'openai-tunnel': '서버에서 ChatGPT로 연결합니다. 공개 MCP 주소나 Tailscale이 필요하지 않습니다.'};
 
   function renderMethod() {
     const method = el('ai-method').value;
@@ -41,11 +41,11 @@ function BridgeConnectionSetup({api, isActive, onChange, feedback}) {
     const reuse = state?.runtime_key_saved && el('ai-tunnel-id').value.trim() === state.tunnel_id;
     el('ai-api-key').required = method === 'openai-tunnel' && !reuse;
     el('ai-key-help').textContent = reuse
-      ? 'A key is saved for this tunnel. Leave blank to reuse it, or paste a replacement.'
-      : 'Saved on your server. The key is never returned to this page.';
+      ? '이 터널에 저장된 키가 있습니다. 그대로 사용하려면 비워 두고, 바꾸려면 새 키를 붙여 넣으세요.'
+      : '서버에 저장됩니다. 저장한 키는 이 화면에 다시 표시되지 않습니다.';
     el('ai-tailscale-location').textContent = state?.managed_vm
-      ? 'On this Mac, web setup runs Tailscale inside Bridge’s Linux VM. It uses that VM’s address.'
-      : 'Tailscale will run on the Linux server where Bridge is installed.';
+      ? '이 Mac에서는 Bridge의 Linux VM 안에서 Tailscale을 실행하며 해당 VM의 주소를 사용합니다.'
+      : 'Bridge가 설치된 Linux 서버에서 Tailscale을 실행합니다.';
     el('ai-setup-fields').disabled = !state?.available || state?.job?.state === 'running' || sending;
     el('ai-setup-submit').hidden = !el('ai-edit').open && !!connectionGuidance(state, method);
     renderStdio();
@@ -56,7 +56,7 @@ function BridgeConnectionSetup({api, isActive, onChange, feedback}) {
     let config = state.stdio;
     const target = el('ai-ssh-target').value.trim();
     const valid = !target || /^(?:[a-zA-Z0-9_][a-zA-Z0-9_.-]*@)?[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(target);
-    el('ai-ssh-target').setCustomValidity(valid ? '' : 'Use an SSH host alias or user@host, without options or spaces.');
+    el('ai-ssh-target').setCustomValidity(valid ? '' : '옵션이나 공백 없이 SSH 호스트 별칭 또는 user@host를 입력하세요.');
     el('ai-copy-stdio').disabled = !valid;
     if (target && valid) {
       // SSH joins remote arguments into a shell command, so quote every server path.
@@ -65,23 +65,23 @@ function BridgeConnectionSetup({api, isActive, onChange, feedback}) {
       const remote = [client.command, ...client.args].map(quote).join(' ');
       config = {mcpServers: {kakaotalk: {command: 'ssh', args: ['-T', '-o', 'BatchMode=yes', target, remote]}}};
     }
-    el('ai-stdio-config').textContent = valid ? JSON.stringify(config, null, 2) : 'Enter a valid SSH destination.';
+    el('ai-stdio-config').textContent = valid ? JSON.stringify(config, null, 2) : '올바른 SSH 접속 대상을 입력하세요.';
   }
 
   function renderJob() {
     const job = state?.job || {};
     el('ai-job').hidden = !job.state || job.state === 'idle' || (job.state === 'ready' && job.method !== 'check' && job.method !== el('ai-method').value);
     el('ai-job').dataset.state = job.state || 'idle';
-    el('ai-job-title').textContent = {running: 'Setting up your connection…', ready: 'Server setup complete',
-      failed: 'Setup needs attention', interrupted: 'Setup was interrupted', action_required: 'Your approval is needed'}[job.state] || '';
-    if (job.method === 'check' && job.state === 'ready') el('ai-job-title').textContent = 'Server check complete';
-    if (job.method === 'check' && job.state === 'running') el('ai-job-title').textContent = 'Checking server services…';
-    if (['none', 'stdio'].includes(job.method) && job.state === 'ready') el('ai-job-title').textContent = 'Choice saved';
-    el('ai-job-message').textContent = job.message || '';
+    el('ai-job-title').textContent = {running: '연결 설정 중…', ready: '서버 설정 완료',
+      failed: '설정 확인 필요', interrupted: '설정 중단됨', action_required: '승인이 필요합니다'}[job.state] || '';
+    if (job.method === 'check' && job.state === 'ready') el('ai-job-title').textContent = '서버 확인 완료';
+    if (job.method === 'check' && job.state === 'running') el('ai-job-title').textContent = '서버 서비스 확인 중…';
+    if (['none', 'stdio'].includes(job.method) && job.state === 'ready') el('ai-job-title').textContent = '선택 저장됨';
+    el('ai-job-message').textContent = /[가-힣]/.test(job.message || '') ? job.message : ({running: '선택한 연결을 준비하고 있습니다.', ready: '설정을 완료했습니다. 아래 연결 안내를 확인하세요.', failed: '설정을 완료하지 못했습니다. 입력값을 확인하고 다시 시도하세요.', interrupted: '이전 설정이 중단되었습니다. 내용을 확인한 뒤 다시 시도하세요.', action_required: '아래 승인 페이지에서 연결을 허용하세요.'}[job.state] || '');
     const elapsed = job.started_at ? Math.max(0, Math.floor(Date.now() / 1000 - job.started_at)) : 0;
-    el('ai-job-time').textContent = job.state === 'running' ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s elapsed · You can leave this page and return.` : '';
+    el('ai-job-time').textContent = job.state === 'running' ? `${Math.floor(elapsed / 60)}분 ${elapsed % 60}초 경과 · 화면을 나갔다가 돌아와도 됩니다.` : '';
     el('ai-retry').hidden = !['failed', 'interrupted'].includes(job.state);
-    el('ai-retry').textContent = job.method === 'check' ? 'Check again' : 'Review and retry';
+    el('ai-retry').textContent = job.method === 'check' ? '다시 확인' : '확인 후 다시 시도';
     let actionURL = '';
     try {
       const url = new URL(job.action_url);
@@ -98,11 +98,11 @@ function BridgeConnectionSetup({api, isActive, onChange, feedback}) {
     if (guide) {
       el('ai-finish-help').textContent = guide.kind === 'tunnel'
         && !connections?.tunnel?.approved
-        ? 'This tunnel is configured but access is not allowed. Review and allow it in AI connections above before adding it to ChatGPT.'
+        ? '터널은 설정되었지만 접근이 허용되지 않았습니다. ChatGPT에 추가하기 전에 위 ‘AI 연결’에서 확인하고 허용하세요.'
         : guide.kind === 'tunnel'
-        ? 'Bridge has allowed this personal tunnel. Complete these steps in ChatGPT to use it.'
-        : 'Keep this admin page open while you add the connection in your AI client.';
-      el('ai-client-label').textContent = guide.kind === 'tunnel' ? 'Tunnel ID' : 'MCP server URL';
+        ? '이 개인 터널의 접근이 허용되었습니다. ChatGPT에서 아래 단계에 따라 연결하세요.'
+        : 'AI 클라이언트에 연결을 추가하는 동안 이 관리 화면을 열어 두세요.';
+      el('ai-client-label').textContent = guide.kind === 'tunnel' ? '터널 ID' : 'MCP 서버 URL';
       el('ai-client-value').textContent = guide.value;
     }
   }
@@ -117,7 +117,7 @@ function BridgeConnectionSetup({api, isActive, onChange, feedback}) {
       if (!isActive() || currentEpoch !== epoch) return;
       const previous = state?.job;
       state = next;
-      el('ai-agent-status').textContent = state.available ? 'Choose where you will use your messages. Existing connections stay available.' : state.message;
+      el('ai-agent-status').textContent = state.available ? '메시지를 사용할 곳을 선택하세요. 기존 연결은 유지됩니다.' : state.message;
       if (state.available && !initialized) {
         initialized = true;
         el('ai-tunnel-id').value = state.tunnel_id || '';
@@ -136,7 +136,7 @@ function BridgeConnectionSetup({api, isActive, onChange, feedback}) {
       renderMethod(); renderJob();
       if (previous?.state === 'running' && state.job?.state !== 'running') void onChange();
     } catch {
-      if (isActive() && currentEpoch === epoch) el('ai-agent-status').textContent = 'Reconnecting to setup status… Your server keeps running the job. Sign in again if requested.';
+      if (isActive() && currentEpoch === epoch) el('ai-agent-status').textContent = '설정 상태에 다시 연결하는 중… 서버에서는 작업이 계속됩니다. 요청이 표시되면 다시 로그인하세요.';
     } finally {
       loading = false;
       if (isActive() && currentEpoch === epoch) timer = setTimeout(refresh, state?.job?.state === 'running' ? 2000 : 10000);
@@ -153,7 +153,7 @@ function BridgeConnectionSetup({api, isActive, onChange, feedback}) {
         if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !['', '/', '/mcp', '/mcp/'].includes(url.pathname)) throw new Error();
         data.url = url.origin; el('ai-public-url').value = url.origin;
       } catch {
-        el('ai-form-error').textContent = 'Enter your HTTPS address, such as https://bridge.example.com or https://bridge.example.com/mcp.';
+        el('ai-form-error').textContent = 'HTTPS 주소를 입력하세요. 예: https://bridge.example.com 또는 https://bridge.example.com/mcp';
         el('ai-form-error').hidden = false; el('ai-edit').open = true; el('ai-public-url').focus(); return;
       }
     }
@@ -182,8 +182,8 @@ function BridgeConnectionSetup({api, isActive, onChange, feedback}) {
   }
 
   async function copy(id) {
-    try { await navigator.clipboard.writeText(el(id).textContent); feedback('Copied.'); }
-    catch { feedback('Copy is unavailable in this browser. Select and copy the displayed text.'); }
+    try { await navigator.clipboard.writeText(el(id).textContent); feedback('복사했습니다.'); }
+    catch { feedback('이 브라우저에서는 자동 복사를 사용할 수 없습니다. 표시된 텍스트를 선택해 복사하세요.'); }
   }
   el('ai-setup-form').noValidate = true;
   el('ai-setup-form').addEventListener('submit', event => { event.preventDefault(); void submit(); });

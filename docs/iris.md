@@ -1,18 +1,22 @@
-# Iris collection implementation
+# Iris 수집 구현
 
-[README](../README.md) · [Operations and recovery](operations.md)
+[README](../README.md) · [운영과 복구](operations.md)
 
-## Components and assumptions
+<a id="components-and-assumptions"></a>
 
-redroid on the Linux server acts as a secondary tablet, without a separate physical tablet. The existing phone remains the primary device. Iris runs inside redroid as a root `app_process`, while the Python `iris-collector` runs in a separate Docker container. This setup does not use Termux or desktop KakaoTalk.
+## 구성과 전제
 
-redroid's tablet size and model properties do not guarantee secondary login. On the actual login screen of the official KakaoTalk APK, verify that “Use with other devices” (“다른 기기와 함께 사용” in the Korean UI) is selected. After signing in, the operator must confirm that both the phone and redroid sessions remain active. The code does not prevent phone sign-out or monitor the phone session. Secondary login and collection of new messages have been verified in Lima on Apple Silicon; the user manually confirmed phone session continuity.
+Linux 서버의 redroid를 보조 태블릿으로 사용하므로 별도 실물 태블릿은 필요하지 않습니다. 기존 휴대폰이 주 기기입니다. Iris는 redroid 안에서 root `app_process`로, Python `iris-collector`는 별도 Docker 컨테이너로 실행됩니다. Termux나 PC 카카오톡은 사용하지 않습니다.
 
-## Running the collector
+태블릿 크기와 모델 속성만으로 보조 로그인이 보장되지는 않습니다. 공식 카카오톡 APK의 실제 한국어 로그인 화면에서 **다른 기기와 함께 사용**이 선택됐는지 확인하세요. 로그인 후 운영자가 휴대폰과 redroid의 로그인이 모두 유지되는지 확인해야 합니다. 코드는 휴대폰 로그아웃을 막거나 휴대폰 세션을 감시하지 않습니다. Apple Silicon의 Lima에서 보조 로그인과 새 메시지 수집을 검증했고, 휴대폰 로그인 유지는 사용자가 직접 확인했습니다.
 
-The [web admin console](web-ui.md) is the primary interface for screen control, installation, and login confirmation. The CLI commands below are an alternative to the corresponding web actions; do not use them concurrently.
+<a id="running-the-collector"></a>
 
-After preparing the kernel, secrets, and official KakaoTalk APK as described in [Linux installation](install.md):
+## 수집기 실행
+
+화면 제어, 설치, 로그인 확인은 [웹 관리 화면](web-ui.md)을 기본으로 사용하세요. 아래 CLI는 같은 웹 작업의 대안이므로 동시에 사용하지 마세요.
+
+[Linux 설치](install.md)에 따라 커널·키·공식 카카오톡 APK를 준비한 뒤 실행합니다.
 
 ```bash
 docker compose build api device-agent gateway
@@ -20,13 +24,13 @@ docker compose up -d
 docker compose --profile setup run --rm bootstrap
 ```
 
-Open the redroid screen in admin and select the secondary-device option on the Korean login screen. A separate scrcpy client requires an authorized ADB identity; forwarding the port alone does not grant access. Before pressing the login button:
+관리 화면에서 redroid를 열고 한국어 로그인 화면의 보조 기기 옵션을 선택하세요. 별도 scrcpy 클라이언트는 승인된 ADB 키가 필요하며 포트 포워딩만으로 접근할 수 없습니다. 로그인 버튼을 누르기 전에 실행합니다.
 
 ```bash
 docker compose --profile setup run --rm bootstrap login-check
 ```
 
-After the check passes, sign in as a secondary device and confirm that the existing phone session remains active. Within 30 minutes:
+검사 통과 후 보조 기기로 로그인하고 기존 휴대폰 로그인이 유지되는지 확인하세요. 30분 안에 실행합니다.
 
 ```bash
 docker compose --profile setup run --rm bootstrap confirm-secondary \
@@ -35,44 +39,52 @@ docker compose --profile setup run --rm bootstrap confirm-secondary \
 docker compose logs --tail 30 iris-collector
 ```
 
-`--tablet-session-active` confirms the redroid session, not a separate tablet. Bridge does not need notification access. Migrating an existing registration from the legacy notification version also requires running bootstrap again with the new image. This resets confirmation and requires operator participation. Do not guess an unverified secondary-login flow or proceed with a primary-device transfer.
+`--tablet-session-active`는 redroid 세션을 확인합니다. Bridge에는 알림 접근 권한이 필요하지 않습니다. 이전 알림 수집 버전에서 옮길 때는 새 이미지로 bootstrap을 다시 실행해야 하며, 확인 기록이 초기화되므로 운영자가 참여해야 합니다. 검증되지 않은 보조 로그인 절차를 추측하거나 주 기기 이전으로 진행하지 마세요.
 
-## Iris build and runtime boundaries
+<a id="iris-build-and-runtime-boundaries"></a>
 
-- Upstream: https://github.com/dolidolih/Iris, commit `ee1dc978ec465df11642596e40f74caff497301d`.
-- The archive SHA-256 `1b194b137b0912ef360a4a0b511c6ed5169aaaf0da85c1de1cf59b325bebfcd0` is checked during the build.
-- This modified build adds `iris/CollectorMain.kt`. It does not run upstream `Main`; it uses only database reads and Iris decryption. The database is opened with Android SQLite `OPEN_READONLY`.
-- It does not start upstream message sending, notification polling, file deletion, the dashboard, `/query`, `/reply`, or `/aot`. It exposes `/collector/rows` and `/collector/metadata` for bounded fixed SELECT queries, and `/collector/health` for build verification.
-- It binds only to Android `127.0.0.1:3000`, reached through a loopback ADB forward inside the collector. Compose does not publish port 3000 on the host. Hosts and containers with root ADB access are within the trust boundary.
-- Iris v4 authenticates data requests with a random per-enrollment bearer before accessing databases. Its credential file is root-owned, mode 0600, inside `/data/kakaocollector-iris` (0700). A nonce/HMAC health challenge verifies the expected listener before Python sends the bearer. Credentials are not included in logs or process arguments.
-- `adb-init` provisions the existing device and Iris collector public keys before Android starts. `ro.adb.secure=1` rejects unregistered ADB clients; authenticated collectors can still use the root access required by Iris. Private keys remain in their state volumes. Preserve these volumes with Android data when backing up or restoring.
-- Every request checks registration mode, secondary-login confirmation, Android fingerprint, and Kakao versionCode. The Python side also checks tablet settings and registration before and after page queries and before sending each row.
-- The APK is a build artifact for `app_process`, not a signed package for app installation. Bootstrap deploys it with read-only file permissions, and the collector compares its SHA-256 with the APK in the image at startup.
-- GPL/MIT notices and corresponding source are included in `iris/NOTICE.md`, `/opt/iris-source.tar.gz`, `/opt/iris-overlay/`, and `/opt/iris-build.Dockerfile` in the image. Distribute the source and notices with the build.
-- Netty modules are aligned to `4.1.138.Final`. `/opt/iris-dependencies.txt` contains the resolved release dependency graph. See [security fixes and remaining Android patch debt](security.md#security-fixes-2026-10-05).
+## Iris 빌드와 실행 경계
 
-## Storage and recovery
+- 원본: [dolidolih/Iris](https://github.com/dolidolih/Iris), 커밋 `ee1dc978ec465df11642596e40f74caff497301d`.
+- 빌드 시 압축 파일의 SHA-256 `1b194b137b0912ef360a4a0b511c6ed5169aaaf0da85c1de1cf59b325bebfcd0`을 확인합니다.
+- 수정 빌드는 `iris/CollectorMain.kt`를 추가합니다. 원본 `Main`을 실행하지 않고 DB 읽기와 Iris 복호화만 사용합니다. Android SQLite `OPEN_READONLY`로 DB를 엽니다.
+- 원본의 메시지 전송, 알림 폴링, 파일 삭제, 대시보드, `/query`, `/reply`, `/aot`는 실행하지 않습니다. 제한된 고정 SELECT용 `/collector/rows`, `/collector/metadata`와 빌드 확인용 `/collector/health`만 제공합니다.
+- Android `127.0.0.1:3000`에만 바인딩하고 수집기 내부 루프백 ADB 포워딩으로 접근합니다. Compose는 호스트에 3000 포트를 공개하지 않습니다. root ADB 권한이 있는 호스트·컨테이너는 신뢰 경계 안에 있습니다.
+- Iris v4는 DB 접근 전에 등록별 무작위 bearer로 인증합니다. 인증 파일은 `/data/kakaocollector-iris`(0700) 안에 root 소유·0600으로 저장합니다. nonce/HMAC 상태 확인으로 리스너를 검증한 뒤 Python이 bearer를 보냅니다. 키는 로그나 프로세스 인수에 넣지 않습니다.
+- `adb-init`이 Android 시작 전에 기존 기기·Iris 수집기 공개 키를 등록합니다. `ro.adb.secure=1`은 미등록 ADB 클라이언트를 거부하고, 승인된 수집기는 Iris에 필요한 root 권한을 사용합니다. 개인 키는 상태 볼륨에 남으므로 Android 데이터와 함께 백업·복구하세요.
+- 요청마다 등록 모드, 보조 로그인 확인, Android 지문, 카카오톡 versionCode를 검사합니다. Python도 페이지 조회 전후와 각 행 전송 전에 태블릿 설정과 등록을 검사합니다.
+- APK는 앱 설치용 서명 패키지가 아니라 `app_process` 빌드 산출물입니다. bootstrap은 읽기 전용으로 배포하고, 수집기는 시작 시 이미지 안 APK와 SHA-256을 비교합니다.
+- GPL·MIT 고지와 대응 소스는 이미지의 `iris/NOTICE.md`, `/opt/iris-source.tar.gz`, `/opt/iris-overlay/`, `/opt/iris-build.Dockerfile`에 포함됩니다. 배포 시 소스와 고지를 함께 제공하세요.
+- Netty는 `4.1.138.Final`로 맞췄으며 `/opt/iris-dependencies.txt`에 실제 의존성 그래프를 보관합니다. [보안 수정과 남은 Android 패치 문제](security.md#security-fixes-2026-10-05)를 참고하세요.
 
-The initial cursor is 0. The collector reads up to 50 rows at a time from those currently present in redroid's KakaoTalk database, including synchronization rows such as `SYNCMSG`. It cannot access the phone's entire history or all history on Kakao's servers.
+<a id="storage-and-recovery"></a>
 
-`_id`, `chat_id`, and `user_id` are passed as strings. Event IDs are derived from the Iris-specific registration epoch, database identity, and log ID. Different log IDs represent different messages even when the body matches. Retransmissions that differ only in observation time receive a duplicate acknowledgment. Immutable rows retain conversation and sender IDs. A separate metadata refresh resolves supported local display names without changing row identity or replay digests; see [Message queries](mcp-queries.md#names).
+## 저장과 복구
 
-The collector waits for a commit acknowledgment for each row. The server stores the row and latest cursor in the same SQLite transaction. After a lost response or collector restart, it queries the server cursor again rather than trusting a local cursor file. It does not skip invalid rows and save a later cursor. The app database serves as the source queue, so rows deleted from the app during a server outage cannot be recovered.
+초기 커서는 0입니다. 수집기는 redroid 카카오톡 DB에 현재 존재하는 행을 `SYNCMSG` 같은 동기화 행을 포함해 한 번에 최대 50개 읽습니다. 휴대폰 전체 기록이나 카카오 서버의 모든 기록에는 접근할 수 없습니다.
 
-Server retention cleanup preserves the Iris cursor even when it deletes messages. Encrypted database backups include the cursor. After a server restore, collection resumes from the restored cursor. Android database replacement (a changed file device/inode) or a decrease in the maximum ID stops collection; a new database is not approved automatically. Changes that reuse the same IDs in the same file, or edits and deletions of existing rows, cannot be fully detected.
+`_id`, `chat_id`, `user_id`는 문자열로 전달합니다. 이벤트 ID는 Iris 등록 세대, DB 식별자, 로그 ID로 만듭니다. 본문이 같아도 로그 ID가 다르면 별개이며 관측 시각만 다른 재전송은 중복 응답을 받습니다. 불변 행에는 대화·발신자 ID를 저장합니다. 별도 메타데이터 갱신이 행 식별자와 재전송 다이제스트를 바꾸지 않고 지원되는 표시 이름을 조회합니다. [메시지 조회](mcp-queries.md#names)를 참고하세요.
 
-The initial collection scope, deleted rows, and delayed synchronization mean `coverage.complete=false` at all times. A connected heartbeat indicates Iris database access, not a connection to Kakao's servers or a valid phone session. Legacy notification messages use `source=notification`; new database messages use `source=iris_db`.
+수집기는 행마다 커밋 응답을 기다리고 서버는 행과 최신 커서를 같은 SQLite 트랜잭션에 저장합니다. 응답 유실·재시작 후에는 로컬 커서 파일 대신 서버 커서를 다시 조회합니다. 잘못된 행을 건너뛰고 다음 커서를 저장하지 않습니다. 앱 DB가 원본 대기열이므로 서버 중단 중 앱에서 삭제된 행은 복구할 수 없습니다.
 
-## Current limits and operational validation
+보관 기간 정리로 메시지를 지워도 Iris 커서는 유지합니다. 암호화 DB 백업에도 커서를 포함하며 복구 후 해당 커서에서 재개합니다. DB 파일의 device/inode가 바뀌거나 최대 ID가 줄면 수집을 멈추고 새 DB를 자동 승인하지 않습니다. 같은 파일·ID를 재사용하는 변경이나 기존 행 수정·삭제는 완전히 감지할 수 없습니다.
 
-Message bodies are limited to 16,384 UTF-16 code units, with truncation flagged. Collection currently includes the row body, message type, IDs, timestamps, origin, and isMine. Display names are resolved separately. Iris v4 includes read-only SQLCipher access to KakaoTalk 26.8.2's `crypto_user_database`: exact sender IDs select ordinary profiles and exact channel/chat ID pairs select PlusChat names. The passphrase is derived inside Android from existing preferences, never created, written or exported. When an open-chat profile is absent, the API can use a nickname from a retained join/leave event in the same room, explicitly marked historical with the event time. Names without either source remain unresolved. Original attachments and edit/deletion synchronization are not implemented. JSON or decryption errors stop the page; ciphertext is not stored as a valid message body.
+초기 범위, 삭제된 행, 늦은 동기화 때문에 `coverage.complete=false`를 유지합니다. 정상 heartbeat는 Iris의 DB 접근 가능 여부이며 카카오 서버 연결이나 휴대폰 로그인 확인이 아닙니다. 이전 알림 메시지는 `source=notification`, 새 DB 메시지는 `source=iris_db`입니다.
 
-Check the following in new environments; these also define the remaining validation scope:
+<a id="current-limits-and-operational-validation"></a>
 
-1. Kernel/binder, KakaoTalk APK ABI, and root database access compatibility.
-2. Secondary-login option and continuity of the existing phone session.
-3. Database reception and decryption for regular chats, muted chats, screen-off operation, own messages, and synchronization messages.
-4. Read status before and after collection, app/container restarts, and resumed collection after network loss.
-5. Continuous reception and disk usage over 24–72 hours.
+## 현재 제한과 운영 검증
 
-Successful local API tests and APK builds do not substitute for these checks.
+본문은 UTF-16 코드 단위 16,384개로 제한하고 잘림 여부를 표시합니다. 행 본문, 종류, ID, 시각, 출처, isMine을 수집하며 표시 이름은 별도로 조회합니다. Iris v4는 카카오톡 26.8.2의 `crypto_user_database`를 SQLCipher로 읽기 전용 접근합니다. 정확한 발신자 ID로 일반 프로필을, 채널·대화 ID 쌍으로 PlusChat 이름을 찾습니다. 암호는 Android의 기존 설정에서 도출하며 생성·기록·외부 전송하지 않습니다.
+
+현재 오픈채팅 프로필이 없으면 API가 같은 방의 보관된 입장·퇴장 이벤트에서 닉네임을 가져오고 과거 이름과 관측 시각임을 명시합니다. 두 근거가 모두 없으면 미확인 상태를 유지합니다. 원본 첨부 파일과 수정·삭제 동기화는 지원하지 않습니다. JSON·복호화 오류는 해당 페이지를 중단시키며 암호문을 정상 본문으로 저장하지 않습니다.
+
+새 환경에서는 다음을 확인해야 하며, 남은 검증 범위이기도 합니다.
+
+1. 커널·binder, 카카오톡 APK ABI, root DB 접근 호환성.
+2. 보조 로그인 옵션과 기존 휴대폰 로그인 유지.
+3. 일반·알림 끈 방, 화면 꺼짐, 본인 메시지, 동기화 메시지의 수신·복호화.
+4. 수집 전후 읽음 상태, 앱·컨테이너 재시작, 네트워크 단절 후 수집 재개.
+5. 24–72시간 연속 수신과 디스크 사용량.
+
+로컬 API 테스트와 APK 빌드 성공만으로 이 검증을 대신할 수 없습니다.

@@ -32,7 +32,7 @@ def test_plan_never_installs_opens_browser_or_writes_state(home, monkeypatch, ca
     monkeypatch.setattr(onboarding.webbrowser, "open", execute)
     onboarding.up(options("--plan"))
     assert not list(home.iterdir())
-    assert "setup plan (no changes)" in capsys.readouterr().out
+    assert "설정 계획 (변경 없음)" in capsys.readouterr().out
 
 
 def fake_runtime(monkeypatch, *, installed=False):
@@ -63,7 +63,7 @@ def test_first_run_installs_then_waits_before_browser(home, monkeypatch, capsys)
     assert json.loads((home / ".bridge/onboarding.json").read_text())["state"] == "ready"
     assert "passkey" not in (home / ".bridge/onboarding.json").read_text()
     output = capsys.readouterr().out
-    assert output.count("— done.") == 4
+    assert output.count("완료") == 4
     assert runtime.call.return_value in output
     assert all("passkey" not in log.read_text() for log in (home / ".bridge/logs").iterdir())
 
@@ -94,8 +94,8 @@ def test_failure_is_resumable_without_persisting_auth_links(home, monkeypatch, c
     }
     opened.assert_not_called()
     output = capsys.readouterr()
-    assert output.out.count("— done.") == 1
-    assert "Stopped during runtime" in output.err
+    assert output.out.count("완료") == 1
+    assert "개인 Bridge 시작 단계에서 중단" in output.err
     assert str(next((home / ".bridge/logs").iterdir())) in output.err
     runtime.installed.return_value = True
     runtime.wait_ready.side_effect = None
@@ -354,7 +354,7 @@ def test_piped_installer_summarizes_bootstrap_and_preserves_failures(tmp_path, v
         if failed:
             assert str(log) in result.stderr
     if not failed:
-        assert "Installer runtime ready." in result.stdout
+        assert "설치 실행 환경 준비 완료" in result.stdout
         assert json.loads(result.stdout.splitlines()[-1]) == ["up", *flags]
 
 

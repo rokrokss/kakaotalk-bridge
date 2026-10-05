@@ -9,7 +9,7 @@ done
 # Parent directory is 0700; mounted runtime files must be readable by container UID 10001.
 chmod 444 secrets/admin_token secrets/ingest_token secrets/read_token secrets/device_token secrets/backup_key secrets/mcp_approval_token secrets/mcp_passkey_token
 if [[ -e secrets/tls_cert.pem || -e secrets/tls_key.pem ]]; then
-    [[ -s secrets/tls_cert.pem && -s secrets/tls_key.pem ]] || { echo 'Incomplete TLS pair; restore it.' >&2; exit 1; }
+    [[ -s secrets/tls_cert.pem && -s secrets/tls_key.pem ]] || { echo 'TLS 인증서 또는 키가 없습니다. 인증서와 키를 함께 복구하세요.' >&2; exit 1; }
 else
     openssl req -x509 -newkey rsa:3072 -nodes -days 365 -sha256 \
         -keyout secrets/tls_key.pem -out secrets/tls_cert.pem \
@@ -25,4 +25,4 @@ if [[ ! -s secrets/bridge.jks && "${BRIDGE_PREBUILT:-0}" != 1 ]]; then
         -dname 'CN=Personal Notification Bridge' -keystore /signing/bridge.jks \
         -storepass:file /signing/bridge_key_password -keypass:file /signing/bridge_key_password
 fi
-echo 'Secrets ready; existing keys were preserved. Back up secrets/ securely.'
+echo '인증 키를 준비했습니다. 기존 키는 유지됩니다. secrets/를 안전하게 백업하세요.'

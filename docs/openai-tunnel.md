@@ -1,81 +1,45 @@
-# Personal OpenAI Secure MCP Tunnel
+# 개인 OpenAI Secure MCP 터널
 
-[README](../README.md) · [HTTPS/OAuth](dot-plugin.md) · [Security](security.md)
+[README](../README.md) · [HTTPS/OAuth](dot-plugin.md) · [보안](security.md)
 
-Use this mode when only your own OpenAI account needs MCP access and you do not
-want to publish an MCP HTTPS address. It also works on a remote Linux server.
-The existing HTTPS/OAuth path can run alongside it for other clients.
+내 OpenAI 계정에서만 MCP를 사용하고 공개 HTTPS 주소를 만들고 싶지 않을 때 선택하세요. 원격 Linux 서버에서도 사용할 수 있고 다른 클라이언트용 HTTPS/OAuth를 함께 운영할 수 있습니다.
 
 ```text
-Your browser → localhost / SSH / HTTPS admin → passkey login and tunnel approval
-OpenAI ↔ outbound tunnel client → internal MCP listener → collector read API
-Other MCP clients → public HTTPS /mcp → existing OAuth listener (optional)
+내 브라우저 → localhost / SSH / HTTPS 관리 화면 → 패스키 로그인·터널 승인
+OpenAI ↔ 서버에서 연결한 터널 클라이언트 → 내부 MCP → 수집 조회 API
+다른 MCP 클라이언트 → 공개 HTTPS /mcp → 기존 OAuth (선택 사항)
 ```
 
-The server's tunnel client opens the connection to OpenAI. OpenAI does not need
-inbound access to your server, a Funnel address, or an open router port for MCP.
-Admin is separate: use localhost on your computer, SSH forwarding to a remote
-server, or an existing trusted HTTPS address. Tailscale is optional. The tunnel
-does not carry the admin UI, ADB or the collector's private API.
+서버의 터널 클라이언트가 OpenAI로 연결하므로 인바운드 접근·Funnel 주소·공유기 포트 개방이 필요하지 않습니다. 관리 화면은 localhost, 원격 서버의 SSH 포워딩 또는 기존 신뢰할 수 있는 HTTPS로 별도 접속합니다. Tailscale은 선택 사항입니다. 터널은 관리 화면·ADB·수집기 비공개 API를 전달하지 않습니다.
 
-## Before setup
+<a id="before-setup"></a>
+## 설정 전 준비
 
-1. Open [OpenAI tunnel settings](https://platform.openai.com/settings/organization/tunnels)
-   and create a tunnel using an account with **Tunnels Read + Manage**.
-2. Associate it with the ChatGPT workspace where you will use Bridge. Copy the
-   `tunnel_…` ID and obtain a runtime API key with **Tunnels Read + Use**.
-3. Return to Bridge's connection form with these two values. Bridge starts the
-   tunnel client for you; then follow the client completion steps below.
+1. **Tunnels Read + Manage** 권한이 있는 계정으로 [OpenAI 터널 설정](https://platform.openai.com/settings/organization/tunnels)에서 터널을 만드세요.
+2. 사용할 ChatGPT 워크스페이스에 연결하고 `tunnel_…` ID를 복사하세요. **Tunnels Read + Use** 권한의 실행용 API 키도 발급받으세요.
+3. 두 값을 Bridge 연결 폼에 입력하세요. Bridge가 터널 클라이언트를 시작하면 아래 클라이언트 설정을 완료하세요.
 
-If the controls or tunnel are missing, check organization permissions and the
-workspace association with your administrator. See the current
-[OpenAI Secure MCP Tunnel instructions](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
-Your OpenAI organization/workspace must support tunnel connections. Restrict
-tunnel access to yourself: everyone allowed to use it gets the same Bridge
-permissions. Bridge implements one owner, not per-workspace-user accounts.
+메뉴·터널이 보이지 않으면 관리자에게 조직 권한과 워크스페이스 연결을 확인하세요. [공식 터널 안내](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)를 참고하세요. 조직·워크스페이스가 터널 연결을 지원해야 합니다. 접근 가능한 모든 사용자가 같은 Bridge 권한을 가지므로 본인만 사용하도록 제한하세요. Bridge는 단일 소유자용이며 워크스페이스 사용자별 계정을 구현하지 않습니다.
 
-The admin form accepts the runtime key in a password-masked field and clears it
-after submission; it never returns the saved key to the browser. The CLI uses
-hidden input. For noninteractive setup, save the key in a private file on the
-machine running the command, not in a command argument or chat. Provisioning
-copies it into the installation's protected `secrets/` directory and generates
-a separate local service credential. On Mac, the CLI transfers it into the VM
-through a temporary private directory. No key is stored in `.env` or job history.
+관리 폼은 키를 가려서 입력받고 제출 후 지우며 저장된 키를 브라우저에 반환하지 않습니다. CLI도 입력을 숨깁니다. 비대화형 설정에서는 키를 명령 인수나 채팅 대신 실행할 컴퓨터의 비공개 파일에 보관하세요. 설치의 보호된 `secrets/`로 복사하고 별도 내부 서비스 인증 정보를 생성합니다. Mac은 비공개 임시 폴더를 거쳐 VM으로 옮깁니다. `.env`나 작업 기록에는 키를 저장하지 않습니다.
 
-## Add a tunnel to an existing installation
+<a id="add-a-tunnel-to-an-existing-installation"></a>
+## 기존 설치에 터널 추가
 
-First update the installed Bridge images/source using the normal
-[update procedure](operations.md), then run `./bridge up` in that installation to
-enable the web setup service. Existing installations retain their admin address.
+기존 설치의 소스·이미지를 [업데이트 절차](operations.md)로 갱신하고 같은 설치에서 `./bridge up`을 실행해 웹 설정 서비스를 켜세요. 기존 관리 주소는 유지됩니다.
 
-1. Sign in to admin and open **AI connections → Add or change a connection**.
-2. Choose **ChatGPT → Personal tunnel · no public address**. Enter the tunnel ID
-   and runtime API key under **Connection settings**. For the same configured ID,
-   leave the key blank to reuse it, or enter a replacement.
-3. Review the access checkbox and select **Set up and allow tunnel**. The page
-   reports service startup, approval and server verification. You can leave and
-   reopen the page while it runs. Approval is included in this web flow.
-4. Follow [Finish in your AI client](web-ui.md#finish-in-your-ai-client): create
-   a custom MCP plugin in ChatGPT, select **Tunnel** with the saved ID and
-   **No authentication**, then install it and select it in a conversation.
-   The runtime API key belongs in Bridge's setup form, not the client connection.
-5. Ask the connected client for collector status, then retrieve a message you
-   sent from your phone. The overview records the successful tool call separately
-   from approval. A running tunnel alone does not verify message collection.
+1. **AI 연결 → 연결 추가 또는 변경**을 여세요.
+2. **ChatGPT → 개인 터널 · 공개 주소 불필요**를 선택하고 **연결 설정**에 ID와 실행용 키를 입력하세요. 같은 ID의 저장된 키를 재사용하려면 비워 두고 교체하려면 새 키를 입력하세요.
+3. 접근 동의를 확인하고 **터널 설정 및 허용**을 누르세요. 서비스 시작·승인·서버 검증을 한국어로 안내합니다. 화면을 나갔다가 돌아와도 작업은 계속됩니다. 웹 절차에는 승인이 포함됩니다.
+4. [AI 클라이언트에서 마무리](web-ui.md#finish-in-your-ai-client)에 따라 ChatGPT의 사용자 지정 MCP 플러그인을 만들고 **터널(Tunnel)**, 저장된 ID, **인증 없음(No authentication)**을 선택하세요. 설치한 뒤 대화에서 선택하세요. 실행용 API 키는 Bridge 설정 폼에만 입력합니다.
+5. 수집 상태와 휴대폰에서 보낸 메시지를 요청하세요. 현황에는 승인과 별도로 도구 호출 성공을 기록합니다. 터널이 실행 중이라고 수집까지 검증된 것은 아닙니다.
 
-Reopen the tunnel's **Connection instructions** at any time. The ID and guidance
-remain available after **Check server connection** and browser reloads. Existing
-settings are collapsed; expand **Connection settings** to change them. For
-failures, follow the displayed recovery message and select **Review and retry**.
-Creating the tunnel and adding it to ChatGPT still require your provider account.
+터널의 **연결 안내**는 언제든 다시 열 수 있습니다. **서버 연결 확인**·새로고침 후에도 ID와 안내를 유지합니다. **연결 설정**을 펼쳐 수정하고 실패하면 안내를 읽고 **확인 후 다시 시도**를 누르세요. 터널 생성과 ChatGPT 추가에는 제공업체 계정이 필요합니다.
 
-### Terminal alternative
+<a id="terminal-alternative"></a>
+### 터미널에서 설정
 
-Run `./bridge setup-connection --method openai-tunnel` from the installation
-directory. It prompts for credentials, starts services and opens admin. Unlike
-the web form, CLI provisioning requires a separate **Allow personal tunnel**
-action in admin **AI connections**. Then complete the same client setup and
-verification above. For noninteractive provisioning:
+설치 폴더에서 `./bridge setup-connection --method openai-tunnel`을 실행하세요. 인증 정보를 입력받고 서비스를 시작한 뒤 관리 화면을 엽니다. 웹 폼과 달리 CLI는 **AI 연결 → 개인 터널 허용**으로 별도 승인해야 합니다. 이후 같은 클라이언트 설정과 검증을 따르세요.
 
 ```bash
 ./bridge tunnel configure \
@@ -83,50 +47,27 @@ verification above. For noninteractive provisioning:
   --api-key-file /private/path/openai-runtime-key
 ```
 
-The example ID is a placeholder; use the lowercase ID issued by OpenAI. The command
-pulls the pinned official `ghcr.io/openai/tunnel-client:v0.0.15` image and starts
-two internal services. It preserves the admin address and existing public OAuth
-connections. Repeating it with the same ID updates the runtime key and preserves
-the existing approval. Changing IDs revokes the previous tunnel grant.
-On startup failure it attempts to restore the previous configuration; revoked
-grants stay revoked and must be approved again.
+예시 ID는 자리 표시자이며 OpenAI가 발급한 소문자 ID로 바꿔야 합니다. 고정된 공식 `ghcr.io/openai/tunnel-client:v0.0.15` 이미지와 내부 서비스 두 개를 실행합니다. 관리 주소·기존 OAuth를 유지합니다. 같은 ID로 반복하면 실행용 키를 갱신하고 승인을 유지합니다. ID를 바꾸면 이전 승인을 취소합니다. 시작 실패 시 이전 설정 복구를 시도하지만 취소된 권한은 되살리지 않으므로 재승인이 필요합니다.
 
-## Approval lifetime
+<a id="approval-lifetime"></a>
+## 승인 유효 기간
 
-Approval has no automatic expiration and survives normal service restarts and
-server reboots when the stored configuration, keys and volumes are preserved.
-Disconnecting, changing the tunnel ID, or resetting the passkey policy invalidates
-it. No periodic browser approval is required. The tunnel services use Docker's
-`unless-stopped` restart policy; Docker must start with the server.
-The client retries startup connections for up to 60 seconds so it can recover
-when Docker starts the tunnel before the private MCP listener is ready.
+자동 만료 없이 승인되며 설정·키·볼륨을 유지하면 서비스·서버 재시작 후에도 유효합니다. 연결 해제, 터널 ID 변경, 패스키 정책 초기화 시 무효화됩니다. 주기적 브라우저 승인은 필요하지 않습니다. 서비스는 Docker의 `unless-stopped` 정책을 사용하므로 서버 시작 시 Docker도 시작되어야 합니다. 클라이언트는 비공개 MCP 준비 지연을 견디도록 시작 연결을 최대 60초 재시도합니다.
 
-If you approved a tunnel with an older version's 30-day policy, choose **Remove
-approval expiration** in **AI connections** once. This explicitly converts the existing
-approval while preserving its subscriptions. An already expired approval needs
-**Allow personal tunnel** again. Updates do not silently extend old approvals.
+이전 30일 정책으로 승인했다면 **AI 연결 → 승인 만료 기한 없애기**를 한 번 누르세요. 구독을 유지하면서 명시적으로 전환합니다. 이미 만료되었다면 **개인 터널 허용**으로 다시 승인해야 합니다. 업데이트만으로 기존 승인을 연장하지 않습니다.
 
-The connection uses the same eight MCP tools and event
-implementation as public OAuth. It can read/search messages and manage requested
-event subscriptions and acknowledgement cursors; it cannot send KakaoTalk
-messages. [Event subscriptions](events.md) remain an explicit separate action.
-Event delivery also requires enabling the conversation in admin **Conversation
-events**. All conversations default off, and the same switches apply to OAuth
-and tunnel clients.
+공개 OAuth와 같은 MCP 도구 8개·이벤트 구현을 사용합니다. 메시지 조회·검색, 요청한 이벤트 구독과 처리 커서 관리는 가능하지만 카카오톡 메시지를 보낼 수는 없습니다. [이벤트 구독](events.md)은 별도 요청해야 합니다. 관리 화면의 **대화 이벤트**에서도 해당 대화를 허용해야 하며 기본값은 꺼짐입니다. 같은 설정이 OAuth와 터널에 적용됩니다.
 
-## Fresh installation without external connections
+<a id="fresh-installation-without-external-connections"></a>
+## 외부 연결 없이 새로 설치
 
 ```bash
 ./bridge up
 ```
 
-This prepares local admin and KakaoTalk collection without either Tailscale or
-an OpenAI tunnel. Add a tunnel later through the web flow above, or run
-`./bridge setup-connection --method openai-tunnel`.
-On a remote server, add `--no-browser` and use [SSH forwarding](quickstart.md#local-and-ssh-admin-access)
-to open the localhost admin link on your own computer.
+Tailscale·OpenAI 터널 없이 로컬 관리 화면과 수집을 준비합니다. 나중에 웹 화면이나 `./bridge setup-connection --method openai-tunnel`로 추가하세요. 원격 서버에서는 `--no-browser`와 [SSH 포워딩](quickstart.md#local-and-ssh-admin-access)을 사용하세요.
 
-For unattended provisioning with existing credentials:
+기존 인증 정보로 비대화형 설정을 하려면 다음을 실행하세요.
 
 ```bash
 ./bridge up --connection openai-tunnel \
@@ -134,20 +75,12 @@ For unattended provisioning with existing credentials:
   --api-key-file /private/path/openai-runtime-key
 ```
 
-`--admin-url https://admin.example.com` is optional if you already have a trusted
-private admin proxy; route it to the admin gateway or an existing shared ingress.
-With local admin, the tunnel does not start the public HTTP MCP ingress. Older
-HTTPS admin routes through that ingress are preserved. Later `./bridge up`
-reuses the stored credentials and admin address. Public HTTPS/OAuth can be added
-separately through **AI connections → Add or change a connection**, or
-`./bridge setup-connection`.
+신뢰할 수 있는 비공개 관리 프록시가 있다면 선택적으로 `--admin-url https://admin.example.com`을 지정하고 관리 게이트웨이나 기존 공용 진입점으로 전달하세요. 로컬 관리 구성의 터널은 공개 HTTP MCP 진입점을 시작하지 않습니다. 기존 HTTPS 관리 경로는 유지합니다. 이후 `./bridge up`은 저장된 인증 정보와 관리 주소를 재사용합니다. 공개 HTTPS/OAuth는 **연결 추가 또는 변경**이나 `./bridge setup-connection`으로 별도 추가할 수 있습니다.
 
-## Check, revoke and restore
+<a id="check-revoke-and-restore"></a>
+## 점검·취소·복구
 
-In admin, **Check server connection** verifies server services. **Refresh
-connections** reloads approvals and recorded activity. **Last successful tool
-call** records past use, not current reachability; discovery and failed tool
-calls do not update it. Calls made before this version are not backfilled.
+**서버 연결 확인**은 서비스를 점검하고 **연결 새로고침**은 승인·활동을 가져옵니다. **마지막 도구 호출 성공**은 과거 기록이며 현재 연결 가능 여부를 뜻하지 않습니다. 목록 조회·실패 호출은 기록하지 않고 이전 버전의 호출은 소급하지 않습니다.
 
 ```bash
 ./bridge tunnel status     # Configured ID and client readiness; no keys
@@ -155,48 +88,19 @@ calls do not update it. Calls made before this version are not backfilled.
 ./bridge tunnel disable    # Revoke grant and stop tunnel services
 ```
 
-**Disconnect tunnel** in admin revokes data access immediately while keeping the
-outbound client running. The client may remain ready: readiness does not mean
-the owner has approved message access. Allow it again to create a new grant.
-Disabling it from the CLI also stops its services; existing public OAuth grants
-remain usable. Neither command deletes the OpenAI tunnel itself.
+**터널 연결 해제**는 데이터 접근을 즉시 취소하지만 연결 클라이언트는 계속 실행됩니다. 클라이언트 준비 완료가 소유자 승인을 뜻하지는 않습니다. 다시 허용하면 새 권한을 만듭니다. CLI 비활성화는 서비스도 중지하며 기존 공개 OAuth는 유지합니다. 어느 방법도 OpenAI의 터널 자체를 삭제하지 않습니다.
 
-Backups include runtime configuration and secrets. A restored installation clears
-MCP grants and subscriptions, so sign in with the preserved passkey and approve
-the tunnel again. Recreate any requested event subscriptions. Passkey recovery,
-policy changes also require a new tunnel approval.
+백업에는 실행 설정과 키가 포함됩니다. 복구 시 MCP 권한·구독은 지우므로 유지된 패스키로 로그인하고 터널을 다시 승인하세요. 원하는 이벤트도 재구독하세요. 패스키 복구·정책 변경 후에도 재승인이 필요합니다.
 
-If readiness is false, check server outbound HTTPS, the runtime key's tunnel
-permissions, and the selected ID. If discovery works but tools return 403, check
-approval in admin (including expiry for an older 30-day approval). Private OAuth
-discovery URLs intentionally return 404. The private listener supports legacy `initialize` for the official client's
-startup probe as well as the existing `server/discover` protocol. Metadata probes
-require the private credential but no owner grant; tools and events require both.
+준비되지 않으면 서버의 외부 HTTPS, 실행용 키의 터널 권한과 ID를 확인하세요. 도구 목록은 조회되는데 호출이 403이라면 관리자 승인과 이전 정책의 만료 여부를 확인하세요. 비공개 OAuth 검색 URL은 의도적으로 404를 반환합니다. 비공개 리스너는 공식 클라이언트 시작 점검의 이전 `initialize`와 기존 `server/discover`를 지원합니다. 메타데이터 조회는 내부 인증 정보만 필요하며 도구·이벤트에는 소유자 승인도 필요합니다.
 
-The startup retry covers refused connections, not Docker DNS failures. If the
-client started while `dot-tunnel` had no DNS entry, wait for that service to be
-healthy and run `docker compose --profile dot --profile tunnel restart openai-tunnel`.
+시작 재시도는 연결 거절을 처리하지만 Docker DNS 실패는 처리하지 않습니다. `dot-tunnel`의 DNS 등록 전에 클라이언트가 시작되었다면 서비스가 정상화된 뒤 `docker compose --profile dot --profile tunnel restart openai-tunnel`을 실행하세요.
 
-## Validation scope
+<a id="validation-scope"></a>
+## 검증 범위
 
-Local automated tests cover public/private credential isolation, all eight tools,
-legacy initialization, persistent approval across time and restarts, revocation,
-legacy expiry and policy changes, event
-delivery and pending/acknowledgement behavior, and provisioning rollback. Compose
-configuration is checked for private networks and absence of tunnel host ports.
-The official v0.0.15 source was checked for file-backed headers and startup probes.
-A separate Linux test installation also connected to OpenAI with a real runtime
-key, exercised browser approval and revocation, preserved approval across service
-restarts and HTTPS/OAuth setup, and recovered from a 12-second MCP startup delay.
-On 2026-10-05, the tunnel was moved from that empty test installation to an
-existing logged-in collector. A self-sent test message was retrieved through the
-private MCP listener and then through the connected KakaoTalk Bridge app in
-ChatGPT, which returned the matching message and timestamp. The existing Android
-and collector containers were preserved. The improved admin flow was also
-checked on the real deployment: a server check kept saved instructions visible,
-and a successful tunnel MCP status call appeared in the activity overview.
-Synthetic browser checks covered setup failure/retry and a 390-pixel mobile
-viewport. See [UX validation](implementation.md#admin-ux-and-connection-setup-2026-10-05).
-End-to-end OpenAI event delivery and a
-full VM reboot remain deployment acceptance checks. Readiness alone does not
-verify message retrieval or event delivery.
+자동 테스트는 공개·비공개 인증 분리, 도구 8개, 이전 초기화, 시간·재시작 후 승인 유지, 취소, 이전 만료 정책·정책 변경, 이벤트·대기 조회·처리 확인, 설정 롤백을 검증합니다. Compose는 비공개 네트워크와 터널 호스트 포트 미공개를 확인합니다. 공식 v0.0.15 소스의 파일 헤더와 시작 점검도 확인했습니다.
+
+별도 Linux 테스트 설치는 실제 실행용 키로 OpenAI에 연결해 브라우저 승인·취소, 서비스 재시작·HTTPS 설정 후 승인 유지, MCP 시작 12초 지연 복구를 검증했습니다. 2026-10-05에는 터널을 빈 테스트 설치에서 로그인된 수집기로 옮겨 직접 보낸 메시지를 비공개 MCP와 연결된 ChatGPT 앱에서 조회하고 본문·시각을 확인했습니다. 기존 Android·수집 컨테이너는 유지했습니다. 실제 관리 화면에서는 서버 점검 후 안내 유지와 성공한 터널 MCP 상태 호출의 활동 기록을 확인했습니다. 가상 브라우저 검증에는 실패·재시도와 390픽셀 화면이 포함됩니다. [관리 UX 검증](implementation.md#admin-ux-and-connection-setup-2026-10-05)
+
+OpenAI 이벤트 전체 전달과 완전한 VM 재부팅은 배포 환경에서 추가 검증해야 합니다. 준비 상태만으로 메시지 조회·이벤트 전달을 보장하지 않습니다.

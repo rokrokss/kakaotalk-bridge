@@ -36,7 +36,42 @@ VOLUMES = [
 REGISTRY = "ghcr.io/rokrokss/kakaotalk-bridge-"
 
 
+class KoreanArgumentParser(argparse.ArgumentParser):
+    """Localize terminal guidance without changing argument names or diagnostics."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._positionals.title = "명령 및 필수 입력"
+        self._optionals.title = "옵션"
+        for action in self._actions:
+            if isinstance(action, argparse._HelpAction):
+                action.help = "사용법을 표시하고 종료"
+
+    def format_usage(self):
+        return super().format_usage().replace("usage: ", "사용법: ", 1)
+
+    def format_help(self):
+        return super().format_help().replace("usage: ", "사용법: ", 1)
+
+    def error(self, message):
+        from ops.setup_output import report_error
+
+        self.print_usage(sys.stderr)
+        report_error(ValueError(message))
+        self.exit(2, "명령과 옵션은 --help로 확인할 수 있습니다.\n")
+
+
 def run(args, *, capture=False, **kwargs):
+    from ops.setup_output import command_streams, provider_command
+
+    if (
+        not capture
+        and not kwargs
+        and any(Path(str(arg)).name.lower() == "tailscale" for arg in args)
+        and ("funnel" in args or "up" in args)
+    ):
+        return provider_command(args)
+    kwargs = command_streams(capture, kwargs)
     result = subprocess.run(
         args, cwd=ROOT, text=True, capture_output=capture, check=False, **kwargs
     )
@@ -289,7 +324,7 @@ def prepare_android_builder():
         run(probe, capture=True, timeout=180)
         return
     except (RuntimeError, subprocess.TimeoutExpired):
-        print("Preparing the Android build emulator…", flush=True)
+        print("Android 빌드 에뮬레이터 준비 중…", flush=True)
     # This changes only the amd64 QEMU handler; other architectures and Rosetta
     # registrations are preserved. Runtime containers stay native.
     run(
@@ -348,14 +383,14 @@ def install(args):
     if (ROOT / ".bridge/installed").exists() or existing:
         compose("up", "-d", "--no-build", "--no-recreate", *services())
         atomic(ROOT / ".bridge/installed", "1\n")
-        print("Existing installation preserved. Use update to change its images.")
+        print("기존 설치를 유지했습니다. 이미지를 변경하려면 update를 사용하세요.")
         return
     prepare_images(args)
     compose("up", "-d", "--no-build", *services())
     atomic(ROOT / ".bridge/installed", "1\n")
     print(
-        "Containers started. Run ./bridge passkey-login to register your passkey.\n"
-        "AI connections are optional: configure them later with ./bridge setup-connection."
+        "컨테이너를 시작했습니다. ./bridge passkey-login으로 패스키를 등록하세요.\n"
+        "AI 연결은 선택 사항입니다. 나중에 ./bridge setup-connection으로 설정할 수 있습니다."
     )
 
 
@@ -454,7 +489,7 @@ def admin_url(override=None):
 
 def open_admin_page(url):
     url = private_url(url)
-    print("Admin: " + url + "\nSign in with the configured method.")
+    print("관리 화면: " + url + "\n설정한 방식으로 로그인하세요.")
     webbrowser.open(url)
 
 
@@ -586,7 +621,7 @@ def passkey_setup(args):
     if args.link_only:
         print(link)
     else:
-        print("Open this setup link (registration links expire in 10 minutes):\n" + link)
+        print("아래 설정 링크를 여세요 (등록 링크는 10분 후 만료):\n" + link)
         webbrowser.open(link)
 
 
@@ -619,7 +654,7 @@ def open_admin(code, url):
     if not re.fullmatch(r"[A-Za-z0-9_-]{43}", code):
         raise RuntimeError("Invalid pairing response")
     link = private_url(url) + "#pair=" + code
-    print("One-time admin link (expires in 10 minutes):\n" + link)
+    print("일회용 관리 화면 링크 (10분 후 만료):\n" + link)
     webbrowser.open(link)
 
 
@@ -644,7 +679,7 @@ def connect(url):
     env_update({"DOT_PUBLIC_URL": url, "DOT_APPROVAL_MODE": mode})
     atomic(ROOT / ".bridge/public-url", url)
     compose("up", "-d", "--no-build", "dot-plugin", "dot-control", "dot-ingress")
-    print(url + "/mcp\nRun ./bridge passkey-login to configure sign-in for this address.")
+    print(url + "/mcp\n./bridge passkey-login으로 이 주소의 로그인을 설정하세요.")
 
 
 def tailscale_binary():
@@ -707,7 +742,7 @@ def expose(args):
     atomic(saved_admin, admin_url)
     atomic(ROOT / ".bridge/public-url", "https://" + hostname)
     print(
-        f"Admin: {admin_url}/admin/\nMCP: https://{hostname}/mcp\nRun ./bridge passkey-login to configure OAuth approval."
+        f"관리 화면: {admin_url}/admin/\nMCP: https://{hostname}/mcp\n./bridge passkey-login으로 OAuth 승인을 설정하세요."
     )
 
 
@@ -797,9 +832,7 @@ def backup(helper_image=None, name=None):
     finally:
         if running:
             compose("start", *running)
-    print(
-        f"Encrypted snapshot: {destination}\nKeep secrets/backup_key separately; it is needed to restore."
-    )
+    print(f"암호화된 백업: {destination}\n복구에 필요한 secrets/backup_key는 별도로 보관하세요.")
     return destination
 
 
@@ -896,7 +929,7 @@ def restore(path, key):
         else:
             (ROOT / ".bridge/tunnel.json").unlink(missing_ok=True)
         print(
-            "Restored to new volumes; the old volumes and configuration were retained. Run ./bridge start, then check both sessions. External event subscriptions must be created again."
+            "새 볼륨으로 복구했습니다. 이전 볼륨과 설정은 유지됩니다. ./bridge start를 실행하고 두 기기의 로그인을 확인하세요. 외부 이벤트 구독은 다시 만들어야 합니다."
         )
     finally:
         with contextlib.suppress(RuntimeError, OSError):
@@ -945,7 +978,7 @@ def update(args):
         for _ in range(30):
             time.sleep(2)
             if doctor(report=False):
-                print("Update complete. Existing Android app data and enrollment were preserved.")
+                print("업데이트를 완료했습니다. 기존 Android 앱 데이터와 기기 등록은 유지됩니다.")
                 return
         raise RuntimeError("Health check failed after update")
     except BaseException:
@@ -1190,12 +1223,16 @@ def mac(args):
                     target + "/key",
                 )
                 atomic(ROOT / ".bridge/tunnel.json", json.dumps({"tunnel_id": args.tunnel_id}))
+                from ops.tunnel import show_configured
+
+                show_configured(args.tunnel_id)
             finally:
                 guest("rm", "-rf", target)
         else:
             invoke("tunnel", args.tunnel_command)
             if args.tunnel_command == "disable":
                 (ROOT / ".bridge/tunnel.json").unlink(missing_ok=True)
+                print("개인 터널을 비활성화했습니다. 공개 OAuth 연결은 유지됩니다.")
     elif args.command == "import-apks":
         target = "/tmp/kakao-import-" + secrets.token_hex(8)
         files = list(Path(args.folder).glob("*.apk"))
@@ -1230,9 +1267,9 @@ def mac(args):
         if result.returncode:
             destination.unlink(missing_ok=True)
             raise RuntimeError("Backup remains in the VM; copying to the Mac failed")
-        print("Copied encrypted snapshot to " + str(destination))
+        print("암호화된 백업을 복사했습니다: " + str(destination))
         print(
-            "Backup and recovery key are inside the VM. Copy backups/ and secrets/backup_key to separate private storage; see docs/onboarding.md."
+            "백업과 복구 키는 VM 안에 있습니다. backups/와 secrets/backup_key를 각각 별도의 안전한 저장소에 복사하세요. docs/onboarding.md를 참고하세요."
         )
     elif args.command == "restore":
         remote = "/tmp/kakao-restore-" + secrets.token_hex(8)
@@ -1262,26 +1299,26 @@ def mac(args):
         if args.command == "connect":
             options += ["--url", args.url]
         invoke(*options)
+        if args.command == "connect":
+            print(args.url + "/mcp\n./bridge passkey-login으로 이 주소의 로그인을 설정하세요.")
 
 
 def main():
     os.umask(0o077)
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = KoreanArgumentParser(description="KakaoTalk Bridge 설치 및 관리")
     parser.add_argument("--local", action="store_true", help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="command", required=True)
-    from ops.onboarding import add_arguments, up
+    from ops.onboarding import add_arguments
 
-    add_arguments(sub.add_parser("up", help="Prepare everything and open KakaoTalk setup"))
+    add_arguments(sub.add_parser("up", help="실행 환경을 준비하고 카카오톡 설정 화면 열기"))
     from ops.tunnel import add_arguments as tunnel_arguments
 
-    tunnel_arguments(sub.add_parser("tunnel", help="Manage a private personal OpenAI MCP tunnel"))
+    tunnel_arguments(sub.add_parser("tunnel", help="개인 OpenAI MCP 터널 관리"))
     from ops.connections import add_arguments as connection_arguments
 
-    connection_arguments(
-        sub.add_parser("setup-connection", help="Choose and configure an optional AI connection")
-    )
-    sub.add_parser("mcp", help="Run the local MCP stdio adapter")
-    agent = sub.add_parser("setup-agent", help="Manage the admin connection setup service")
+    connection_arguments(sub.add_parser("setup-connection", help="AI 연결 방식 선택 및 설정"))
+    sub.add_parser("mcp", help="로컬 MCP stdio 어댑터 실행")
+    agent = sub.add_parser("setup-agent", help="관리 화면의 연결 설정 서비스 관리")
     agent.add_argument("agent_command", choices=("install", "serve", "job"))
     for name in ("install", "update"):
         cmd = sub.add_parser(name)
@@ -1293,20 +1330,16 @@ def main():
         cmd.add_argument("--mcp-port", type=int)
     cmd = sub.add_parser("admin")
     cmd.add_argument("--url")
-    cmd.add_argument(
-        "--recovery", action="store_true", help="Issue a one-time emergency browser link"
-    )
+    cmd.add_argument("--recovery", action="store_true", help="일회용 긴급 복구 링크 발급")
     cmd.add_argument("--code-only", action="store_true", help=argparse.SUPPRESS)
     cmd.add_argument("--info", action="store_true", help=argparse.SUPPRESS)
     cmd = sub.add_parser(
         "passkey-login",
-        help="Configure passkeys for admin and MCP",
+        help="관리 화면과 MCP의 패스키 설정",
     )
-    cmd.add_argument("--url", help="Admin HTTPS origin or http://localhost:<port>")
-    cmd.add_argument("--public-url", help="Public HTTPS MCP origin")
-    cmd.add_argument(
-        "--enroll", action="store_true", help="Issue a one-time registration/recovery link"
-    )
+    cmd.add_argument("--url", help="관리 화면 HTTPS 주소 또는 http://localhost:<port>")
+    cmd.add_argument("--public-url", help="공개 HTTPS MCP 주소")
+    cmd.add_argument("--enroll", action="store_true", help="일회용 등록·복구 링크 발급")
     cmd.add_argument("--link-only", action="store_true", help=argparse.SUPPRESS)
     cmd = sub.add_parser("connect")
     cmd.add_argument("--url", required=True)
@@ -1320,125 +1353,132 @@ def main():
     for name in ("doctor", "start", "stop", "reset-password", "expose"):
         sub.add_parser(name)
     args = parser.parse_args()
+    from ops.setup_output import operation, report_error
+
     try:
-        if args.command == "up":
-            up(args)
-            return
-        if args.command == "setup-connection":
-            from ops.connections import setup
-
-            setup(args)
-            return
-        if args.command == "setup-agent":
-            if platform.system() == "Darwin" and not args.local:
-                mac(args)
-            else:
-                from ops import setup_agent
-
-                {
-                    "install": setup_agent.install,
-                    "serve": setup_agent.serve,
-                    "job": setup_agent.job_main,
-                }[args.agent_command]()
-            return
-        if (
-            args.command == "backup"
-            and args.name
-            and not re.fullmatch(r"[a-zA-Z0-9_-]+\.kcs", args.name)
-        ):
-            raise ValueError("Invalid snapshot filename")
-        if args.local or platform.system() == "Linux":
-            recover_activation()
-        if args.command == "passkey-login":
-            passkey_setup(args)
-        elif args.command == "expose":
-            expose(args)
-        elif platform.system() == "Darwin" and not args.local:
-            mac(args)
-        elif args.command == "install":
-            install(args)
-        elif args.command == "update":
-            update(args)
-        elif args.command == "admin":
-            if args.info:
-                print(json.dumps(admin_info()))
-            elif args.recovery:
-                code = admin_code()
-                if args.code_only:
-                    print(code)
-                else:
-                    open_admin(code, admin_url(args.url))
-            else:
-                info = admin_info()
-                open_admin_page(args.url or info.get("origin") or admin_url())
-        elif args.command == "doctor":
-            if not doctor():
-                raise SystemExit(1)
-        elif args.command == "mcp":
-            compose("run", "--rm", "--no-deps", "-T", "mcp")
-        elif args.command == "connect":
-            connect(args.url)
-        elif args.command == "tunnel":
-            from ops.tunnel import run as run_tunnel
-
-            run_tunnel(args)
-        elif args.command == "backup":
-            backup(name=args.name)
-        elif args.command == "restore":
-            restore(args.file, args.key)
-        elif args.command == "import-apks":
-            files = sorted(Path(args.folder).glob("*.apk"))
-            if not files:
-                raise ValueError("No APK files in this folder")
-            destination = ROOT / "inputs/kakao"
-            destination.mkdir(parents=True, exist_ok=True)
-            existing = sorted(destination.glob("*.apk"))
-            if existing:
-
-                def hashes(paths):
-                    result = []
-                    for path in paths:
-                        with path.open("rb") as stream:
-                            result.append(hashlib.file_digest(stream, "sha256").hexdigest())
-                    return sorted(result)
-
-                if hashes(existing) == hashes(files):
-                    print("This APK set is already imported; existing files preserved.")
-                    return
-                raise RuntimeError(
-                    "inputs/kakao already contains APKs. Move the old set aside first; do not mix versions."
-                )
-            for index, file in enumerate(files):
-                shutil.copyfile(file, destination / f"{index}.apk")
-            print(
-                "APK set copied. Use Set up collection components in admin to verify and install it."
-            )
-        elif args.command == "reset-password":
-            compose("exec", "-T", "admin", "python", "-m", "webui.auth", "reset-password")
-        elif args.command == "stop":
-            compose("stop")
-        elif args.command == "start":
-            # Older encrypted snapshots predate this verifier-only service credential.
-            ensure_passkey_verifier_secret()
-            migrate_auth_modes()
-            pending = ROOT / ".bridge/restored-pending"
-            compose(
-                "up",
-                "-d",
-                "--no-build",
-                *(["--force-recreate"] if pending.exists() else []),
-                *services(),
-            )
-            pending.unlink(missing_ok=True)
+        with operation(args):
+            execute(args)
     except KeyboardInterrupt:
-        print("Interrupted. Run the same command to continue.", file=sys.stderr)
+        print("중단되었습니다. 같은 명령을 실행해 이어서 진행하세요.", file=sys.stderr)
         raise SystemExit(130) from None
     except subprocess.TimeoutExpired:
-        print("A setup command timed out. Run the same command to retry.", file=sys.stderr)
+        print("설정 명령의 제한 시간이 지났습니다. 같은 명령으로 다시 시도하세요.", file=sys.stderr)
         raise SystemExit(1) from None
     except (RuntimeError, ValueError, OSError) as exc:
-        print(str(exc), file=sys.stderr)
+        report_error(exc)
         raise SystemExit(1) from None
+
+
+def execute(args):
+    from ops.onboarding import up
+
+    if args.command == "up":
+        up(args)
+        return
+    if args.command == "setup-connection":
+        from ops.connections import setup
+
+        setup(args)
+        return
+    if args.command == "setup-agent":
+        if platform.system() == "Darwin" and not args.local:
+            mac(args)
+        else:
+            from ops import setup_agent
+
+            {
+                "install": setup_agent.install,
+                "serve": setup_agent.serve,
+                "job": setup_agent.job_main,
+            }[args.agent_command]()
+        return
+    if (
+        args.command == "backup"
+        and args.name
+        and not re.fullmatch(r"[a-zA-Z0-9_-]+\.kcs", args.name)
+    ):
+        raise ValueError("Invalid snapshot filename")
+    if args.local or platform.system() == "Linux":
+        recover_activation()
+    if args.command == "passkey-login":
+        passkey_setup(args)
+    elif args.command == "expose":
+        expose(args)
+    elif platform.system() == "Darwin" and not args.local:
+        mac(args)
+    elif args.command == "install":
+        install(args)
+    elif args.command == "update":
+        update(args)
+    elif args.command == "admin":
+        if args.info:
+            print(json.dumps(admin_info()))
+        elif args.recovery:
+            code = admin_code()
+            if args.code_only:
+                print(code)
+            else:
+                open_admin(code, admin_url(args.url))
+        else:
+            info = admin_info()
+            open_admin_page(args.url or info.get("origin") or admin_url())
+    elif args.command == "doctor":
+        if not doctor():
+            raise SystemExit(1)
+    elif args.command == "mcp":
+        compose("run", "--rm", "--no-deps", "-T", "mcp")
+    elif args.command == "connect":
+        connect(args.url)
+    elif args.command == "tunnel":
+        from ops.tunnel import run as run_tunnel
+
+        run_tunnel(args)
+    elif args.command == "backup":
+        backup(name=args.name)
+    elif args.command == "restore":
+        restore(args.file, args.key)
+    elif args.command == "import-apks":
+        files = sorted(Path(args.folder).glob("*.apk"))
+        if not files:
+            raise ValueError("No APK files in this folder")
+        destination = ROOT / "inputs/kakao"
+        destination.mkdir(parents=True, exist_ok=True)
+        existing = sorted(destination.glob("*.apk"))
+        if existing:
+
+            def hashes(paths):
+                result = []
+                for path in paths:
+                    with path.open("rb") as stream:
+                        result.append(hashlib.file_digest(stream, "sha256").hexdigest())
+                return sorted(result)
+
+            if hashes(existing) == hashes(files):
+                print("이미 가져온 APK 세트입니다. 기존 파일을 유지합니다.")
+                return
+            raise RuntimeError(
+                "inputs/kakao already contains APKs. Move the old set aside first; do not mix versions."
+            )
+        for index, file in enumerate(files):
+            shutil.copyfile(file, destination / f"{index}.apk")
+        print("APK 세트를 복사했습니다. 관리 화면의 ‘수집 구성 요소 설치’에서 검증하고 설치하세요.")
+    elif args.command == "reset-password":
+        compose("exec", "-T", "admin", "python", "-m", "webui.auth", "reset-password")
+    elif args.command == "stop":
+        compose("stop")
+    elif args.command == "start":
+        # Older encrypted snapshots predate this verifier-only service credential.
+        ensure_passkey_verifier_secret()
+        migrate_auth_modes()
+        pending = ROOT / ".bridge/restored-pending"
+        compose(
+            "up",
+            "-d",
+            "--no-build",
+            *(["--force-recreate"] if pending.exists() else []),
+            *services(),
+        )
+        pending.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

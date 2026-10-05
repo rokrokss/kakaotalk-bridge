@@ -17,7 +17,7 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
-        <service android:name=".WebInputMethod" android:label="KakaoTalk Bridge Keyboard"
+        <service android:name=".WebInputMethod" android:label="KakaoTalk Bridge 키보드"
             android:exported="true" android:permission="android.permission.BIND_INPUT_METHOD">
             <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
             <meta-data android:name="android.view.im" android:resource="@xml/web_input_method" />

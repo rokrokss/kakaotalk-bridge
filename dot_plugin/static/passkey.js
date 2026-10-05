@@ -5,7 +5,7 @@ window.BridgePasskey = (() => {
   const decode = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4)), c => c.charCodeAt(0));
   const encode = value => btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   async function run(options, create = false) {
-    if (!window.isSecureContext || !window.PublicKeyCredential) throw new Error('Open this address in a current system browser with HTTPS to use passkeys.');
+    if (!window.isSecureContext || !window.PublicKeyCredential) throw new Error('패스키를 사용하려면 최신 시스템 브라우저에서 이 주소를 HTTPS로 여세요.');
     const publicKey = {...options, challenge: decode(options.challenge)};
     if (create) publicKey.user = {...options.user, id: decode(options.user.id)};
     for (const field of ['allowCredentials', 'excludeCredentials']) {
@@ -14,9 +14,9 @@ window.BridgePasskey = (() => {
     let credential;
     try { credential = await navigator.credentials[create ? 'create' : 'get']({publicKey}); }
     catch (error) {
-      if (error.name === 'NotAllowedError') throw new Error('Passkey request cancelled or timed out. Try again, or choose your phone or security key.');
-      if (error.name === 'InvalidStateError') throw new Error('This device already has a passkey. Sign in or choose another device.');
-      throw new Error('This browser could not use the passkey. Open the configured address in your system browser and try again.');
+      if (error.name === 'NotAllowedError') throw new Error('패스키 요청이 취소되었거나 시간이 초과되었습니다. 다시 시도하거나 휴대폰 또는 보안 키를 선택하세요.');
+      if (error.name === 'InvalidStateError') throw new Error('이 기기에는 이미 패스키가 있습니다. 로그인하거나 다른 기기를 선택하세요.');
+      throw new Error('이 브라우저에서 패스키를 사용할 수 없습니다. 시스템 브라우저에서 설정된 주소를 열고 다시 시도하세요.');
     }
     const response = {clientDataJSON: encode(credential.response.clientDataJSON)};
     if (create) {
