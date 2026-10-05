@@ -84,15 +84,9 @@ Your AI client connects to a public MCP URL provided by Tailscale Funnel or your
 HTTPS proxy. You approve the OAuth connection with your passkey; subsequent
 requests carry the client's OAuth access token.
 
-```mermaid
-flowchart LR
-    AI["AI client"] <-->|"HTTPS<br/>OAuth token"| HTTPS["Public HTTPS<br/>Funnel / your proxy"]
-    subgraph SERVER["Your server / VM"]
-        MCP["OAuth MCP<br/>/mcp"] <-->|"Read API"| DATA[("Collected<br/>messages")]
-    end
-    HTTPS <-->|"Proxy"| MCP
-    YOU["Your browser"] -.->|"Passkey<br/>+ consent"| HTTPS
-```
+<p align="center">
+  <img src="docs/assets/connection-https.svg" width="960" alt="AI clients connect through public HTTPS with OAuth. The owner approves with a passkey, and the server returns collected messages through MCP.">
+</p>
 
 ### Personal OpenAI tunnel
 
@@ -101,23 +95,13 @@ back through that connection, so MCP needs no public HTTPS address or inbound
 port. The admin console has its own HTTPS access, which can stay private through
 Tailscale Serve or your VPN.
 
-```mermaid
-flowchart LR
-    AI["ChatGPT"] <-->|"Tool calls"| OPENAI["OpenAI<br/>tunnel service"]
-    subgraph SERVER["Your server / VM"]
-        CLIENT["Tunnel<br/>client"] <-->|"Local<br/>credential"| MCP["Private<br/>MCP listener"]
-        MCP <-->|"Read API"| DATA[("Collected<br/>messages")]
-        ADMIN["Admin console"] -.->|"Approval"| MCP
-    end
-    CLIENT -.->|"Opens outbound<br/>HTTPS"| OPENAI
-    OPENAI <-->|"MCP traffic"| CLIENT
-    YOU["Your browser"] -->|"Private HTTPS<br/>+ passkey"| ADMIN
-```
+<p align="center">
+  <img src="docs/assets/connection-tunnel.svg" width="960" alt="The server opens an outbound connection to OpenAI. ChatGPT uses that connection to reach private MCP, while the owner separately approves access through the private admin console.">
+</p>
 
 Approve the personal tunnel in admin once. Approval has no automatic expiration
 and survives normal restarts; you can disconnect it in **Connections**. The
-dashed outbound arrow shows who opens the connection, while the solid arrows
-show MCP requests and results. The local credential authenticates the tunnel
+local credential authenticates the tunnel
 client to the private MCP listener. [Tunnel setup](docs/openai-tunnel.md)
 
 ### stdio launched by your client
@@ -126,19 +110,16 @@ A client that supports local MCP commands starts the adapter and communicates
 over stdin/stdout. The adapter reads the collection API using the server's read
 token. For a remote server, run the same command over SSH.
 
-```mermaid
-flowchart LR
-    AI["MCP client"] <-->|"stdin / stdout<br/>or SSH"| ADAPTER["stdio MCP<br/>adapter"]
-    subgraph SERVER["Your server / VM"]
-        ADAPTER <-->|"Internal HTTP<br/>+ read token"| API["Collection API"]
-        API <-->|"Read"| DATA[("Collected<br/>messages")]
-    end
-```
+<p align="center">
+  <img src="docs/assets/connection-stdio.svg" width="960" alt="The MCP client starts a stdio adapter, locally or over SSH. The adapter queries the server collection API using its read token.">
+</p>
 
 HTTPS/OAuth and the OpenAI tunnel share the same eight tools. The stdio adapter
 provides the five query tools listed in its [configuration guide](docs/api.md#stdio-mcp).
 
 [MCP Events](docs/events.md) are optional and require a separate subscription. Connecting a client does not create subscriptions or automated tasks.
+
+Editable diagram source: [draw.io · three pages](docs/assets/connection-methods.drawio).
 
 ## Requirements and validation
 

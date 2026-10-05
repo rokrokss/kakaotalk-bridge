@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="364" viewBox="0 0 1120 364" role="img" aria-labelledby="title desc">
+<title id="title">stdio launched by your client</title>
+<desc id="desc">The MCP client launches an adapter process and communicates with it over standard input and output, optionally transported through SSH to a remote server. The adapter uses the server read token to query the collection API and return stored messages. No public MCP URL is needed.</desc>
+<defs>
+<marker id="arrow-line" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M2 1.5 7 4.5 2 7.5" fill="none" stroke="#85857b" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="arrow-blue" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M2 1.5 7 4.5 2 7.5" fill="none" stroke="#3b697f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="arrow-goldink" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M2 1.5 7 4.5 2 7.5" fill="none" stroke="#8c691e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="arrow-green" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M2 1.5 7 4.5 2 7.5" fill="none" stroke="#47735e" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<rect x="0" y="0" width="1120" height="364" rx="20" fill="#faf9f6" stroke="none"/>
+<rect x="32" y="30" width="44" height="34" rx="9" fill="#f6df80" stroke="none"/>
+<text x="54" y="53" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="15" font-weight="700" fill="#242320" text-anchor="middle">03</text>
+<text x="92" y="55" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="25" font-weight="650" fill="#242320" text-anchor="start">stdio launched by your client</text>
+<text x="32" y="88" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="14" font-weight="400" fill="#6f7069" text-anchor="start">A local MCP command starts the adapter. Use SSH when your server is remote.</text>
+<rect x="876" y="32" width="212" height="30" rx="15.0" fill="#ffffff" stroke="none"/>
+<text x="982.0" y="50.85" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="600" fill="#6f7069" text-anchor="middle">CLIENT STARTED PROCESS</text>
+<rect x="344" y="116" width="744" height="180" rx="14" fill="#f1efe7" stroke="#dedad0"/>
+<text x="364" y="143" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="600" fill="#6f7069" text-anchor="start">Your server / VM</text>
+<rect x="32" y="176" width="200" height="98" rx="12" fill="#ffffff" stroke="#dedad0"/>
+<rect x="48" y="195" width="5" height="24" rx="2" fill="#3b697f" stroke="none"/>
+<text x="64" y="216" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="19" font-weight="600" fill="#242320" text-anchor="start">MCP client</text>
+<text x="50" y="252" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">Starts the command</text>
+<rect x="368" y="176" width="192" height="98" rx="12" fill="#ffffff" stroke="#dedad0"/>
+<rect x="384" y="195" width="5" height="24" rx="2" fill="#f6df80" stroke="none"/>
+<text x="400" y="216" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="19" font-weight="600" fill="#242320" text-anchor="start">stdio adapter</text>
+<text x="386" y="252" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">Client-owned process</text>
+<rect x="696" y="176" width="192" height="98" rx="12" fill="#ffffff" stroke="#dedad0"/>
+<rect x="712" y="195" width="5" height="24" rx="2" fill="#f6df80" stroke="none"/>
+<text x="728" y="216" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="18" font-weight="600" fill="#242320" text-anchor="start">Collection API</text>
+<text x="714" y="252" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">Read-only queries</text>
+<rect x="976" y="176" width="88" height="98" rx="12" fill="#ffffff" stroke="#dedad0"/>
+<rect x="992" y="195" width="5" height="24" rx="2" fill="#f6df80" stroke="none"/>
+<text x="1008" y="216" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="17" font-weight="600" fill="#242320" text-anchor="start">Data</text>
+<text x="994" y="252" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">Messages</text>
+<path d="M243 225 L357 225" fill="none" stroke="#3b697f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#arrow-blue)" marker-end="url(#arrow-blue)"/>
+<text x="300" y="208" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#3b697f" text-anchor="middle">stdin / stdout</text>
+<text x="300" y="251" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="400" fill="#6f7069" text-anchor="middle">SSH if remote</text>
+<path d="M571 225 L685 225" fill="none" stroke="#85857b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#arrow-line)" marker-end="url(#arrow-line)"/>
+<text x="628" y="208" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#6f7069" text-anchor="middle">Internal HTTP</text>
+<text x="628" y="251" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="11" font-weight="400" fill="#6f7069" text-anchor="middle">Read token</text>
+<path d="M899 225 L965 225" fill="none" stroke="#85857b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#arrow-line)" marker-end="url(#arrow-line)"/>
+<text x="932" y="208" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="12" font-weight="400" fill="#6f7069" text-anchor="middle">Read</text>
+<text x="32" y="333" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">No public MCP URL. The client starts and stops the adapter; your collector runs separately.</text>
+</svg>
