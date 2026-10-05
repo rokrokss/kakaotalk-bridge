@@ -36,6 +36,16 @@ Never infer phone-session health or KakaoTalk unread/read state from these curso
 Subscription webhooks have no protocol replay; the durable pending-message tools provide recovery within collector retention.
 """
 
+# tunnel-client v0.0.15 uses legacy initialize for its startup probe.
+TUNNEL_PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
+TUNNEL_DISCOVERY = {
+    "initialize",
+    "notifications/initialized",
+    "server/discover",
+    "tools/list",
+    "ping",
+}
+
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -157,7 +167,7 @@ def scopes_for(name):
     return ["kakao.events"] if name == "acknowledge_messages" else ["kakao.read"]
 
 
-def tool_definitions():
+def tool_definitions(*, oauth=True):
     definitions = []
     for name, (schema, description) in TOOLS.items():
         definition = {
@@ -177,6 +187,10 @@ def tool_definitions():
                 }
             ],
         }
+        if not oauth:
+            # The private listener authenticates the locally injected credential.
+            # Do not ask ChatGPT to start the public browser OAuth flow.
+            definition["securitySchemes"] = [{"type": "noauth"}]
         if name == "get_profile":
             definition["_meta"] = {"openai/profile": True}
             definition["outputSchema"] = {
@@ -241,11 +255,18 @@ EVENT_DEFINITION = {
 
 
 def create_app(
-    config=None, collector=None, state=None, verifier=None, sender=None, worker=True, passkeys=None
+    config=None,
+    collector=None,
+    state=None,
+    verifier=None,
+    sender=None,
+    worker=True,
+    passkeys=None,
+    auth=None,
 ):
     config = config or Config.from_env()
     state = state or State(config.database, config.storage_key)
-    auth = OAuth(config, state, passkeys)
+    auth = auth or OAuth(config, state, passkeys)
     collector = collector or Collector(config)
     options = {}
     if verifier is not None:
@@ -299,7 +320,11 @@ def create_app(
                 ),
                 status_code=503,
             )
-        headers = {"WWW-Authenticate": auth.challenge()} if error.status == 401 else {}
+        headers = (
+            {"WWW-Authenticate": auth.challenge()}
+            if error.status == 401 and auth.transport == "oauth"
+            else {}
+        )
         return JSONResponse({"error": error.reason}, status_code=error.status, headers=headers)
 
     @app.exception_handler(DeliveryError)
@@ -490,7 +515,11 @@ def create_app(
                 "instructions": INSTRUCTIONS,
             }
         if method == "tools/list":
-            return {"tools": tool_definitions(), "ttlMs": 60000, "cacheScope": "private"}
+            return {
+                "tools": tool_definitions(oauth=auth.transport == "oauth"),
+                "ttlMs": 60000,
+                "cacheScope": "private",
+            }
         if method == "tools/call":
             return tool_call(params, principal)
         if method in ("events/list", "events/subscribe", "events/unsubscribe"):
@@ -507,19 +536,38 @@ def create_app(
         if method == "ping":
             return {}
         if method == "initialize":
+            if auth.transport == "tunnel":
+                version = params.get("protocolVersion")
+                return {
+                    "protocolVersion": version
+                    if version in TUNNEL_PROTOCOLS
+                    else TUNNEL_PROTOCOLS[0],
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "kakaotalk-bridge", "version": "0.1.0"},
+                    "instructions": INSTRUCTIONS,
+                }
             raise RpcError("MCP_2026_07_28_required_use_server_discover", -32022)
         raise RpcError("method_not_found", -32601)
 
+    def request_principal(request, *, discovery=False):
+        if auth.transport == "tunnel":
+            # Connector Authorization may override the sidecar's static headers.
+            # A separate header keeps local service authentication independent.
+            return auth.principal(
+                request.headers.get("x-bridge-tunnel-authorization"), discovery=discovery
+            )
+        return auth.principal(request.headers.get("authorization"))
+
     @app.get("/mcp")
     def get_mcp(request: Request):
-        auth.principal(request.headers.get("authorization"))
+        request_principal(request, discovery=True)
         return Response(status_code=405, headers={"Allow": "POST"})
 
     @app.post("/mcp")
     async def rpc(request: Request):
         from starlette.concurrency import run_in_threadpool
 
-        principal = auth.principal(request.headers.get("authorization"))
+        principal = request_principal(request, discovery=True)
         try:
             msg = await request.json()
         except ValueError:
@@ -542,6 +590,8 @@ def create_app(
                 },
                 status_code=400,
             )
+        if auth.transport == "tunnel" and msg["method"] not in TUNNEL_DISCOVERY:
+            principal = request_principal(request)
         if "id" not in msg:
             return Response(status_code=202)
         params = msg.get("params", {})
@@ -553,7 +603,10 @@ def create_app(
             version = request.headers.get(
                 "mcp-protocol-version", meta.get("io.modelcontextprotocol/protocolVersion")
             )
-            if version not in (None, PROTOCOL):
+            allowed_versions = (None, PROTOCOL)
+            if auth.transport == "tunnel":
+                allowed_versions += TUNNEL_PROTOCOLS
+            if version not in allowed_versions:
                 raise RpcError("unsupported_protocol_version", -32022)
             output = await run_in_threadpool(dispatch, msg["method"], params, principal)
             result["result"] = {
@@ -566,6 +619,10 @@ def create_app(
                     }
                 },
             }
+            if auth.transport == "tunnel" and (
+                msg["method"] == "initialize" or version in TUNNEL_PROTOCOLS
+            ):
+                result["result"] = output
         except RpcError as error:
             result["error"] = {"code": error.code, "message": error.message}
             if error.reason:
@@ -597,4 +654,9 @@ def create_app(
         )
         return result
 
+    if auth.transport == "tunnel":
+        # A separate process/network listener, never a public route or auth fallback.
+        app.router.routes[:] = [
+            route for route in app.router.routes if route.path in {"/mcp", "/health/live"}
+        ]
     return app

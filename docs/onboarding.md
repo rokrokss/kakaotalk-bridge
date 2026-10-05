@@ -1,5 +1,7 @@
 # Set up a personal bridge
 
+For automatic preparation and a single launch command, start with [one-command setup](quickstart.md): `bash install.sh` or `./bridge up`. The individual commands below remain available for advanced deployments.
+
 The installer manages one account on a Linux Docker host. On a Mac it creates a Lima VM with no home-directory mounts. The web console guides you through installing KakaoTalk, signing in as a secondary device, checking your phone, and connecting ChatGPT.
 
 ## Install
@@ -36,20 +38,20 @@ Running install again preserves existing keys and containers. Use `update` to ch
 
 ## Register a passkey and open admin
 
-After installation, sign in to Tailscale on the server and run `./bridge expose`, then `./bridge passkey-login`. The second command opens a private, one-use registration link. Choose **Create a passkey** and save it to your device or password manager. No developer account or admin password is required. See [passkey setup and recovery](passkeys.md) for other reverse proxies and existing deployments.
+After installation, sign in to Tailscale on the server and run `./bridge expose`, then `./bridge passkey-login`. The second command opens a one-use registration link. Keep that link private. Choose **Create a passkey** and save it to your device or password manager. No developer account or admin password is required. See [passkey setup and recovery](passkeys.md) for other reverse proxies and existing deployments.
 
-Bookmark the private admin address. Use **Keep me signed in** for seven days, or leave it unchecked for a 30-minute session. Sessions survive container restarts and can be revoked under **Admin browsers**. `./bridge admin` opens the same address as a convenience.
+Bookmark the admin address. Use **Keep me signed in** for seven days, or leave it unchecked for a 30-minute session. Sessions survive container restarts and can be revoked under **Admin browsers**. `./bridge admin` opens the same address as a convenience.
 
-The two endpoints share one stable hostname:
+Both endpoints share one stable hostname and HTTPS port 443:
 
 | Address | Access |
 | --- | --- |
-| `https://<node>.ts.net:8443/admin/` | Private tailnet, with passkey authentication |
+| `https://<node>.ts.net/admin/` | Public login page; management requires passkey authentication |
 | `https://<node>.ts.net/mcp` | Public Funnel, with MCP OAuth and passkey approval |
 
-Tailscale Serve supplies the trusted certificate. Use the configured hostname rather than localhost; passkeys are bound to that hostname. Tailscale identity headers do not replace passkey authentication. Never point Funnel at the admin/API gateway.
+Tailscale Funnel supplies the trusted certificate. Use the configured hostname rather than localhost; passkeys are bound to that hostname. Tailscale identity headers do not replace passkey authentication. Never point Funnel at the admin/API gateway.
 
-`expose` refuses to overwrite unrelated Tailscale routes. For an existing setup, configure Serve on port 8443 to the local admin HTTPS port and Funnel on port 443 to the local MCP HTTP port yourself, then run `./bridge connect --url https://<node>.ts.net`. The automatic Mac installer forwards MCP to `127.0.0.1:18787`; the older development tunnel uses 18788.
+`expose` refuses to overwrite unrelated Tailscale routes. For an existing setup with manually managed routes, point Funnel on port 443 at the shared `dot-ingress` HTTP port, then run `./bridge connect --url https://<node>.ts.net` and `./bridge passkey-login --url https://<node>.ts.net --public-url https://<node>.ts.net`. The automatic Mac installer forwards ingress to `127.0.0.1:18787`; the older development tunnel uses 18788. `expose` removes an older Bridge-owned 8443 route only after verifying ownership of the entire current configuration. Existing passkeys remain valid on the same hostname; the origin change invalidates previous browser sessions and pending authentication flows.
 
 Add a backup passkey under **Passkeys and recovery**. If every key is lost, run `./bridge passkey-login --enroll` on the server. `./bridge admin --recovery` can also issue a one-time link for a 30-minute emergency session. Password/key login is available only with explicit `ADMIN_AUTH_MODE=local`.
 
@@ -75,11 +77,11 @@ The command copies APKs into the runtime; **Set up components** verifies and ins
 ## Connect ChatGPT
 
 1. Run `./bridge expose`, or supply a public HTTPS reverse proxy and run `./bridge connect --url https://your-host`.
-2. Register your [passkey](passkeys.md) for the private admin and public MCP origins, then add the `/mcp` address in ChatGPT with OAuth authentication.
+2. Register your [passkey](passkeys.md) for the shared admin/MCP origin, then add the `/mcp` address in ChatGPT with OAuth authentication.
 3. Confirm with your passkey, then review the client, callback and requested permissions. Client names are self-reported.
 4. Choose **Allow connection** to return to ChatGPT, or **Cancel** to decline. The request expires after ten minutes. You can disconnect a client in admin **Connections** at any time.
 
-OAuth still requires the initiating browser cookie, exact Origin, redirect URI, resource and PKCE challenge. The approval listener has no host port; separate internal networks distinguish private administration from public passkey assertions. The public port belongs to dot-ingress, which filters private cookies. Connecting does not create an event subscription.
+OAuth still requires the initiating browser cookie, exact Origin, redirect URI, resource and PKCE challenge. The approval listener has no host port; separate internal networks distinguish private administration from public passkey assertions. The shared port belongs to dot-ingress, which routes `/admin/*` to admin and filters admin cookies before forwarding OAuth/MCP traffic. Connecting does not create an event subscription.
 
 ## Maintain and recover
 

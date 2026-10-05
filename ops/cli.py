@@ -21,6 +21,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
+if not __package__:
+    sys.path.insert(0, str(ROOT))
 SERVICES = ["redroid", "api", "gateway", "device-agent", "iris-collector", "admin"]
 VOLUMES = [
     "android-data",
@@ -84,7 +86,18 @@ def compose(*args, capture=False, **kwargs):
         if (ROOT / ".bridge" / file).exists():
             files += ["-f", str(ROOT / ".bridge" / file)]
     return run(
-        ["docker", "compose", "--project-directory", str(ROOT), *files, "--profile", "dot", *args],
+        [
+            "docker",
+            "compose",
+            "--project-directory",
+            str(ROOT),
+            *files,
+            "--profile",
+            "dot",
+            "--profile",
+            "tunnel",
+            *args,
+        ],
         capture=capture,
         env={**os.environ, **read_env()},
         **kwargs,
@@ -92,12 +105,15 @@ def compose(*args, capture=False, **kwargs):
 
 
 def services():
-    return SERVICES + (
+    selected = SERVICES + (
         ["dot-plugin", "dot-control", "dot-ingress"]
         if read_env().get("DOT_PUBLIC_URL", "").endswith(".invalid") is False
         and read_env().get("DOT_PUBLIC_URL")
         else (["dot-control"] if read_env().get("ADMIN_AUTH_MODE", "passkey") == "passkey" else [])
     )
+    if read_env().get("OPENAI_TUNNEL_ENABLED") == "1":
+        selected += ["dot-plugin", "dot-control", "dot-ingress", "dot-tunnel", "openai-tunnel"]
+    return list(dict.fromkeys(selected))
 
 
 def manifest(path):
@@ -221,7 +237,9 @@ def image_config(args):
                     file.encode() + b"\0" + hashlib.sha256(path.read_bytes()).digest()
                 )
         tag = "local-" + fingerprint.hexdigest()[:16]
-        refs = {kind: f"kakaotalk-collector/{kind}:{tag}" for kind in ("server", "device", "gateway")}
+        refs = {
+            kind: f"kakaotalk-collector/{kind}:{tag}" for kind in ("server", "device", "gateway")
+        }
     else:
         if not args.manifest:
             raise RuntimeError(
@@ -236,12 +254,58 @@ def image_config(args):
     }
 
 
+def prepare_android_builder():
+    if platform.machine() not in ("aarch64", "arm64"):
+        return
+    # Exercise the actual pinned build image: a registered emulator can still
+    # crash in cmp (and make apt report misleading signature failures).
+    dockerfile = (ROOT / "docker/device.Dockerfile").read_text()
+    image = re.search(
+        r"^FROM --platform=linux/amd64 (\S+) AS android-build$", dockerfile, re.MULTILINE
+    )
+    if not image:
+        raise RuntimeError("Cannot identify the Android build image")
+    probe = [
+        "docker",
+        "run",
+        "--rm",
+        "--platform",
+        "linux/amd64",
+        image[1],
+        "sh",
+        "-ec",
+        "printf probe >/tmp/probe; printf probe | cmp -s - /tmp/probe; java -version",
+    ]
+    try:
+        run(probe, capture=True, timeout=180)
+        return
+    except (RuntimeError, subprocess.TimeoutExpired):
+        print("Preparing the Android build emulator…", flush=True)
+    # This changes only the amd64 QEMU handler; other architectures and Rosetta
+    # registrations are preserved. Runtime containers stay native.
+    run(
+        [
+            "docker",
+            "run",
+            "--privileged",
+            "--rm",
+            "tonistiigi/binfmt:qemu-v10.0.4-56@sha256:30cc9a4d03765acac9be2ed0afc23af1ad018aed2c28ea4be8c2eb9afe03fbd1",
+            "--uninstall",
+            "qemu-x86_64",
+            "--install",
+            "amd64",
+        ]
+    )
+    run(probe, capture=True, timeout=180)
+
+
 def prepare_images(args):
     previous = (ROOT / ".env").read_text()
     refs = image_config(args)
     env_update(refs)
     try:
         if args.source:
+            prepare_android_builder()
             compose("build", "api", "device-agent", "gateway")
         else:
             compose("pull", *SERVICES, "dot-plugin", "dot-control", "dot-ingress")
@@ -261,6 +325,8 @@ def install(args):
                 "DOT_PUBLIC_URL": "https://kakao.example.invalid",
                 "DOT_APPROVAL_MODE": "passkey",
                 "ADMIN_AUTH_MODE": "passkey",
+                "HTTPS_PORT": str(args.admin_port or 8443),
+                "DOT_HTTP_PORT": str(args.mcp_port or 18787),
             }
         )
     host_check()
@@ -272,6 +338,7 @@ def install(args):
     init_secrets(args.source)
     if (ROOT / ".bridge/installed").exists() or existing:
         compose("up", "-d", "--no-build", "--no-recreate", *services())
+        atomic(ROOT / ".bridge/installed", "1\n")
         print("Existing installation preserved. Use update to change its images.")
         return
     prepare_images(args)
@@ -323,6 +390,15 @@ def doctor(report=True):
         )
         if not (ROOT / "secrets" / name).is_file()
     ]
+    if read_env().get("OPENAI_TUNNEL_ENABLED") == "1":
+        from ops.tunnel import status
+
+        reports["tunnel"] = status()
+        reports["missing_secrets"] += [
+            name
+            for name in ("openai_tunnel_api_key", "mcp_tunnel_authorization")
+            if not (ROOT / "secrets" / name).is_file()
+        ]
     if report:
         print(json.dumps(reports, indent=2))
     expected = set(services())
@@ -402,8 +478,9 @@ def passkey_setup(args):
             "passkey-login",
             "--link-only",
         ]
-        if args.url:
-            command += ["--url", args.url]
+        saved_origin = ROOT / ".bridge/admin-url"
+        if args.url or saved_origin.exists():
+            command += ["--url", args.url or saved_origin.read_text().strip()]
         if args.public_url:
             command += ["--public-url", args.public_url]
         if args.enroll:
@@ -429,9 +506,13 @@ def passkey_setup(args):
             )
 
         info = json.loads(helper("info"))
-        origin = private_url(args.url or info.get("admin_origin") or admin_url()).removesuffix(
-            "/admin/"
-        )
+        saved_origin = ROOT / ".bridge/admin-url"
+        origin = private_url(
+            args.url
+            or (saved_origin.read_text().strip() if saved_origin.exists() else None)
+            or info.get("admin_origin")
+            or admin_url()
+        ).removesuffix("/admin/")
         public = args.public_url or read_env().get("DOT_PUBLIC_URL", "")
         if public.endswith(".invalid"):
             public = ""
@@ -467,7 +548,7 @@ def passkey_setup(args):
     if args.link_only:
         print(link)
     else:
-        print("Open this private setup link (registration links expire in 10 minutes):\n" + link)
+        print("Open this setup link (registration links expire in 10 minutes):\n" + link)
         webbrowser.open(link)
 
 
@@ -482,7 +563,7 @@ def private_url(value):
         or parsed.fragment
         or parsed.path not in ("", "/admin/")
     ):
-        raise ValueError("Use the private admin HTTPS address without query parameters")
+        raise ValueError("Use the admin HTTPS address without query parameters")
     return value.rstrip("/").removesuffix("/admin") + "/admin/"
 
 
@@ -518,16 +599,26 @@ def connect(url):
     print(url + "/mcp\nRun ./bridge passkey-login to configure sign-in for this address.")
 
 
+def tailscale_binary():
+    installed = shutil.which("tailscale")
+    app = Path("/Applications/Tailscale.app/Contents/MacOS/Tailscale")
+    return installed or (str(app) if platform.system() == "Darwin" and app.is_file() else None)
+
+
 def expose(args):
-    if not shutil.which("tailscale"):
+    tailscale = tailscale_binary()
+    if not tailscale:
         raise RuntimeError("Install Tailscale and sign in first, then rerun ./bridge expose.")
-    status = json.loads(run(["tailscale", "status", "--json"], capture=True))
+    tailscale = (["sudo"] if platform.system() == "Linux" and os.geteuid() != 0 else []) + [
+        tailscale
+    ]
+    status = json.loads(run([*tailscale, "status", "--json"], capture=True))
     hostname = status.get("Self", {}).get("DNSName", "").rstrip(".")
     if status.get("BackendState") != "Running" or not re.fullmatch(
         r"[a-z0-9.-]+\.ts\.net", hostname
     ):
         raise RuntimeError("Sign in to Tailscale and enable MagicDNS first.")
-    existing = json.loads(run(["tailscale", "serve", "status", "--json"], capture=True))
+    existing = json.loads(run([*tailscale, "serve", "status", "--json"], capture=True))
     record_path = ROOT / ".bridge/expose.json"
     owned = json.loads(record_path.read_text()) if record_path.exists() else None
     if existing and (
@@ -538,30 +629,32 @@ def expose(args):
         )
     if platform.system() == "Darwin" and not args.local:
         config = json.loads((ROOT / ".bridge/mac.json").read_text())
-        admin_port = config["admin_port"]
         local = argparse.Namespace(command="connect", url="https://" + hostname)
         mac(local)
     else:
-        admin_port = int(read_env().get("HTTPS_PORT", "8443"))
         connect("https://" + hostname)
-    # Separate HTTPS ports: admin is tailnet-only; only OAuth/MCP is public.
-    run(["tailscale", "serve", "--bg", "--https=8443", f"https+insecure://localhost:{admin_port}"])
 
     def record_routes():
-        current = json.loads(run(["tailscale", "serve", "status", "--json"], capture=True))
+        current = json.loads(run([*tailscale, "serve", "status", "--json"], capture=True))
         atomic(record_path, json.dumps({"hostname": hostname, "config": current}))
 
-    record_routes()
     mcp_port = (
-        18787 if platform.system() == "Darwin" else int(read_env().get("DOT_HTTP_PORT", "18787"))
+        config.get("mcp_port", 18787)
+        if platform.system() == "Darwin" and not args.local
+        else int(read_env().get("DOT_HTTP_PORT", "18787"))
     )
-    run(["tailscale", "funnel", "--bg", "--https=443", f"http://127.0.0.1:{mcp_port}"])
+    run([*tailscale, "funnel", "--bg", "--https=443", f"http://127.0.0.1:{mcp_port}"])
     record_routes()
-    admin_url = "https://" + hostname + ":8443"
+    # Migrate only the old route whose complete configuration we verified above.
+    # Record each successful step so a failed migration can be retried safely.
+    if existing.get("Web", {}).get(hostname + ":8443"):
+        run([*tailscale, "serve", "--https=8443", "off"])
+        record_routes()
+    admin_url = "https://" + hostname
     atomic(ROOT / ".bridge/admin-url", admin_url)
     atomic(ROOT / ".bridge/public-url", "https://" + hostname)
     print(
-        f"Private admin: {admin_url}/admin/\nPublic MCP: https://{hostname}/mcp\nRun ./bridge passkey-login to register sign-in at this address."
+        f"Admin: {admin_url}/admin/\nMCP: {admin_url}/mcp\nBoth use HTTPS port 443. Admin requires passkey sign-in; MCP requires OAuth.\nRun ./bridge passkey-login to configure sign-in at this address."
     )
 
 
@@ -741,6 +834,14 @@ def restore(path, key):
                 "Restore verification failed. Existing volumes and keys were not changed."
             )
         activate_restore(stage, names)
+        restored = read_env()
+        if restored.get("OPENAI_TUNNEL_ENABLED") == "1":
+            atomic(
+                ROOT / ".bridge/tunnel.json",
+                json.dumps({"tunnel_id": restored["OPENAI_TUNNEL_ID"]}),
+            )
+        else:
+            (ROOT / ".bridge/tunnel.json").unlink(missing_ok=True)
         print(
             "Restored to new volumes; the old volumes and configuration were retained. Run ./bridge start, then check both sessions. External event subscriptions must be created again."
         )
@@ -801,9 +902,40 @@ def update(args):
 
 
 def package_source(destination):
-    files = run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], capture=True
-    ).split("\0")
+    # Release/source archives have no .git directory. Explicitly enumerate source
+    # roots so local credentials, volumes and virtualenvs cannot enter the guest.
+    from ops.source import CODE_DIRS
+
+    files = []
+    if (ROOT / ".git").exists() and shutil.which("git"):
+        files = run(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], capture=True
+        ).split("\0")
+    for entry in [] if files else sorted(ROOT.iterdir()):
+        if entry.is_symlink():
+            continue
+        if entry.is_dir() and entry.name in CODE_DIRS:
+            for folder, directories, names in os.walk(entry, followlinks=False):
+                directories[:] = [
+                    name
+                    for name in directories
+                    if name not in {"build", ".git", ".gradle", "__pycache__", "node_modules"}
+                    and not (Path(folder) / name).is_symlink()
+                ]
+                files.extend(str((Path(folder) / name).relative_to(ROOT)) for name in names)
+        elif entry.is_file() and entry.name in {
+            "bridge",
+            "compose.yaml",
+            "pyproject.toml",
+            "uv.lock",
+            "requirements.lock",
+            ".dockerignore",
+            ".gitignore",
+            "README.md",
+            "CONTRIBUTING.md",
+            "release.json",
+        }:
+            files.append(entry.name)
     with tarfile.open(destination, "w:gz") as archive:
         for file in sorted(set(files)):
             path = ROOT / file
@@ -815,8 +947,26 @@ def package_source(destination):
                     for p in path.relative_to(ROOT).parts
                 )
                 and not file.startswith(".env")
+                and not path.name.startswith(".env")
+                and not file.endswith((".local.plist", ".pyc", ".log", ".pem", ".key"))
             ):
                 archive.add(path, arcname=file, recursive=False)
+
+
+def available_port(preferred, requested=None, exclude=()):
+    port = requested if requested is not None else preferred
+    if not 1024 <= port <= 65535:
+        raise ValueError("Choose a port between 1024 and 65535")
+    with socket.socket() as probe:
+        try:
+            if port in exclude:
+                raise OSError("Port selected twice")
+            probe.bind(("127.0.0.1", port))
+        except OSError:
+            if requested is not None:
+                raise RuntimeError(f"Port {port} is already in use. Choose another port.") from None
+            probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
 
 
 def mac(args):
@@ -825,11 +975,17 @@ def mac(args):
     config_path = ROOT / ".bridge/mac.json"
     if not config_path.exists() and args.command != "install":
         raise RuntimeError("Run ./bridge install first; this checkout has no managed Lima runtime.")
-    config = (
-        json.loads(config_path.read_text())
-        if config_path.exists()
-        else {"vm": args.vm, "directory": "/srv/kakaotalk-bridge", "admin_port": args.admin_port}
-    )
+    existing_config = config_path.exists()
+    if existing_config:
+        config = json.loads(config_path.read_text())
+    else:
+        admin_port = available_port(18443, args.admin_port)
+        config = {
+            "vm": args.vm,
+            "directory": "/srv/kakaotalk-bridge",
+            "admin_port": admin_port,
+            "mcp_port": available_port(18787, args.mcp_port, (admin_port,)),
+        }
     vm, directory = config["vm"], config["directory"]
 
     def guest(*command, capture=False):
@@ -840,13 +996,17 @@ def mac(args):
 
     if args.command in ("install", "update"):
         instances = run(["limactl", "list", "--format", "{{.Name}}"], capture=True).splitlines()
+        if vm in instances and not existing_config:
+            raise RuntimeError(
+                "A VM with this name already exists outside this installation. Choose another --vm name."
+            )
         if vm not in instances:
             if (
                 not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,48}", vm)
                 or not 1024 <= config["admin_port"] <= 65535
             ):
                 raise ValueError("Invalid VM name or admin port")
-            for port in (config["admin_port"], 18787):
+            for port in (config["admin_port"], config.get("mcp_port", 18787)):
                 with socket.socket() as probe:
                     probe.settimeout(0.2)
                     if probe.connect_ex(("127.0.0.1", port)) == 0:
@@ -862,7 +1022,7 @@ def mac(args):
             )
             template = template.replace(
                 "  - guestPortRange:",
-                "  - guestPort: 18787\n    hostPort: 18787\n    hostIP: 127.0.0.1\n  - guestPortRange:",
+                f"  - guestPort: 18787\n    hostPort: {config.get('mcp_port', 18787)}\n    hostIP: 127.0.0.1\n  - guestPortRange:",
             )
             if platform.machine() == "x86_64":
                 template = template.replace("arch: aarch64", "arch: x86_64").replace(
@@ -871,6 +1031,9 @@ def mac(args):
             with tempfile.TemporaryDirectory() as folder:
                 path = Path(folder) / "lima.yaml"
                 path.write_text(template)
+                # Persist port choices before provisioning so a failed first boot
+                # resumes the same VM and forwarding configuration.
+                atomic(config_path, json.dumps(config))
                 run(["limactl", "start", "--tty=false", "--name", vm, str(path)])
         else:
             run(["limactl", "start", "--tty=false", vm])
@@ -919,6 +1082,37 @@ def mac(args):
         else:
             info = json.loads(invoke("admin", "--info", capture=True))
             open_admin_page(args.url or info.get("origin") or admin_url())
+    elif args.command == "tunnel":
+        if args.tunnel_command == "configure":
+            from ops.tunnel import credentials
+
+            credentials(args.tunnel_id, args.api_key_file)
+            target = "/tmp/kakao-tunnel-" + secrets.token_hex(8)
+            run(["limactl", "shell", "--workdir=/", vm, "mkdir", "-m", "700", target])
+            try:
+                run(
+                    [
+                        "limactl",
+                        "copy",
+                        str(Path(args.api_key_file).resolve()),
+                        vm + ":" + target + "/key",
+                    ]
+                )
+                invoke(
+                    "tunnel",
+                    "configure",
+                    "--tunnel-id",
+                    args.tunnel_id,
+                    "--api-key-file",
+                    target + "/key",
+                )
+                atomic(ROOT / ".bridge/tunnel.json", json.dumps({"tunnel_id": args.tunnel_id}))
+            finally:
+                guest("rm", "-rf", target)
+        else:
+            invoke("tunnel", args.tunnel_command)
+            if args.tunnel_command == "disable":
+                (ROOT / ".bridge/tunnel.json").unlink(missing_ok=True)
     elif args.command == "import-apks":
         target = "/tmp/kakao-import-" + secrets.token_hex(8)
         files = list(Path(args.folder).glob("*.apk"))
@@ -966,10 +1160,21 @@ def mac(args):
                     ["limactl", "copy", str(Path(source).resolve()), vm + ":" + remote + "/" + name]
                 )
             invoke("restore", remote + "/backup.kcs", "--key", remote + "/key")
+            # Runtime .env is restored, but the Mac-only launch hint is not in snapshots.
+            restored_tunnel = json.loads(invoke("tunnel", "status", capture=True))
+            if restored_tunnel["configured"]:
+                atomic(
+                    ROOT / ".bridge/tunnel.json",
+                    json.dumps({"tunnel_id": restored_tunnel["tunnel_id"]}),
+                )
+            else:
+                (ROOT / ".bridge/tunnel.json").unlink(missing_ok=True)
         finally:
             guest("rm", "-rf", remote)
 
     else:
+        if args.command == "start":
+            run(["limactl", "start", "--tty=false", vm])
         options = [args.command]
         if args.command == "connect":
             options += ["--url", args.url]
@@ -981,13 +1186,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--local", action="store_true", help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="command", required=True)
+    from ops.onboarding import add_arguments, up
+
+    add_arguments(sub.add_parser("up", help="Prepare everything and open KakaoTalk setup"))
+    from ops.tunnel import add_arguments as tunnel_arguments
+
+    tunnel_arguments(sub.add_parser("tunnel", help="Manage a private personal OpenAI MCP tunnel"))
     for name in ("install", "update"):
         cmd = sub.add_parser(name)
         mode = cmd.add_mutually_exclusive_group()
         mode.add_argument("--source", action="store_true")
         mode.add_argument("--manifest")
         cmd.add_argument("--vm", default="kakaotalk-bridge")
-        cmd.add_argument("--admin-port", type=int, default=18443)
+        cmd.add_argument("--admin-port", type=int)
+        cmd.add_argument("--mcp-port", type=int)
     cmd = sub.add_parser("admin")
     cmd.add_argument("--url")
     cmd.add_argument(
@@ -999,7 +1211,7 @@ def main():
         "passkey-login",
         help="Configure passkeys for admin and MCP",
     )
-    cmd.add_argument("--url", help="Private HTTPS admin origin; same hostname as public MCP")
+    cmd.add_argument("--url", help="HTTPS admin origin; same hostname as public MCP")
     cmd.add_argument("--public-url", help="Public HTTPS MCP origin")
     cmd.add_argument(
         "--enroll", action="store_true", help="Issue a one-time registration/recovery link"
@@ -1018,6 +1230,9 @@ def main():
         sub.add_parser(name)
     args = parser.parse_args()
     try:
+        if args.command == "up":
+            up(args)
+            return
         if (
             args.command == "backup"
             and args.name
@@ -1053,6 +1268,10 @@ def main():
                 raise SystemExit(1)
         elif args.command == "connect":
             connect(args.url)
+        elif args.command == "tunnel":
+            from ops.tunnel import run as run_tunnel
+
+            run_tunnel(args)
         elif args.command == "backup":
             backup(name=args.name)
         elif args.command == "restore":
@@ -1063,7 +1282,19 @@ def main():
                 raise ValueError("No APK files in this folder")
             destination = ROOT / "inputs/kakao"
             destination.mkdir(parents=True, exist_ok=True)
-            if any(destination.glob("*.apk")):
+            existing = sorted(destination.glob("*.apk"))
+            if existing:
+
+                def hashes(paths):
+                    result = []
+                    for path in paths:
+                        with path.open("rb") as stream:
+                            result.append(hashlib.file_digest(stream, "sha256").hexdigest())
+                    return sorted(result)
+
+                if hashes(existing) == hashes(files):
+                    print("This APK set is already imported; existing files preserved.")
+                    return
                 raise RuntimeError(
                     "inputs/kakao already contains APKs. Move the old set aside first; do not mix versions."
                 )
@@ -1089,6 +1320,12 @@ def main():
                 *services(),
             )
             pending.unlink(missing_ok=True)
+    except KeyboardInterrupt:
+        print("Interrupted. Run the same command to continue.", file=sys.stderr)
+        raise SystemExit(130) from None
+    except subprocess.TimeoutExpired:
+        print("A setup command timed out. Run the same command to retry.", file=sys.stderr)
+        raise SystemExit(1) from None
     except (RuntimeError, ValueError, OSError) as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1) from None

@@ -80,6 +80,7 @@ class Action(Strict):
         "configure",
         "open-store",
         "setup-check",
+        "setup-poll",
         "open-kakao",
         "keyboard",
         "login-check",
@@ -265,7 +266,7 @@ def create_app(
             return FileResponse(STATIC.parent.parent / "dot_plugin/static/passkey.js")
         if asset == "logo.svg":
             return FileResponse(STATIC.parent.parent / "assets" / asset)
-        if asset not in {"app.js", "style.css"}:
+        if asset not in {"app.js", "setup-flow.js", "style.css"}:
             raise HTTPException(404)
         return FileResponse(STATIC / asset)
 
@@ -322,7 +323,7 @@ def create_app(
         info = passkey_call("info")
         origin = "https://" + request.headers.get("host", "")
         if auth_mode != "passkey" or not info["configured"] or origin != info["admin_origin"]:
-            raise HTTPException(403, "Open the private admin address configured for passkeys.")
+            raise HTTPException(403, "Open the admin address configured for passkeys.")
         return origin
 
     @app.post("/admin/api/passkeys/{operation}")
@@ -487,6 +488,12 @@ def create_app(
     def connection_list(current: Annotated[dict, Depends(authenticated)]):
         return connection_call("GET", "/connections")
 
+    from dot_plugin.control import TunnelDecision
+
+    @app.post("/admin/api/tunnel/decision")
+    def tunnel_decision(body: TunnelDecision, current: Annotated[dict, Depends(authenticated)]):
+        return connection_call("POST", "/tunnel/decision", body.model_dump())
+
     @app.post("/admin/api/connections/{identity}/decide")
     def decide(
         identity: Identity, body: Decision, current: Annotated[dict, Depends(authenticated)]
@@ -612,7 +619,7 @@ def create_app(
                     device.confirm(body.phone_active, body.tablet_active)
                 elif body.name in ("phone-active", "phone-lost"):
                     device.record_phone(body.name == "phone-active")
-                if body.name in ("setup-check", "prepare", "configure", "bootstrap"):
+                if body.name in ("setup-check", "setup-poll", "prepare", "configure", "bootstrap"):
                     setup_snapshot = device.setup_status()
                 if body.name in (
                     "setup-check",
@@ -633,6 +640,7 @@ def create_app(
                 else "Existing enrollment and collection approval preserved.",
                 "open-store": "Aurora opened. Search for KakaoTalk by Kakao Corp.",
                 "setup-check": "Setup status refreshed.",
+                "setup-poll": "Setup status refreshed.",
                 "bootstrap": "Installation complete. Open KakaoTalk and check login options.",
                 "open-kakao": "KakaoTalk opened.",
                 "keyboard": "Keyboard connected. Select an input field on the tablet.",

@@ -14,7 +14,7 @@ KakaoTalk Bridge runs KakaoTalk headlessly on your server using redroid as a vir
 
 Iris reads the tablet's local message database and stores the collected messages on your server. Run the stack with Docker Compose, use the web admin console to install and sign in, then connect your AI client.
 
-Use a [passkey](docs/passkeys.md) for admin and MCP connection approval. No developer account, client secret or separate authentication server is needed.
+Use a [passkey](docs/passkeys.md) for admin and MCP connection approval. The default HTTPS/OAuth connection needs no developer account, client secret or separate authentication server. The optional OpenAI tunnel needs an OpenAI tunnel ID and runtime API key.
 
 ## See it in action
 
@@ -44,13 +44,24 @@ The AI client searches through MCP and writes the summary from the retrieved mes
   <img src="docs/assets/message-flow.svg" width="960" alt="Iris reads messages on a secondary tablet on your server and stores them locally. Your AI retrieves them through OAuth and MCP.">
 </p>
 
-Messages and the KakaoTalk session are stored in server volumes. Retrieved content is sent to your connected AI client. Admin access stays on private HTTPS; the remote MCP endpoint uses public HTTPS with OAuth. See [Architecture](docs/design.md) and [Security](docs/security.md).
+Messages and the KakaoTalk session are stored in server volumes. Retrieved content is sent to your connected AI client. Admin and MCP share one HTTPS address on port 443: `/admin/` requires passkey sign-in and `/mcp` requires OAuth. See [Architecture](docs/design.md) and [Security](docs/security.md).
 
 Run Redroid in a dedicated VM. Its available official images have old Android security patches; authenticated ADB and service isolation reduce exposure but do not remove that [remaining risk](docs/security.md#dependency-results-and-remaining-android-risk).
 
 ## Getting started
 
-1. **Set up your server.** Use the [installer](docs/onboarding.md) on Mac or Linux and register a [passkey](docs/passkeys.md) for admin and ChatGPT connections. Open the private admin URL and confirm with your device. The setup guide supports Aurora installation without a USB-connected phone.
+From the downloaded project folder, run:
+
+```bash
+bash install.sh
+```
+
+The installer prepares the execution environment, starts your bridge and opens the
+setup page. Run the same command again to resume or reopen it. See the
+[one-command setup guide](docs/quickstart.md) for download installation, Windows
+entry points, supported environments and the remaining first-use confirmations.
+
+1. **Open your bridge.** Follow the installer's browser sign-in and save a [passkey](docs/passkeys.md). Device preparation runs automatically. Install KakaoTalk through the on-screen store; collection components are then configured automatically.
 2. **Sign in through the admin console.** Follow the [first login procedure](docs/web-ui.md#first-login). Select the secondary-device option and manually confirm that your phone's existing session remains active before starting collection.
 3. **Connect your AI client.** Choose an [MCP connection method](#connect-your-ai) below.
 4. **Try your first query.** Send yourself the two sample messages above from your phone, then ask your connected agent to find messages mentioning `Friday`. Confirm that both messages appear before asking for a summary.
@@ -64,6 +75,7 @@ Run Redroid in a dedicated VM. Its available official images have old Android se
 | Connection | Setup | Validation |
 | --- | --- | --- |
 | Remote MCP over HTTPS with OAuth | [Server deployment and ChatGPT connection](docs/dot-plugin.md) | Passkey connection and profile/status calls verified; message retrieval confirmed by user testing. Event execution remains unverified |
+| Personal OpenAI Secure MCP Tunnel | [Outbound-only MCP setup](docs/openai-tunnel.md); keep admin HTTPS reachable by your browser | Local auth, protocol, tools and event tests; live OpenAI connection unverified |
 | stdio MCP launched by your client | [Configuration example](docs/api.md#stdio-mcp) | Automated protocol tests; verify compatibility with your client |
 
 [MCP Events](docs/events.md) are optional and require a separate subscription. Connecting a client does not create subscriptions or automated tasks.
@@ -78,7 +90,7 @@ Run Redroid in a dedicated VM. Its available official images have old Android se
 
 The Linux guide suggests starting with 4 vCPUs and 8 GB RAM; these are not measured minimums. The supplied Lima VM uses 6 CPUs and 8 GiB RAM. See [Validation scope](docs/implementation.md) for the tested environment and remaining checks.
 
-The installer has isolated tests. A fresh installation through the CLI and the release publishing workflow still need end-to-end validation; use `--source` until prebuilt releases are available.
+The installer has isolated tests. A fresh installation through the CLI and the release publishing workflow still need end-to-end validation; `bridge up` builds source until you supply a verified prebuilt release manifest. Windows currently uses an existing Linux server or a Binder-enabled WSL2 distribution; it is not a verified native Android host.
 
 ## Collection scope
 
@@ -90,9 +102,9 @@ The installer has isolated tests. A fresh installation through the CLI and the r
 
 | Task | Documentation |
 | --- | --- |
-| Install and sign in | [Installer and setup guide](docs/onboarding.md), [Linux](docs/install.md), [Mac](docs/local-redroid.md), [Admin console](docs/web-ui.md) |
+| Install and sign in | [One-command setup](docs/quickstart.md), [Advanced installer](docs/onboarding.md), [Linux](docs/install.md), [Mac](docs/local-redroid.md), [Admin console](docs/web-ui.md) |
 | Configure administrator access | [Passkey setup and recovery](docs/passkeys.md) |
-| Connect an AI client or use the API | [OAuth MCP](docs/dot-plugin.md), [HTTP API and stdio MCP](docs/api.md), [Events](docs/events.md) |
+| Connect an AI client or use the API | [OAuth MCP](docs/dot-plugin.md), [Personal OpenAI tunnel](docs/openai-tunnel.md), [HTTP API and stdio MCP](docs/api.md), [Events](docs/events.md) |
 | Check status, restart, and back up | [Operations](docs/operations.md), [Security](docs/security.md) |
 | Understand, change, and verify the implementation | [Architecture](docs/design.md), [Iris](docs/iris.md), [Development](docs/development.md), [Validation scope](docs/implementation.md) |
 

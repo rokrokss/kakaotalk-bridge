@@ -7,6 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="/admin/logo.svg?v=cc464e4">
   <link rel="stylesheet" href="/admin/style.css">
   <script src="/admin/passkey.js" defer></script>
+  <script src="/admin/setup-flow.js" defer></script>
   <script src="/admin/app.js" defer></script>
 </head>
 <body>
@@ -52,9 +53,10 @@
         <span id="collector-status" class="collector-state" role="status">Checking collection status</span>
       </div>
       <section class="setup-guide" aria-labelledby="guide-title">
-        <div class="section-heading"><h2 id="guide-title">Set up your bridge</h2><button data-action="setup-check" class="quiet">Refresh setup</button></div>
+        <div class="section-heading"><h2 id="guide-title">Connect your KakaoTalk</h2><button data-action="setup-check" class="quiet">Check again</button></div>
         <ol id="setup-progress" class="setup-progress" aria-label="Setup progress"></ol>
         <p id="setup-next">Checking the server and tablet…</p>
+        <p class="hint">Device preparation runs automatically. You complete store installation and KakaoTalk sign-in on the screen below.</p>
         <button id="setup-next-button" class="primary" hidden>Continue</button>
         <p class="hint">The phone session is confirmed by you. Tablet settings alone do not guarantee it stays signed in.</p>
       </section>
@@ -70,7 +72,7 @@
           <div class="screen-stage">
             <div id="screen-placeholder">
               <h2>Waiting for the screen</h2>
-              <p>If the screen does not connect, check that redroid is running on the server.</p>
+              <p>Your private device is starting. If it stays here, run the installation command again.</p>
             </div>
             <img id="screen" hidden draggable="false" alt="Tablet screen controlled by clicking or dragging">
           </div>
@@ -164,6 +166,7 @@
             <div class="section-body">
               <p id="connection-help">Add the MCP address below in ChatGPT and choose OAuth. Confirm with your passkey and review access in the connecting browser.</p>
               <code id="mcp-address" class="endpoint">Start the dot profile to connect.</code>
+              <div id="tunnel-connection" hidden aria-live="polite"></div>
               <button id="refresh-connections" class="quiet">Refresh connections</button>
               <div id="connections-list" aria-live="polite"></div>
               <p class="hint">Connecting does not subscribe to events automatically.</p>

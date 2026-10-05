@@ -24,6 +24,32 @@ def test_prepare_refuses_incomplete_android(monkeypatch):
     adb.assert_not_called()
 
 
+def test_locale_restart_waits_for_a_new_boot_before_opening_store(monkeypatch):
+    monkeypatch.setattr(
+        setup,
+        "status",
+        lambda: {"state": "needs_setup", "locale": "en-US", "aurora_installed": True},
+    )
+    adb = Mock(
+        side_effect=lambda *a, **k: (
+            "package:android" if a[1:4] == ("pm", "list", "packages") else "0"
+        )
+    )
+    monkeypatch.setattr(cli, "adb", adb)
+    sample = Mock(side_effect=[{"state": "booting"}, {"state": "needs_setup"}])
+    monkeypatch.setattr(cli, "sample", sample)
+    monkeypatch.setattr(setup.time, "sleep", Mock())
+    opened = Mock()
+    monkeypatch.setattr(setup, "open_store", opened)
+    assert setup.prepare() is True
+    calls = [call.args for call in adb.call_args_list]
+    assert calls.index(("shell", "setprop", "sys.boot_completed", "0")) < calls.index(
+        ("shell", "stop")
+    )
+    assert sample.call_count == 2
+    opened.assert_called_once()
+
+
 def test_wrong_aurora_artifact_is_never_installed(monkeypatch, tmp_path):
     import io
 
@@ -81,3 +107,14 @@ def test_publisher_signature_is_required(monkeypatch):
         setup.verify_kakao(["/tmp/test.apk"])
     result.stdout = "Signer #1 certificate SHA-256 digest: " + setup.KAKAO_SIGNER
     setup.verify_kakao(["/tmp/test.apk"])
+
+
+def test_installed_apk_verification_accepts_android_randomized_paths(monkeypatch):
+    remote = "/data/app/~~random==/com.kakao.talk-identifier==/base.apk"
+    adb = Mock(return_value="package:" + remote)
+    monkeypatch.setattr(cli, "adb", adb)
+    verify = Mock()
+    monkeypatch.setattr(setup, "verify_kakao", verify)
+    setup.verify_installed_kakao()
+    assert adb.call_args.args[:2] == ("pull", remote)
+    verify.assert_called_once()

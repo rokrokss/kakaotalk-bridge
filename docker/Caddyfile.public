@@ -6,14 +6,19 @@
     request_body {
         max_size 1MB
     }
-    # Path scoping alone does not hide cookies from a compromised same-host app.
-    # Filter at this separate, immutable ingress before the public process sees them.
-    request_header Cookie "(^|;)[[:space:]]*(__Host-kakao-admin|__Secure-kakao-admin-v2|__Host-passkey-admin-flow)=[^;]*" ""
-    @private path /admin /admin/* /passkeys/admin/* /internal/*
+    redir / /admin/ 302
+    redir /admin /admin/ 302
+    handle /admin/* {
+        reverse_proxy admin:8080
+    }
+    # The shared browser entry point never exposes internal control or ingestion.
+    @private path /passkeys/admin /passkeys/admin/* /internal /internal/* /v1 /v1/*
     handle @private {
         respond 404
     }
     handle {
+        # Only the admin upstream may receive or set admin browser cookies.
+        request_header Cookie "(^|;)[[:space:]]*(__Host-kakao-admin|__Secure-kakao-admin-v2|__Host-passkey-admin-flow)=[^;]*" ""
         reverse_proxy dot-plugin:8787 {
             # A public response must not overwrite a private browser cookie either.
             header_down Set-Cookie "^[[:space:]]*(__Host-kakao-admin|__Secure-kakao-admin-v2|__Host-passkey-admin-flow)=.*$" ""

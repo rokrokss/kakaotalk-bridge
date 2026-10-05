@@ -161,7 +161,7 @@ services:
       - admin-state:/auth
       - ./inputs/kakao:/inputs/kakao:ro
     secrets: [admin_token, read_token, ingest_token, tls_cert, mcp_approval_token]
-    networks: [device-net, backend-net, private-control-net]
+    networks: [device-net, backend-net, private-control-net, admin-ingress-net]
     depends_on:
       redroid:
         condition: service_started
@@ -211,6 +211,8 @@ services:
       DOT_PUBLIC_URL: ${DOT_PUBLIC_URL:-https://kakao.example.invalid}
       DOT_DB_PATH: /data/dot.db
       DOT_APPROVAL_MODE: ${DOT_APPROVAL_MODE:-passkey}
+      OPENAI_TUNNEL_ID: ${OPENAI_TUNNEL_ID:-}
+      OPENAI_TUNNEL_ENABLED: ${OPENAI_TUNNEL_ENABLED:-0}
     secrets: [read_token, mcp_link_key, mcp_storage_key, mcp_passkey_token]
     volumes: [dot-state:/data]
     networks: [public-read-net, public-assertion-net, public-ingress-net, dot-net]
@@ -240,9 +242,11 @@ services:
     volumes: [./docker/Caddyfile.public:/etc/caddy/Caddyfile:ro]
     ports: ["127.0.0.1:${DOT_HTTP_PORT:-18787}:8786"]
     # Docker does not publish ports for containers on exclusively internal networks.
-    networks: [public-ingress-net, public-edge-net]
+    networks: [public-ingress-net, admin-ingress-net, public-edge-net]
     depends_on:
       dot-plugin:
+        condition: service_healthy
+      admin:
         condition: service_healthy
     healthcheck:
       test: [CMD, wget, -q, -T, "3", -O, /dev/null, "http://127.0.0.1:8786/health/live"]
@@ -262,9 +266,62 @@ services:
       DOT_PUBLIC_URL: ${DOT_PUBLIC_URL:-https://kakao.example.invalid}
       DOT_DB_PATH: /data/dot.db
       DOT_APPROVAL_MODE: ${DOT_APPROVAL_MODE:-passkey}
+      OPENAI_TUNNEL_ID: ${OPENAI_TUNNEL_ID:-}
+      OPENAI_TUNNEL_ENABLED: ${OPENAI_TUNNEL_ENABLED:-0}
     secrets: [mcp_storage_key, mcp_approval_token, mcp_passkey_token]
     volumes: [dot-state:/data, passkey-state:/passkeys]
     networks: [private-control-net, public-assertion-net]
+
+  # No published ports and no connection to the public ingress or Android.
+  dot-tunnel:
+    <<: *server
+    image: ${DOT_IMAGE:-kakaotalk-collector/dot:0.1.0}
+    profiles: [tunnel]
+    restart: unless-stopped
+    command: [uvicorn, dot_plugin.tunnel:create_app, --factory, --host, 0.0.0.0, --port, "8789", --no-access-log]
+    environment:
+      API_URL: http://api:8000
+      DOT_PUBLIC_URL: ${DOT_PUBLIC_URL:-https://kakao.example.invalid}
+      DOT_DB_PATH: /data/dot.db
+      DOT_APPROVAL_MODE: ${DOT_APPROVAL_MODE:-passkey}
+      OPENAI_TUNNEL_ID: ${OPENAI_TUNNEL_ID:-}
+      OPENAI_TUNNEL_ENABLED: ${OPENAI_TUNNEL_ENABLED:-0}
+    secrets: [read_token, mcp_storage_key, mcp_passkey_token, mcp_tunnel_authorization]
+    volumes: [dot-state:/data]
+    networks: [public-read-net, public-assertion-net, tunnel-mcp-net]
+    depends_on:
+      dot-plugin:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8789/health/live', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  openai-tunnel:
+    image: ${OPENAI_TUNNEL_IMAGE:-ghcr.io/openai/tunnel-client:v0.0.15}
+    user: "65532:65532"
+    profiles: [tunnel]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    pids_limit: 128
+    tmpfs: [/tmp]
+    command: [--control-plane.api-key=file:/run/secrets/openai_tunnel_api_key]
+    environment:
+      CONTROL_PLANE_TUNNEL_ID: ${OPENAI_TUNNEL_ID:-}
+      MCP_SERVER_URL: http://dot-tunnel:8789/mcp
+      MCP_EXTRA_HEADERS: "X-Bridge-Tunnel-Authorization: file:/run/secrets/mcp_tunnel_authorization"
+      MCP_DISCOVERY_EXTRA_HEADERS: "X-Bridge-Tunnel-Authorization: file:/run/secrets/mcp_tunnel_authorization"
+      HEALTH_LISTEN_ADDR: 0.0.0.0:8080
+    secrets: [openai_tunnel_api_key, mcp_tunnel_authorization]
+    networks: [tunnel-mcp-net, tunnel-egress-net]
+    depends_on:
+      dot-tunnel:
+        condition: service_healthy
+    logging: *logging
 
 volumes:
   android-data:
@@ -292,8 +349,13 @@ networks:
     internal: true
   public-ingress-net:
     internal: true
+  admin-ingress-net:
+    internal: true
   public-edge-net:
   dot-net:
+  tunnel-mcp-net:
+    internal: true
+  tunnel-egress-net:
 
 secrets:
   admin_token:
@@ -322,3 +384,7 @@ secrets:
     file: ./secrets/mcp_approval_token
   mcp_passkey_token:
     file: ./secrets/mcp_passkey_token
+  mcp_tunnel_authorization:
+    file: ./secrets/mcp_tunnel_authorization
+  openai_tunnel_api_key:
+    file: ./secrets/openai_tunnel_api_key

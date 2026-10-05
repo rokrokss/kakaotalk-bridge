@@ -1,4 +1,4 @@
-"""Exercise the real public Caddy config with synthetic cookies and an echo server.
+"""Exercise the shared Caddy ingress with synthetic admin and MCP upstreams.
 
 Requires locally built server and gateway images. No production volumes or ports
 are used. Override SMOKE_SERVER_IMAGE / SMOKE_GATEWAY_IMAGE when testing a release.
@@ -17,6 +17,7 @@ def main():
     network = f"kakao-ingress-test-{suffix}"
     edge = f"{network}-edge"
     upstream = f"{network}-echo"
+    admin = f"{network}-admin"
     ingress = f"{network}-proxy"
     server = os.getenv("SMOKE_SERVER_IMAGE", "kakaotalk-collector/server:0.1.0")
     gateway = os.getenv("SMOKE_GATEWAY_IMAGE", "kakaotalk-collector/gateway:2.11.7")
@@ -27,7 +28,7 @@ def main():
 
     echo = """
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import json
+import json, sys
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -38,7 +39,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps(self.headers.get_all('Cookie', [])).encode())
     def log_message(self, *args): pass
-HTTPServer(('0.0.0.0', 8787), Handler).serve_forever()
+HTTPServer(('0.0.0.0', int(sys.argv[1])), Handler).serve_forever()
 """
     probe = """
 import http.client, json, time
@@ -51,7 +52,7 @@ def request(path, cookies):
         r = c.getresponse()
         headers = r.getheaders()
         for key, value in headers:
-            if key.lower() == 'set-cookie':
+            if key.lower() == 'set-cookie' and not path.startswith('/admin/'):
                 assert 'private-test' not in value, headers
         if r.status == 200:
             assert any(key.lower() == 'set-cookie' and value.startswith('__Host-kakao-link=')
@@ -78,10 +79,17 @@ for cookies in cases:
     values = json.loads(body)
     assert all('private-test' not in value for value in values), cookies
     if cookies: assert keep in ';'.join(values), cookies
-for path in ['/admin', '/admin/', '/admin/api/session', '/passkeys/admin/credentials', '/internal/v1/test']:
+for path in ['/passkeys/admin', '/passkeys/admin/credentials', '/internal', '/internal/v1/test', '/v1/messages']:
     assert request(path, [keep])[0] == 404, path
+for path in ['/', '/admin']:
+    assert request(path, [])[0] == 302, path
+for path in ['/admin/', '/admin/api/session']:
+    status, body = request(path, ['__Secure-kakao-admin-v2=private-test'])
+    assert status == 200, path
+    assert 'private-test' in ';'.join(json.loads(body)), path
 print(f'PASS: {len(cases)} cookie cases, including duplicate headers; OAuth cookie retained')
-print('PASS: 5 private paths rejected before upstream')
+print('PASS: admin and MCP share one port; admin cookies reach only admin')
+print('PASS: root/admin redirects and 5 internal paths rejected before upstream')
 print('PASS: private Set-Cookie values suppressed; OAuth Set-Cookie retained')
 """
     try:
@@ -108,6 +116,26 @@ print('PASS: private Set-Cookie values suppressed; OAuth Set-Cookie retained')
             server,
             "-c",
             echo,
+            "8787",
+        )
+        run(
+            "run",
+            "-d",
+            "--name",
+            admin,
+            "--network",
+            network,
+            "--network-alias",
+            "admin",
+            "--read-only",
+            "--cap-drop",
+            "ALL",
+            "--entrypoint",
+            "python",
+            server,
+            "-c",
+            echo,
+            "8080",
         )
         run(
             "run",
@@ -180,7 +208,7 @@ print('PASS: private Set-Cookie values suppressed; OAuth Set-Cookie retained')
             connection.close()
         print("PASS: published host-loopback port works and filters cookies")
     finally:
-        for name in [ingress, upstream]:
+        for name in [ingress, upstream, admin]:
             subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
         subprocess.run(["docker", "network", "rm", network], capture_output=True, check=False)
         subprocess.run(["docker", "network", "rm", edge], capture_output=True, check=False)

@@ -1,4 +1,5 @@
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -17,8 +18,11 @@ class Config:
     api_url: str = "http://api:8000"
     read_token: str = ""
     approval_mode: str = "passkey"
+    tunnel_id: str = ""
 
     def __post_init__(self):
+        if self.tunnel_id and not re.fullmatch(r"tunnel_[a-z0-9]{32}", self.tunnel_id):
+            raise ValueError("Invalid OpenAI tunnel ID")
         if self.approval_mode not in {"key", "admin", "passkey"}:
             raise ValueError("Invalid approval mode")
         u = urlsplit(self.public_url)
@@ -41,6 +45,10 @@ class Config:
     def resource(self):
         return self.public_url + "/mcp"
 
+    @property
+    def tunnel_resource(self):
+        return "urn:kakaotalk:personal-tunnel:" + self.tunnel_id
+
     @classmethod
     def from_env(cls, *, control=False):
         def secret(name):
@@ -56,4 +64,7 @@ class Config:
             os.getenv("API_URL", "http://api:8000"),
             "" if control else secret("READ_TOKEN"),
             os.getenv("DOT_APPROVAL_MODE", "passkey"),
+            os.getenv("OPENAI_TUNNEL_ID", "")
+            if os.getenv("OPENAI_TUNNEL_ENABLED", "1") == "1"
+            else "",
         )

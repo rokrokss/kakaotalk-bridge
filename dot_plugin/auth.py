@@ -50,6 +50,8 @@ def redirect_origin(uri):
 
 
 class OAuth:
+    transport = "oauth"
+
     def __init__(self, config, state, passkeys=None):
         self.config, self.state = config, state
         from server.auth_migration import retire_social_login
@@ -538,7 +540,12 @@ class OAuth:
             raise AuthError("invalid_token", 401)
         record = self.state.get("access", digest(authorization[7:]))
         grant = self.active_grant(record["grant_id"]) if record else None
-        if not record or record["expires"] <= time.time() or not grant:
+        if (
+            not record
+            or record["expires"] <= time.time()
+            or not grant
+            or grant.get("transport", "oauth") != "oauth"
+        ):
             raise AuthError("invalid_token", 401)
         return {**grant, "grant_id": record["grant_id"]}
 
@@ -549,8 +556,22 @@ class OAuth:
             if grant
             and not grant["revoked"]
             and grant["expires"] > time.time()
-            and grant["resource"] == self.config.resource
-            and (not grant.get("policy") or grant["policy"] == self.policy())
+            and (
+                grant.get("transport", "oauth") == "oauth"
+                and grant["resource"] == self.config.resource
+                or grant.get("transport") == "tunnel"
+                and bool(self.config.tunnel_id)
+                and grant["resource"] == self.config.tunnel_resource
+            )
+            and (
+                not grant.get("policy")
+                or grant["policy"]
+                == (
+                    self.passkey_call("info")["policy"]
+                    if grant.get("transport") == "tunnel"
+                    else self.policy()
+                )
+            )
             else None
         )
 

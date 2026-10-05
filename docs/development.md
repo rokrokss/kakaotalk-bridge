@@ -9,6 +9,7 @@ uv sync --frozen --python 3.12
 uv run pytest -q
 uv run ruff check .
 node --check webui/static/app.js
+node --test tests/setup-flow.test.cjs
 node --check dot_plugin/static/approval.js
 docker compose --profile dot config --quiet
 ```
@@ -30,6 +31,7 @@ uv export --frozen --no-dev --no-emit-project --output-file requirements.lock
 | `webui/` | Admin authentication, device control, and static web console |
 | `dot_plugin/` | OAuth, remote MCP, and optional Events |
 | `ops/`, `bridge` | Host CLI, isolated Lima installation, image updates and encrypted full snapshots |
+| `install.sh`, `install.ps1`, `ops/onboarding.py` | One-command launch, dependency preparation and resumable setup |
 | `tests/` | Synthetic-data tests and fake devices for browser previews |
 | `deploy/`, `scripts/` | Lima, supervisor, installation, diagnostics, and backup tools |
 
@@ -66,15 +68,31 @@ uv run python scripts/smoke-ingress.py
 
 The smoke test inserts synthetic Iris rows into an isolated `kakaocollector-smoke-PID` project and checks HTTPS authentication, retransmission, persistence, backups, and stdio MCP. It removes only the test project's volumes and uses no real redroid instance or account. The host needs uv or Python 3.12 with dependencies. The default test subnet is `172.29.88.0/24` and the port is `18443`; avoid conflicts with existing deployments.
 
-The ingress smoke test uses disposable Docker networks and an echo server, without production secrets or volumes. It checks private Cookie and Set-Cookie filtering, OAuth cookie preservation, private-path denial, and loopback port publishing. Set `SMOKE_SERVER_IMAGE` and `SMOKE_GATEWAY_IMAGE` when using custom tags.
+The ingress smoke test uses disposable Docker networks and an echo server, without production secrets or volumes. It checks private Cookie and Set-Cookie filtering, OAuth cookie preservation, shared admin/MCP routing, internal-path denial, and loopback port publishing. Set `SMOKE_SERVER_IMAGE` and `SMOKE_GATEWAY_IMAGE` when using custom tags.
 
 Docker base images are pinned by digest. The device build runs Bridge's `assembleRelease`, `lintRelease`, and `apksigner verify`, plus Iris's Kotlin tests and `assembleRelease`. Netty versions are aligned by the overlay Gradle configuration, with the resolved report retained in `/opt/iris-dependencies.txt`.
+
+ARM source builds run a probe in the pinned amd64 Android build image before
+compilation. If the registered emulator fails, Bridge replaces only the
+`qemu-x86_64` handler using a digest-pinned `tonistiigi/binfmt` image and reruns the
+probe. This addresses a fresh Ubuntu VM failure where QEMU crashed in `cmp` and
+APT reported unsupported keyring files. It requires privileged Docker access;
+release-image installs and native runtime containers do not need this build step.
+The pinned emulator comes from the [Lima multi-architecture guide](https://lima-vm.io/docs/config/multi-arch/).
+
 
 ## Contribution guidelines
 
 English is the primary language for documentation and project-owned user interfaces. Keep Korean literals where they identify the supported KakaoTalk UI, and preserve multilingual test data. Document this distinction when describing login checks.
 
 Keep UI explanations focused on status and the next action. Put installation and operations procedures in their respective guides, and protocol and storage details in the architecture and API documentation. Do not append progress logs or troubleshooting attempts to the README.
+
+For automatic onboarding, start `uv run python -m tests.setup_preview`, then run
+`node tests/setup-browser.cjs` with the same `PLAYWRIGHT_MODULE` and
+`CHROME_EXECUTABLE` options described above. This fixture uses port 19449 and
+synthetic store/device state. It verifies preparation, detection of store
+installation, automatic component setup, the manual login-confirmation boundary
+and reload without reinstalling. It never launches a real VM or signs in to KakaoTalk.
 
 When changing login or authentication, verify form submission in a real browser as well as unit tests. An Origin header set directly by an HTTP client is not a substitute for browser validation. Do not include tokens, real conversations, or account information in tests or screenshots.
 

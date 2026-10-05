@@ -38,6 +38,21 @@ def signin(client):
     return {"Origin": ORIGIN, "X-CSRF-Token": response.json()["csrf"]}
 
 
+def test_automatic_setup_poll_does_not_dump_the_interactive_screen(console):
+    client, android = console
+    android.setup_status.return_value = {"state": "needs_setup", "enrolled": False}
+    response = client.post("/admin/api/action", json={"name": "setup-poll"}, headers=signin(client))
+    assert response.status_code == 202
+    for _ in range(100):
+        if client.app.state.job["state"] != "running":
+            break
+        time.sleep(0.01)
+    assert client.app.state.job["state"] == "done"
+    android.setup_status.assert_called_once()
+    android.session_status.assert_not_called()
+    assert client.get("/admin/api/screen").status_code == 200
+
+
 def test_admin_session_security_and_read_token_is_not_admin(console):
     client, android = console
     assert client.get("/admin/").status_code == 200

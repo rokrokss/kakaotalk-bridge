@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Download once, reuse on every launch. No Git, Python or Docker knowledge needed.
+set -euo pipefail
+umask 077
+
+case "$(uname -s)" in
+  Darwin) bridge_default_home="$HOME/Library/Application Support/KakaoTalk Bridge" ;;
+  Linux) bridge_default_home="${XDG_DATA_HOME:-$HOME/.local/share}/kakaotalk-bridge" ;;
+  *) echo 'Use install.ps1 on Windows, or run this installer on macOS/Linux.' >&2; exit 1 ;;
+esac
+bridge_install_home="${BRIDGE_HOME:-$bridge_default_home}"
+bridge_version="${BRIDGE_VERSION:-main}"
+if [[ ! "$bridge_version" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+  echo 'BRIDGE_VERSION must be a release tag or commit ID.' >&2; exit 1
+fi
+if ! command -v curl >/dev/null; then
+  echo 'curl is required to download the installer. Install curl and run this command again.' >&2
+  exit 1
+fi
+
+# Redirect only when replacing this shell. Changing fd 0 while bash is still
+# reading a curl pipe can discard the rest of the installer itself.
+bridge_launch() {
+  if [[ ! -t 0 && -r /dev/tty ]] && ( : </dev/tty ) 2>/dev/null; then
+    exec "$bridge_python" "$1/bridge" up "${@:2}" </dev/tty
+  else
+    exec "$bridge_python" "$1/bridge" up "${@:2}"
+  fi
+}
+
+bridge_python=''
+for bridge_candidate in python3.14 python3.13 python3.12 python3; do
+  if command -v "$bridge_candidate" >/dev/null && "$bridge_candidate" -c 'import sys; sys.exit(not ((3,12) <= sys.version_info < (3,15)))' 2>/dev/null; then
+    bridge_python="$(command -v "$bridge_candidate")"; break
+  fi
+done
+if [[ -z "$bridge_python" ]]; then
+  echo 'Preparing the installer runtime…'
+  bridge_uv="$(command -v uv || true)"
+  if [[ -z "$bridge_uv" && -x "$HOME/.local/bin/uv" ]]; then bridge_uv="$HOME/.local/bin/uv"; fi
+  if [[ -z "$bridge_uv" ]]; then
+    bridge_tmp="$(mktemp -d)"
+    trap 'rm -rf "$bridge_tmp"' EXIT
+    curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 https://astral.sh/uv/install.sh -o "$bridge_tmp/uv-install.sh"
+    UV_NO_MODIFY_PATH=1 sh "$bridge_tmp/uv-install.sh"
+    bridge_uv="$HOME/.local/bin/uv"
+    rm -rf "$bridge_tmp"
+    trap - EXIT
+  fi
+  "$bridge_uv" python install 3.12
+  bridge_python="$("$bridge_uv" python find --managed-python 3.12)"
+fi
+
+if [[ -f "${BASH_SOURCE[0]:-}" ]]; then
+  bridge_checkout="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [[ -f "$bridge_checkout/ops/onboarding.py" && -z "${BRIDGE_HOME:-}" ]]; then
+    bridge_launch "$bridge_checkout" "$@"
+  fi
+fi
+
+if [[ ! -f "$bridge_install_home/bridge" ]]; then
+  echo 'Installing KakaoTalk Bridge…'
+  "$bridge_python" - "$bridge_install_home" "$bridge_version" <<'PY'
+import os, pathlib, shutil, sys, tarfile, tempfile, urllib.request
+target, version = pathlib.Path(sys.argv[1]).expanduser().absolute(), sys.argv[2]
+if target.exists():
+    raise SystemExit('Installation folder already exists but is incomplete. Choose another BRIDGE_HOME; existing files were preserved.')
+target.parent.mkdir(parents=True, exist_ok=True)
+with tempfile.TemporaryDirectory(prefix='.bridge-download-', dir=target.parent) as temporary:
+    scratch = pathlib.Path(temporary)
+    archive = scratch / 'source.tar.gz'
+    with urllib.request.urlopen('https://codeload.github.com/rokrokss/kakaotalk-bridge/tar.gz/' + version, timeout=120) as response, archive.open('wb') as output:
+        shutil.copyfileobj(response, output)
+    with tarfile.open(archive) as bundle:
+        members = bundle.getmembers()
+        for item in members:
+            path = pathlib.PurePosixPath(item.name)
+            if path.is_absolute() or '..' in path.parts or not (item.isfile() or item.isdir()):
+                raise SystemExit('Unexpected source archive; installation cancelled.')
+        bundle.extractall(scratch / 'source', filter='data')
+    roots = list((scratch / 'source').iterdir())
+    if len(roots) != 1 or not (roots[0] / 'ops/onboarding.py').is_file():
+        raise SystemExit('This source version does not include the one-command installer.')
+    roots[0].rename(target)
+PY
+fi
+echo "Bridge location: $bridge_install_home"
+bridge_launch "$bridge_install_home" "$@"

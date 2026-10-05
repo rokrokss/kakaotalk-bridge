@@ -1,3 +1,4 @@
+import argparse
 import io
 import json
 import os
@@ -9,6 +10,79 @@ import pytest
 from cryptography.exceptions import InvalidTag
 
 from ops import cli, snapshot
+
+
+@pytest.mark.parametrize("system,legacy", [("Linux", False), ("Linux", True), ("Darwin", True)])
+def test_expose_uses_shared_https_and_migrates_only_owned_routes(
+    tmp_path, monkeypatch, system, legacy
+):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    monkeypatch.setattr(cli.platform, "system", lambda: system)
+    monkeypatch.setattr(cli.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(cli, "tailscale_binary", lambda: "tailscale")
+    monkeypatch.setattr(cli, "connect", Mock())
+    monkeypatch.setattr(cli, "mac", Mock())
+    (tmp_path / ".bridge").mkdir()
+    (tmp_path / ".bridge/mac.json").write_text(json.dumps({"mcp_port": 28787}))
+    host = "bridge.example.ts.net"
+    config = (
+        {"Web": {host + ":8443": {"Handlers": {"/": {"Proxy": "https://localhost:8443"}}}}}
+        if legacy
+        else {}
+    )
+    if legacy:
+        (tmp_path / ".bridge/expose.json").write_text(
+            json.dumps({"hostname": host, "config": config})
+        )
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if command[1:] == ["status", "--json"]:
+            return json.dumps({"BackendState": "Running", "Self": {"DNSName": host + "."}})
+        if command[1:] == ["serve", "status", "--json"]:
+            return json.dumps(config)
+        if command[1] == "funnel":
+            config.setdefault("Web", {})[host + ":443"] = {
+                "Handlers": {"/": {"Proxy": command[-1]}}
+            }
+        if command[1:] == ["serve", "--https=8443", "off"]:
+            del config["Web"][host + ":8443"]
+        return ""
+
+    monkeypatch.setattr(cli, "run", run)
+    args = argparse.Namespace(local=False)
+    cli.expose(args)
+    port = 28787 if system == "Darwin" else 18787
+    assert ["tailscale", "funnel", "--bg", "--https=443", f"http://127.0.0.1:{port}"] in calls
+    assert list(config["Web"]) == [host + ":443"]
+    assert (tmp_path / ".bridge/admin-url").read_text() == "https://" + host
+    assert (tmp_path / ".bridge/public-url").read_text() == "https://" + host
+    calls.clear()
+    cli.expose(args)
+    assert not any("off" in command for command in calls)
+    # An unrelated route added later must prevent all mutations.
+    config["Web"][host + ":10000"] = {"Handlers": {"/": {"Proxy": "http://localhost:9999"}}}
+    calls.clear()
+    with pytest.raises(RuntimeError, match="preserved"):
+        cli.expose(args)
+    assert all(command[-1] == "--json" for command in calls)
+
+
+def test_mac_passkey_setup_uses_saved_shared_origin(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    monkeypatch.setattr(cli.platform, "system", lambda: "Darwin")
+    (tmp_path / ".bridge").mkdir()
+    (tmp_path / ".bridge/mac.json").write_text(
+        json.dumps({"vm": "test", "directory": "/srv/bridge"})
+    )
+    (tmp_path / ".bridge/admin-url").write_text("https://bridge.example.ts.net")
+    execute = Mock(return_value="https://bridge.example.ts.net/admin/")
+    monkeypatch.setattr(cli, "run", execute)
+    cli.passkey_setup(
+        argparse.Namespace(local=False, url=None, public_url=None, enroll=False, link_only=True)
+    )
+    assert execute.call_args.args[0][-2:] == ["--url", "https://bridge.example.ts.net"]
 
 
 def test_release_manifest_requires_immutable_official_refs(tmp_path):
@@ -279,3 +353,27 @@ def test_default_admin_mode_starts_private_passkey_authority(tmp_path, monkeypat
     (tmp_path / ".env").write_text("DOT_PUBLIC_URL=https://unset.invalid\n")
     assert "dot-control" in cli.services()
     assert "dot-plugin" not in cli.services()
+
+
+def test_android_builder_repairs_broken_arm_emulation_then_verifies(monkeypatch):
+    monkeypatch.setattr(cli.platform, "machine", lambda: "aarch64")
+    execute = Mock(side_effect=[RuntimeError("emulator crash"), "", ""])
+    monkeypatch.setattr(cli, "run", execute)
+    cli.prepare_android_builder()
+    commands = [call.args[0] for call in execute.call_args_list]
+    assert commands[0] == commands[2]
+    assert "--privileged" in commands[1]
+    assert commands[1][-4:] == ["--uninstall", "qemu-x86_64", "--install", "amd64"]
+    assert "@sha256:" in commands[1][-5]
+
+
+def test_android_builder_preserves_working_emulation_and_skips_intel(monkeypatch):
+    execute = Mock(return_value="")
+    monkeypatch.setattr(cli, "run", execute)
+    monkeypatch.setattr(cli.platform, "machine", lambda: "aarch64")
+    cli.prepare_android_builder()
+    assert execute.call_count == 1
+    assert "--privileged" not in execute.call_args.args[0]
+    monkeypatch.setattr(cli.platform, "machine", lambda: "x86_64")
+    cli.prepare_android_builder()
+    assert execute.call_count == 1

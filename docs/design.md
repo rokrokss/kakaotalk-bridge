@@ -4,7 +4,7 @@
 
 The stack runs one account and one redroid instance. Iris is the default collection path. The original notification-based design and implementation history remain in Git.
 
-![Administrators control the tablet over private HTTPS. Your AI connects to MCP over public HTTPS with OAuth. Iris runs inside redroid, and the collector stores messages through the API in SQLite.](assets/architecture.svg)
+![Admin and MCP share HTTPS port 443 with passkey and OAuth authentication. Iris runs inside redroid, and the collector stores messages through the API in SQLite.](assets/architecture.svg)
 
 [Architecture diagram source](assets/architecture.svg) · [Simplified message flow](assets/message-flow.svg)
 
@@ -20,7 +20,7 @@ The stack runs one account and one redroid instance. Iris is the default collect
 | `admin` | Passkey login, persistent sessions, setup guide, restricted screen/input commands, and login confirmation |
 | `dot-control` | Private passkey authority, approval and revocation of OAuth connections |
 | `dot-plugin` | Passkey verification, explicit OAuth consent, remote MCP, and optional event delivery |
-| `dot-ingress` | Public HTTP entry point; remove private cookies and reject private routes before forwarding to MCP |
+| `dot-ingress` | Shared entry point; route admin and MCP, filter admin cookies on MCP routes, reject internal routes |
 | `adb-init` | Offline provisioning of the two collector public keys before Android starts |
 | `bootstrap`, `mcp` | One-time installation and the client-launched stdio adapter, respectively |
 
@@ -44,7 +44,7 @@ Message IDs are derived from the registration epoch, database identity, and log 
 
 ## Networking and recovery
 
-The default setup restricts external access to the API and ADB, publishing HTTPS on the host loopback interface. The public proxy for ChatGPT targets only dot-ingress, which forwards to dot-plugin. Separate Docker networks keep the public application away from Android and admin controls, while allowing read API and passkey assertion requests. The ingress has its own edge network for loopback port publishing and an internal link to dot-plugin. It has no direct admin, device, API or control network. See [Security](security.md) for the cookie boundary and remaining risks.
+The default setup restricts external access to the API and ADB, publishing HTTPS on the host loopback interface. The public HTTPS proxy targets only dot-ingress: `/admin/*` forwards to admin and OAuth/MCP routes forward to dot-plugin. Separate Docker networks keep the public application away from Android and admin controls, while allowing read API and passkey assertion requests. The ingress has an edge network for loopback port publishing and separate internal links to dot-plugin and admin. It does not join device, API or control networks. The public MCP process does not join the admin ingress network. See [Security](security.md) for the cookie boundary and remaining risks.
 
 Automatic restarts are disabled for redroid. An optional host supervisor provides a limited number of recovery attempts. Follow [Operations](operations.md) for database backups and Android snapshots.
 

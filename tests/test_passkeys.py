@@ -122,6 +122,22 @@ def test_registration_assertion_and_enrollment_replay(authority):
         authority.call("admin", "authenticate_verify", data)
 
 
+def test_move_admin_to_shared_origin_keeps_registered_key_and_invalidates_old_flow(authority):
+    key, _ = enroll(authority)
+    _, pending = assertion(authority, key)
+    old_policy = authority.info()["policy"]
+    authority.configure(PUBLIC, PUBLIC)
+    assert authority.info()["registered"]
+    assert authority.info()["policy"] != old_policy
+    with pytest.raises(ValueError):
+        authority.call("admin", "authenticate_verify", pending)
+    for role, purpose, context in [("admin", "login", ""), ("public", "mcp", "request-id")]:
+        _, data = assertion(
+            authority, key, role=role, origin=PUBLIC, purpose=purpose, context=context
+        )
+        assert authority.call(role, "authenticate_verify", data)
+
+
 @pytest.mark.parametrize(
     "change",
     ["browser", "origin", "challenge", "signature", "uv", "rp", "handle", "expired", "purpose"],

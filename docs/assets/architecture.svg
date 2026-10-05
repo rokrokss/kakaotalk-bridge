@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="772" viewBox="0 0 1120 772" role="img" aria-labelledby="title desc">
   <title id="title">KakaoTalk Bridge architecture</title>
-  <desc id="desc">An administrator signs in with a passkey and controls redroid through gateway and admin over private HTTPS and authenticated ADB. iris-collector authenticates to Iris inside redroid and stores messages through the API in SQLite. Your AI connects over public HTTPS through dot-ingress, which filters private cookies before forwarding to dot-plugin. The plugin queries the API with the read token. dot-control verifies passkeys with separate public assertion and private administration permissions. Phone sessions are confirmed manually; events require a separate subscription.</desc>
+  <desc id="desc">An administrator signs in with a passkey and controls redroid through dot-ingress and admin over shared HTTPS port 443 and authenticated ADB. iris-collector authenticates to Iris inside redroid and stores messages through the API in SQLite. Your AI connects over public HTTPS through dot-ingress, which filters private cookies before forwarding to dot-plugin. The plugin queries the API with the read token. dot-control verifies passkeys with separate public assertion and private administration permissions. Phone sessions are confirmed manually; events require a separate subscription.</desc>
   <defs>
     <marker id="request" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#77766e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
     <marker id="data" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="m2 2 5 3-5 3" fill="none" stroke="#a1832e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></marker>
@@ -23,13 +23,13 @@
     <rect x="24" y="254" width="1072" height="464" rx="12" fill="#f1efe7" stroke="#dedad0"/>
     <text x="370" y="284" font-size="14" fill="#717069">Your server · Docker Compose</text>
     <path d="M183 186v126" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
-    <text x="196" y="224" font-size="14" fill="#717069">Private HTTPS</text>
+    <text x="196" y="224" font-size="14" fill="#717069">HTTPS 443 · /admin/</text>
     <path d="M930 186v126" fill="none" stroke="#77766e" stroke-width="2" marker-end="url(#request)"/>
-    <text x="765" y="224" font-size="14" fill="#717069">Public HTTPS + OAuth</text>
+    <text x="765" y="224" font-size="14" fill="#717069">HTTPS 443 · /mcp + OAuth</text>
 
     <rect x="48" y="318" width="270" height="94" rx="8" fill="#fff" stroke="#dedad0"/>
     <text x="72" y="356" font-size="22" font-weight="600">Admin console</text>
-    <text x="72" y="385" font-size="15" fill="#717069">gateway · admin</text>
+    <text x="72" y="385" font-size="15" fill="#717069">dot-ingress → admin</text>
     <rect x="810" y="318" width="238" height="94" rx="8" fill="#fff" stroke="#dedad0"/>
     <text x="834" y="356" font-size="22" font-weight="600">MCP plugin</text>
     <text x="834" y="383" font-size="13" fill="#717069">dot-ingress → dot-plugin</text>

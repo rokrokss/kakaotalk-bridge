@@ -1,14 +1,15 @@
 """Private approval listener. Never mounted by the public MCP application."""
 
 import hmac
+import secrets
 import time
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from webauthn.helpers.exceptions import WebAuthnException
 
-from dot_plugin.auth import redirect_origin
-from dot_plugin.config import Config
+from dot_plugin.auth import digest, redirect_origin
+from dot_plugin.config import SCOPES, Config
 from dot_plugin.storage import State
 from server.app import BodyLimit
 from server.config import secret
@@ -17,6 +18,12 @@ from server.config import secret
 class Decision(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     code: str = Field(pattern=r"^[A-F0-9]{8}$")
+    approve: bool
+
+
+class TunnelDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    tunnel_id: str = Field(pattern=r"^tunnel_[a-z0-9]{32}$")
     approve: bool
 
 
@@ -42,6 +49,80 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
         docs_url=None, redoc_url=None, openapi_url=None, dependencies=[Depends(authenticate)]
     )
     app.add_middleware(BodyLimit, maximum=32768)
+
+    def owner_policy():
+        nonlocal passkeys
+        if passkeys is None:
+            from server.passkeys import authority
+
+            passkeys = authority()
+        info = passkeys.call("admin", "info", {})
+        if not info.get("registered"):
+            raise HTTPException(409, "Register an admin passkey first")
+        return info["policy"]
+
+    def tunnel_status():
+        row = state.get("grant", state.get("settings", "tunnel_grant", ""))
+        active = bool(
+            config.tunnel_id
+            and row
+            and not row["revoked"]
+            and row["expires"] > time.time()
+            and row["resource"] == config.tunnel_resource
+            and row.get("policy") == owner_policy()
+        )
+        return {
+            "configured": bool(config.tunnel_id),
+            "tunnel_id": config.tunnel_id,
+            "approved": active,
+            "expires": row["expires"] if active else None,
+        }
+
+    @app.post("/tunnel/decision")
+    def tunnel_decide(body: TunnelDecision):
+        if not config.tunnel_id or body.tunnel_id != config.tunnel_id:
+            raise HTTPException(409, "Tunnel configuration changed. Refresh Connections.")
+        policy = owner_policy() if body.approve else None
+        with state.transaction() as db:
+            db.execute("BEGIN IMMEDIATE")
+            previous = state.get("settings", "tunnel_grant", "", db=db)
+            row = state.get("grant", previous, db=db)
+            # Allow is idempotent. It cannot silently extend an existing approval.
+            if (
+                body.approve
+                and row
+                and not row["revoked"]
+                and row["expires"] > time.time()
+                and row["resource"] == config.tunnel_resource
+                and row.get("policy") == policy
+            ):
+                return {"ok": True}
+            if row:
+                row["revoked"] = True
+                state.put("grant", previous, row, db=db)
+            if body.approve:
+                profile = state.get("settings", "profile", db=db)
+                if not profile:
+                    profile = "prf_" + secrets.token_hex(16)
+                    state.put("settings", "profile", profile, db=db)
+                identity = secrets.token_hex(24)
+                state.put(
+                    "grant",
+                    identity,
+                    {
+                        "transport": "tunnel",
+                        "client_id": "OpenAI personal tunnel",
+                        "resource": config.tunnel_resource,
+                        "scope": SCOPES,
+                        "owner": digest(profile + ":personal-tunnel:" + config.tunnel_id),
+                        "policy": policy,
+                        "revoked": False,
+                        "expires": time.time() + 30 * 86400,
+                    },
+                    db=db,
+                )
+                state.put("settings", "tunnel_grant", identity, db=db)
+        return {"ok": True}
 
     @app.post("/passkeys/{role}/{operation}")
     def passkey_call(role: str, operation: str, body: dict):
@@ -84,13 +165,16 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
                 "expires": row["expires"],
             }
             for identity, row in state.all("grant")
-            if not row["revoked"] and row["expires"] > now
+            if not row["revoked"]
+            and row["expires"] > now
+            and row.get("transport", "oauth") == "oauth"
         ]
         return {
             "pending": pending,
             "grants": grants,
             "resource": config.resource,
             "approval_mode": config.approval_mode,
+            "tunnel": tunnel_status(),
         }
 
     @app.post("/approvals/{identity}")

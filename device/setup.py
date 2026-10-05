@@ -28,6 +28,7 @@ def status():
         result.update(
             aurora_installed=cli.is_installed("com.aurora.store"),
             enrolled=enrolled(),
+            apk_available=any(Path("/inputs/kakao").glob("*.apk")),
             locale=cli.adb("shell", "getprop", "persist.sys.locale")[:32],
         )
     return result
@@ -57,7 +58,7 @@ def verify_installed_kakao():
         local = []
         for index, line in enumerate(paths):
             remote = line.removeprefix("package:")
-            if not re.fullmatch(r"/data/app/[A-Za-z0-9_=/+.-]+\.apk", remote):
+            if not re.fullmatch(r"/data/app/[A-Za-z0-9_=/+.~-]+\.apk", remote):
                 raise RuntimeError("kakao_signature_unverified")
             path = Path(folder) / f"{index}.apk"
             cli.adb("pull", remote, str(path), timeout=120)
@@ -102,6 +103,10 @@ def prepare():
         cli.adb("shell", "setprop", "persist.sys.locale", "ko-KR")
         # Only a fresh device reaches here. Restart the framework to apply the locale
         # before Play delivers language splits. Never reboot an enrolled device.
+        # Framework stop/start does not clear the previous boot-completed property.
+        # Without resetting it, PackageManager can appear before ADB's install
+        # transport is ready and the first install fails with abb_exec: closed.
+        cli.adb("shell", "setprop", "sys.boot_completed", "0")
         cli.adb("shell", "stop")
         cli.adb("shell", "start")
         for _ in range(60):

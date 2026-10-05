@@ -12,8 +12,9 @@ This setup assumes a personal server with one owner. Because redroid is a privil
 | `/admin/` | Private HTTPS | Passkey login, persistent revocable cookies, Origin and CSRF checks |
 | `/v1/*` | Private HTTPS | Read token |
 | `/mcp` | Separately configured public HTTPS proxy | OAuth |
+| Private tunnel `/mcp` | Docker-internal listener; no published port | Locally injected service credential and owner-approved grant |
 
-The public proxy must connect **only to the dot-ingress port** (`127.0.0.1:18787` by default). Do not bypass this cookie-filtering proxy with a direct dot-plugin route. Do not expose the API gateway or ADB alongside it. Tailscale Funnel provides a public internet address, so OAuth protects MCP access rather than Tailscale user ACLs. Use an SSH tunnel or private Tailscale connection for administration.
+The public proxy must connect **only to the dot-ingress port** (`127.0.0.1:18787` by default). Do not bypass this cookie-filtering proxy with a direct dot-plugin route. Do not expose the API gateway or ADB alongside it. Tailscale Funnel provides a public internet address, so OAuth protects MCP access rather than Tailscale user ACLs. The default shared HTTPS origin also serves `/admin/`, protected by passkeys. The admin login page is publicly reachable. To retain a tailnet-only admin in an advanced split-origin deployment, explicitly deny `/admin` and `/admin/*` at the public reverse proxy.
 
 ## What is stored?
 
@@ -37,6 +38,8 @@ Compose does not encrypt the Android volume or collection database itself. Use h
 | `secrets/mcp_approval_token` | Private admin-to-control requests and passkey-state encryption derivation |
 | `secrets/mcp_passkey_token` | Assertion-only public-to-control requests |
 | `secrets/mcp_storage_key` | MCP state encryption |
+| `secrets/openai_tunnel_api_key` | OpenAI tunnel runtime authentication; mounted only in the tunnel client |
+| `secrets/mcp_tunnel_authorization` | Tunnel client to private MCP listener; never accepted as public OAuth |
 | `secrets/backup_key` | Database and full-volume snapshot encryption |
 | `secrets/bridge.jks`, `secrets/bridge_key_password` | Registration app signing |
 
@@ -48,17 +51,39 @@ Do not pass permanent keys through URLs, chats, or command-line arguments. Passk
 
 OAuth validates PKCE S256, exact redirect URIs and resource audiences, and one-time approval records. Access tokens last 30 minutes; refresh grants last 30 days. Detected refresh-token reuse revokes the associated grant.
 
-The plugin receives the API read token and its own OAuth/passkey-assertion secrets, without mounting Android volumes or the admin key. It exposes no message-sending tool. `acknowledge_messages` changes only the plugin's internal processing position. Separate Docker networks restrict it to the read API, assertion endpoints and public ingress. It has no direct network path to admin, the private gateway or Android. Message bodies are external data; do not execute instructions within them as system commands.
+The plugin receives the API read token and its own OAuth/passkey-assertion secrets, without mounting Android volumes or the admin key. It exposes no message-sending tool. `acknowledge_messages` changes only the plugin's internal processing position. Separate Docker networks restrict it to the read API, assertion endpoints and public ingress. It has no direct container-network connection to admin, the private gateway or Android. The shared ingress does expose authenticated admin routes. Message bodies are external data; do not execute instructions within them as system commands.
 
 ## Owner access and connection approval
+
+The optional [personal OpenAI tunnel](openai-tunnel.md) uses a separate internal
+listener and an outbound tunnel client. Only the client and listener receive the
+local service credential. It is sent in `X-Bridge-Tunnel-Authorization` so
+connector-forwarded `Authorization` cannot replace it. Neither container has an
+Android or admin/control network connection. The listener has read-API and
+passkey-assertion access, and shares encrypted MCP state with the public service.
+
+Approval in the authenticated admin console creates a 30-day grant bound to the
+configured tunnel ID and current passkey policy. Tools and event operations check
+this grant on every request. Revocation, expiry, policy changes and tunnel-ID
+changes block access. Credential-authenticated protocol discovery can succeed
+before approval for the official client's startup probe; it exposes schemas and
+instructions only. The private listener has no browser OAuth or passkey routes.
+The existing public listener continues to require OAuth.
+
+This is a single-owner connection: every caller permitted to use that tunnel by
+OpenAI receives the same approved collector access. Bridge cannot determine the
+individual OpenAI user. Restrict the tunnel to yourself in OpenAI; shared-workspace
+user isolation is not implemented. Admin approval does not subscribe to events.
+The existing public service runs the one shared event worker, including for tunnel
+grants. Outbound webhook delivery still requires a reachable destination.
 
 [Passkeys](passkeys.md) are the default. Only the server CLI can issue the one-time, ten-minute initial or recovery registration link. Fresh user verification is required to add or remove a key through admin. The public MCP endpoint cannot register an owner.
 
 `dot-control` owns encrypted credentials in `passkey-state`, with an encryption key derived from `mcp_approval_token`. It has no published port. Public `dot-plugin` receives only the separate assertion-only `mcp_passkey_token`; it cannot register, list, remove or configure credentials and has neither the credential volume nor its encryption key.
 
-Each WebAuthn challenge binds the browser, purpose, exact origin and pending OAuth request and can be verified once. Registration and authentication require user verification. Cross-origin/iframe ceremonies are rejected. One passkey works across admin and MCP ports of the same hostname, but ports do not isolate cookies.
+Each WebAuthn challenge binds the browser, purpose, exact origin and pending OAuth request and can be verified once. Registration and authentication require user verification. Cross-origin/iframe ceremonies are rejected. One passkey works on the shared admin/MCP origin and also across ports of the same hostname. Ports do not isolate cookies.
 
-A successful assertion opens a separate consent page. No MCP code is issued until a same-origin POST explicitly allows the listed permissions. Cancel returns `access_denied`. The client, callback, scope, resource and PKCE challenge remain bound throughout. Client names are self-reported, so the page also shows the client ID and callback origin. The public service has no admin routes or admin volume. Admin sessions use a `/admin` cookie. A separate Caddy ingress strips all private admin cookies from requests and private `Set-Cookie` values from responses before forwarding public traffic. This is necessary because ports do not isolate cookies, and a public process may still reach private Tailscale Serve indirectly through the host. Keep this ingress outside the public application container, with a read-only configuration and no private network membership.
+A successful assertion opens a separate consent page. No MCP code is issued until a same-origin POST explicitly allows the listed permissions. Cancel returns `access_denied`. The client, callback, scope, resource and PKCE challenge remain bound throughout. Client names are self-reported, so the page also shows the client ID and callback origin. The MCP application has no admin routes or admin volume; the separate ingress routes `/admin/*` to the admin service. Admin sessions use a `/admin` cookie. A separate Caddy ingress strips all private admin cookies from requests and private `Set-Cookie` values from responses before forwarding public traffic. Keep this ingress outside the public application container with a read-only configuration. Only ingress and admin join `admin-ingress-net`; ingress never joins the device, API or control networks. Cookie filtering prevents the MCP upstream from receiving or overwriting admin cookies, but the default shared port means both frontends share a browser origin. A compromised frontend or same-origin script can act through a signed-in browser; this setup does not claim browser-origin isolation. Use a separate admin origin and deny admin paths at the public proxy when that isolation is required.
 
 Browser cookie IDs and emergency pairing values are stored as digests. Private session records are encrypted and checked for revocation on every request. Sessions last 30 minutes, or seven days when explicitly remembered; emergency access is limited to 30 minutes. Passwords use salted scrypt only in explicit `ADMIN_AUTH_MODE=local`. Password/key login is disabled in passkey mode.
 
@@ -69,6 +94,10 @@ Kakao OAuth has been removed. Startup deletes its encrypted configuration, pendi
 Full snapshot restoration verifies AES-GCM before extraction and uses new volumes. It retains passkey credentials but clears pending enrollment, browser sessions, OAuth grants and webhook callbacks. Keep the backup key separately. Restored Android data cannot guarantee Kakao's servers will accept the saved session.
 
 ## Security fixes: 2026-10-05
+
+The following records describe the earlier split-port deployment. The shared-port
+change exposes authenticated admin routes and changes the browser trust boundary
+as described above; historical public-admin 404 results are not its current behavior.
 
 The October 4–5 review found missing Iris caller authentication, a conditional public-to-admin escalation path, anonymous OAuth registration exhaustion, outdated dependencies and Android patch debt. Application fixes and dependency updates are deployed on the existing ARM64 Lima host. **Android patch debt remains unresolved.** This was a bounded review, not evidence that every possible vulnerability has been found.
 

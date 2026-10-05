@@ -13,6 +13,8 @@ let frame = null, pointer = null, blobURL = null, busy = false, generation = 0;
 let setupInitialized = false, precheckValid = false, collectionApproved = false;
 let loginAlreadyApproved = false;
 let loginMode = 'passkey';
+const preparationAttempts = new Set();
+let setupCheckedAt = 0;
 const messages = {
   session_required: 'Your admin session has expired. Sign in again.',
   device_busy: 'A device operation is in progress. Try again shortly.',
@@ -36,6 +38,7 @@ function locked() {
   csrf = '';
   frame = pointer = null;
   busy = precheckValid = collectionApproved = setupInitialized = loginAlreadyApproved = false;
+  preparationAttempts.clear();
   $('console').hidden = true;
   $('login-panel').hidden = false;
   $('logout').hidden = true;
@@ -202,6 +205,9 @@ async function updateState() {
   try {
     const state = await api('state');
     if (!active || requestedGeneration !== generation) return;
+    if (latestState?.job.state === 'running' && state.job.state !== 'running') {
+      setupCheckedAt = Date.now();
+    }
     latestState = state;
     setupState = state.setup;
     lastObservation = state.collector.last_observation_received_at || null;
@@ -226,6 +232,19 @@ async function updateState() {
     $('collector-status').title = 'Collects messages received on the tablet. This does not restore the entire chat history.';
     renderSessions(state.sessions, state.sessions_stale);
     updateControls();
+    // Decide only after busy/session state is updated. Mark the action before
+    // starting it, since action() itself refreshes state.
+    const prepare = nextPreparation(state, preparationAttempts);
+    if (prepare && !busy) {
+      preparationAttempts.add(prepare);
+      void action(prepare);
+    } else if (!busy && state.job.state !== 'failed' && !state.setup?.enrolled
+        && Date.now() - setupCheckedAt > 10000) {
+      // Detect store installation finishing without a manual refresh, including
+      // while Android transitions from booting to ready.
+      setupCheckedAt = Date.now();
+      void action('setup-poll');
+    }
   } catch {
     if (active && requestedGeneration === generation) {
       $('collector-status').textContent = 'Could not retrieve status';
@@ -238,6 +257,7 @@ async function updateState() {
 
 async function action(name, extra = {}) {
   if (!active || busy) return;
+  if (['setup-check', 'setup-poll'].includes(name)) setupCheckedAt = Date.now();
   busy = true;
   updateControls();
   if (name === 'login-check') {
@@ -459,22 +479,23 @@ function renderSetup() {
   const enrolled = !!s?.enrolled;
   const approved = session?.collection_approval === 'approved';
   const collecting = latestState?.collector.state === 'collecting_partial';
-  const steps = [ready, !!s?.kakao_installed, enrolled, approved, collecting, mcpConnected];
-  const labels = ['Server', 'KakaoTalk', 'Components', 'Both sessions', 'Collection', 'ChatGPT'];
+  const steps = [enrolled, approved, collecting && mcpConnected];
+  const labels = ['Prepare', 'Sign in', 'Connect AI'];
   $('setup-progress').replaceChildren(...labels.map((label, i) => {
     const item = document.createElement('li'); item.textContent = label;
     item.dataset.complete = String(steps[i]); return item;
   }));
   let next = ['Server readiness is being checked.', '', ''];
-  if (s && !ready) next = ['Waiting for Android. If it stays here, run ./bridge doctor.', '', ''];
+  if (s && !ready) next = ['Your private device is starting. This page will continue automatically.', '', ''];
   else if (ready && !s.kakao_installed) next = s.aurora_installed
-    ? ['Open Aurora, choose anonymous sign-in and install KakaoTalk. Then refresh setup.', 'open-store', 'Open Aurora']
-    : ['Prepare a Korean tablet and Aurora. Existing app data is preserved.', 'prepare', 'Prepare tablet'];
-  else if (ready && !enrolled) next = ['KakaoTalk is installed. Verify its signature and set up collection components.', 'configure', 'Set up components'];
+    ? ['Choose anonymous sign-in in the store and install KakaoTalk by Kakao Corp. Setup continues automatically.', 'open-store', 'Open store']
+    : ['Preparing your device and the app store…', 'prepare', 'Retry preparation'];
+  else if (ready && !enrolled) next = ['Finishing preparation for KakaoTalk sign-in…', 'configure', 'Retry preparation'];
   else if (enrolled && !approved) next = ['Open KakaoTalk. Check “Use with other devices” before login, then confirm both phone and tablet sessions below.', 'open-kakao', 'Open KakaoTalk'];
   else if (approved && !collecting) next = ['Both sessions were confirmed. Waiting for the collector; refresh status if needed.', 'session-check', 'Check status'];
   else if (collecting && !mcpConnected) next = ['Collection is running. Send a test message, then connect ChatGPT under Connections.', '', ''];
   else if (collecting && mcpConnected) next = ['Setup complete. Phone session health still requires your manual confirmation.', '', ''];
+  if (latestState?.job.state === 'failed') next[0] = latestState.job.message || 'Preparation stopped. Check the result below and retry.';
   $('setup-next').textContent = next[0];
   $('setup-next-button').hidden = !next[1];
   $('setup-next-button').textContent = next[2];
@@ -498,18 +519,37 @@ async function refreshConnections() {
   try {
     const data = await api('connections');
     if (!active) return;
-    mcpConnected = data.grants.length > 0;
+    mcpConnected = data.grants.length > 0 || !!data.tunnel?.approved;
     $('mcp-address').textContent = data.resource;
     $('connection-help').textContent = data.approval_mode === 'passkey'
       ? 'Add this MCP address in ChatGPT and choose OAuth. Confirm with your passkey, review access, then allow the connection. You can disconnect it here.'
       : data.approval_mode === 'key'
         ? 'This server uses legacy connection-key approval. Enter its connection key in the connecting browser.'
         : 'Add this MCP address in ChatGPT and choose OAuth. Approve only the request whose code matches that browser.';
+    if (data.tunnel?.configured && data.resource.includes('.invalid/')) {
+      $('mcp-address').textContent = 'Public OAuth connection is not configured.';
+      $('connection-help').textContent = 'Connect your personal OpenAI tunnel below. Public HTTPS connections remain available when configured.';
+    }
     $('pending-count').textContent = data.pending.length ? `(${data.pending.length} pending)` : '';
     renderSetup();
     const signature = JSON.stringify(data);
     if (signature === connectionSignature) return;
     connectionSignature = signature;
+    const tunnel = data.tunnel;
+    const tunnelPanel = $('tunnel-connection');
+    tunnelPanel.hidden = !tunnel?.configured;
+    if (tunnel?.configured) {
+      const card = document.createElement('div'); card.className = 'connection-card';
+      card.append(paragraph('OpenAI personal tunnel'), paragraph(tunnel.tunnel_id));
+      card.append(paragraph(tunnel.approved
+        ? `Access allowed until ${localTime(tunnel.expires)}. In ChatGPT, choose Tunnel and select this ID. No OAuth login is needed.`
+        : 'Allow this personal tunnel to read collected messages and manage event subscriptions you request. Use a tunnel accessible only to you. Access lasts 30 days.'));
+      card.append(button(tunnel.approved ? 'Disconnect tunnel' : 'Allow personal tunnel', async () => {
+        await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: !tunnel.approved});
+        connectionSignature = ''; await refreshConnections();
+      }));
+      tunnelPanel.replaceChildren(card);
+    }
     const nodes = data.pending.map(row => {
       const card = document.createElement('div'); card.className = 'connection-card';
       card.append(paragraph(`${row.client_name} · ${row.client_id}`), paragraph(`Callback: ${row.redirect_origin}`), paragraph(`Permissions: ${row.scope}`));

@@ -4,16 +4,16 @@ Passkeys authenticate admin and MCP connection approvals without a Kakao Develop
 
 ## Set up
 
-Choose one stable HTTPS hostname before registration. For example, use `https://your-node.ts.net:8443/admin/` privately through Tailscale Serve and `https://your-node.ts.net/mcp` publicly through Funnel. Run `./bridge expose` or configure the reverse proxies yourself. Never publish the admin gateway through Funnel.
+Choose one stable HTTPS hostname before registration. For example, use `https://your-node.ts.net/admin/` and `https://your-node.ts.net/mcp` through Funnel on the same HTTPS port 443. Run `./bridge expose` or configure the reverse proxies yourself. Never publish the admin gateway through Funnel.
 
 A trusted certificate and the same hostname let one passkey work on both ports. A passkey registered on `localhost` cannot be used at your public hostname. Setup rejects IP addresses and mismatched hostnames.
 
-Route public traffic through `dot-ingress`, never directly to `dot-plugin`. Browser cookies cross ports: the separate ingress removes private admin cookies in requests and responses while retaining the OAuth consent cookie. Private admin stays behind Tailscale Serve.
+Route public traffic through `dot-ingress`, never directly to `dot-plugin`. The shared ingress forwards admin routes to the authenticated admin service and removes admin cookies from requests and responses on OAuth/MCP routes. Its dedicated admin network does not connect the public MCP process to admin. Both web applications share a browser origin; this is not browser-origin isolation.
 
 Update the checkout and images to a version that includes passkeys, then run:
 
 ```bash
-./bridge passkey-login --url https://your-node.ts.net:8443 --public-url https://your-node.ts.net
+./bridge passkey-login --url https://your-node.ts.net --public-url https://your-node.ts.net
 ```
 
 The command starts the private authentication service, enables passkey mode, and opens a one-use registration link that expires in ten minutes. On a headless server it prints the link. Keep the link private. Open it on your computer or phone and choose **Create a passkey**. Your device or password manager asks you to unlock it; the server receives the credential's public key.
@@ -52,10 +52,10 @@ For the older manually managed `kakaotalk-test` VM, run the CLI inside the exist
 
 ```bash
 limactl shell --workdir=/ kakaotalk-test sudo python3 /srv/kakaotalk-collector/ops/cli.py passkey-login \
-  --url https://your-node.ts.net:8443 --public-url https://your-node.ts.net
+  --url https://your-node.ts.net --public-url https://your-node.ts.net
 ```
 
-Configure the private and public HTTPS routes first. Once registration is complete, use the private hostname above for admin. Do not repeat enrollment when an existing passkey still works.
+Configure the shared HTTPS route first. Once registration is complete, use the hostname above for admin. Do not repeat enrollment when an existing passkey still works.
 
 ## Boundaries and verification
 

@@ -6,15 +6,21 @@ Use the admin console to control the tablet and check login and collection statu
 
 ## Access
 
-Use your configured private HTTPS address, such as `https://<node>.ts.net:8443/admin/`. Register a [passkey](passkeys.md) once, then select **Sign in with a passkey**. Use the same hostname where it was registered; changing to localhost will not work. No admin password or routine terminal command is required. `./bridge admin` opens the configured address.
+Use your configured HTTPS address, such as `https://<node>.ts.net/admin/`. Register a [passkey](passkeys.md) once, then select **Sign in with a passkey**. Use the same hostname where it was registered; changing to localhost will not work. No admin password or routine terminal command is required. `./bridge admin` opens the configured address.
 
-With Tailscale Serve, open this address from a device connected to your tailnet. The public MCP address does not serve admin. Bookmark the private address for everyday use.
+Admin and MCP use the same HTTPS port 443, at `/admin/` and `/mcp`. The root address opens admin. The login page is publicly reachable; the console and device controls require authentication. Bookmark the admin address for everyday use.
 
 Sessions last 30 minutes, or seven days with **Keep me signed in**, and survive container restarts. Revoke them under **Admin browsers**. **Lock** ends only the bridge's admin session; it does not sign out the tablet's KakaoTalk app. Add a backup under **Passkeys and recovery**. If every key is lost, run `./bridge passkey-login --enroll` on the server. Missing passkey configuration keeps controls locked.
 
 After the security update, sign in once again with your existing passkey. It replaces older admin browser sessions; your passkeys and MCP connections remain registered. Tablet setup, login confirmation and collection controls follow the same steps below.
 
 ## First login
+
+After admin sign-in, fresh-device preparation and collection-component installation
+run automatically. The page detects KakaoTalk installation without requiring a
+refresh and opens it when preparation finishes. Existing enrollment and collection
+approval are left intact. A failed preparation stops automatic actions until you
+retry; login and both-session confirmations always require your input.
 
 1. Prepare a Korean tablet and Aurora from the setup guide. Install KakaoTalk in Aurora, then select **Set up collection components**. Alternatively import a complete official APK set.
 2. Select **Open KakaoTalk**. To enter text, select **Connect keyboard**, focus an input field on the tablet, then send a value through **Text input**.
