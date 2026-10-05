@@ -46,8 +46,8 @@ First update the installed Bridge images/source to this version using the normal
 The example ID is a placeholder; use the lowercase ID issued by OpenAI. The command
 pulls the pinned official `ghcr.io/openai/tunnel-client:v0.0.15` image and starts
 two internal services. It preserves the admin address and existing public OAuth
-connections. Repeating it with the same ID updates the runtime key without
-extending an existing approval. Changing IDs revokes the previous tunnel grant.
+connections. Repeating it with the same ID updates the runtime key and preserves
+the existing approval. Changing IDs revokes the previous tunnel grant.
 On startup failure it attempts to restore the previous configuration; revoked
 grants stay revoked and must be approved again.
 
@@ -60,7 +60,18 @@ grants stay revoked and must be approved again.
    message and retrieve it. A running tunnel alone does not verify account access
    or message collection.
 
-Approval lasts 30 days. The connection uses the same eight MCP tools and event
+Approval has no automatic expiration and survives normal service restarts and
+server reboots when the stored configuration, keys and volumes are preserved.
+Disconnecting, changing the tunnel ID, or resetting the passkey policy invalidates
+it. No periodic browser approval is required. The tunnel services use Docker's
+`unless-stopped` restart policy; Docker must start with the server.
+
+If you approved a tunnel with an older version's 30-day policy, choose **Remove
+approval expiration** in Connections once. This explicitly converts the existing
+approval while preserving its subscriptions. An already expired approval needs
+**Allow personal tunnel** again. Updates do not silently extend old approvals.
+
+The connection uses the same eight MCP tools and event
 implementation as public OAuth. It can read/search messages and manage requested
 event subscriptions and acknowledgement cursors; it cannot send KakaoTalk
 messages. [Event subscriptions](events.md) remain an explicit separate action.
@@ -105,19 +116,20 @@ remain usable. Neither command deletes the OpenAI tunnel itself.
 Backups include runtime configuration and secrets. A restored installation clears
 MCP grants and subscriptions, so sign in with the preserved passkey and approve
 the tunnel again. Recreate any requested event subscriptions. Passkey recovery,
-policy changes and approval expiry also require a new tunnel approval.
+policy changes also require a new tunnel approval.
 
 If readiness is false, check server outbound HTTPS, the runtime key's tunnel
 permissions, and the selected ID. If discovery works but tools return 403, check
-approval and expiry in admin. Private OAuth discovery URLs intentionally return
-404. The private listener supports legacy `initialize` for the official client's
+approval in admin (including expiry for an older 30-day approval). Private OAuth
+discovery URLs intentionally return 404. The private listener supports legacy `initialize` for the official client's
 startup probe as well as the existing `server/discover` protocol. Metadata probes
 require the private credential but no owner grant; tools and events require both.
 
 ## Validation scope
 
 Local automated tests cover public/private credential isolation, all eight tools,
-legacy initialization, owner approval, revocation/expiry/policy changes, event
+legacy initialization, persistent approval across time and restarts, revocation,
+legacy expiry and policy changes, event
 delivery and pending/acknowledgement behavior, and provisioning rollback. Compose
 configuration is checked for private networks and absence of tunnel host ports.
 The official v0.0.15 source was checked for file-backed headers and startup probes.

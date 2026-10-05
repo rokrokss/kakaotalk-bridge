@@ -62,10 +62,13 @@ connector-forwarded `Authorization` cannot replace it. Neither container has an
 Android or admin/control network connection. The listener has read-API and
 passkey-assertion access, and shares encrypted MCP state with the public service.
 
-Approval in the authenticated admin console creates a 30-day grant bound to the
-configured tunnel ID and current passkey policy. Tools and event operations check
-this grant on every request. Revocation, expiry, policy changes and tunnel-ID
-changes block access. Credential-authenticated protocol discovery can succeed
+Approval in the authenticated admin console creates a grant without automatic
+expiration, bound to the configured tunnel ID and current passkey policy.
+Tools and event operations check
+this grant on every request. Revocation, policy changes and tunnel-ID changes
+block access; normal restarts retain approval. Older 30-day approvals retain their
+expiry until the owner explicitly removes it in admin. Public OAuth grant expiry
+is unchanged. Credential-authenticated protocol discovery can succeed
 before approval for the official client's startup probe; it exposes schemas and
 instructions only. The private listener has no browser OAuth or passkey routes.
 The existing public listener continues to require OAuth.

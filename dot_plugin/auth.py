@@ -49,6 +49,13 @@ def redirect_origin(uri):
         raise AuthError("invalid_redirect_uri") from None
 
 
+def grant_unexpired(grant, *, now=None):
+    expires = grant.get("expires", 0)
+    if grant.get("transport") == "tunnel" and expires is None:
+        return True
+    return isinstance(expires, (int, float)) and expires > (time.time() if now is None else now)
+
+
 class OAuth:
     transport = "oauth"
 
@@ -512,10 +519,11 @@ class OAuth:
                 if (
                     not record
                     or not grant
+                    or grant.get("transport", "oauth") != "oauth"
                     or grant["client_id"] != client["client_id"]
                     or record["expires"] <= time.time()
                     or grant["revoked"]
-                    or grant["expires"] <= time.time()
+                    or not grant_unexpired(grant)
                     or grant["resource"] != form["resource"]
                     or (grant.get("policy") and grant["policy"] != self.policy())
                 ):
@@ -555,7 +563,7 @@ class OAuth:
             grant
             if grant
             and not grant["revoked"]
-            and grant["expires"] > time.time()
+            and grant_unexpired(grant)
             and (
                 grant.get("transport", "oauth") == "oauth"
                 and grant["resource"] == self.config.resource
@@ -591,7 +599,12 @@ class OAuth:
         with self.state.transaction() as db:
             for kind in ("approval", "code", "access", "refresh", "grant"):
                 for key, record in self.state.all(kind, db=db):
-                    if record.get("expires", now + 1) < now:
+                    expired = (
+                        not grant_unexpired(record, now=now)
+                        if kind == "grant"
+                        else record.get("expires", now + 1) < now
+                    )
+                    if expired:
                         self.state.delete(kind, key, db=db)
             active_clients = {g["client_id"] for _, g in self.state.all("grant", db=db)}
             for key, client in self.state.all("client", db=db):

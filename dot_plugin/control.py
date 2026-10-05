@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from webauthn.helpers.exceptions import WebAuthnException
 
-from dot_plugin.auth import digest, redirect_origin
+from dot_plugin.auth import digest, grant_unexpired, redirect_origin
 from dot_plugin.config import SCOPES, Config
 from dot_plugin.storage import State
 from server.app import BodyLimit
@@ -66,8 +66,9 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
         active = bool(
             config.tunnel_id
             and row
+            and row.get("transport") == "tunnel"
             and not row["revoked"]
-            and row["expires"] > time.time()
+            and grant_unexpired(row)
             and row["resource"] == config.tunnel_resource
             and row.get("policy") == owner_policy()
         )
@@ -87,15 +88,20 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
             db.execute("BEGIN IMMEDIATE")
             previous = state.get("settings", "tunnel_grant", "", db=db)
             row = state.get("grant", previous, db=db)
-            # Allow is idempotent. It cannot silently extend an existing approval.
+            # Repeated approval preserves the grant and its subscriptions. Explicit
+            # approval also removes the expiry from an existing 30-day grant.
             if (
                 body.approve
                 and row
+                and row.get("transport") == "tunnel"
                 and not row["revoked"]
-                and row["expires"] > time.time()
+                and grant_unexpired(row)
                 and row["resource"] == config.tunnel_resource
                 and row.get("policy") == policy
             ):
+                if row["expires"] is not None:
+                    row["expires"] = None
+                    state.put("grant", previous, row, db=db)
                 return {"ok": True}
             if row:
                 row["revoked"] = True
@@ -117,7 +123,7 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
                         "owner": digest(profile + ":personal-tunnel:" + config.tunnel_id),
                         "policy": policy,
                         "revoked": False,
-                        "expires": time.time() + 30 * 86400,
+                        "expires": None,
                     },
                     db=db,
                 )
@@ -165,9 +171,9 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
                 "expires": row["expires"],
             }
             for identity, row in state.all("grant")
-            if not row["revoked"]
-            and row["expires"] > now
-            and row.get("transport", "oauth") == "oauth"
+            if row.get("transport", "oauth") == "oauth"
+            and not row["revoked"]
+            and grant_unexpired(row, now=now)
         ]
         return {
             "pending": pending,

@@ -542,8 +542,14 @@ async function refreshConnections() {
       const card = document.createElement('div'); card.className = 'connection-card';
       card.append(paragraph('OpenAI personal tunnel'), paragraph(tunnel.tunnel_id));
       card.append(paragraph(tunnel.approved
-        ? `Access allowed until ${localTime(tunnel.expires)}. In ChatGPT, choose Tunnel and select this ID. No OAuth login is needed.`
-        : 'Allow this personal tunnel to read collected messages and manage event subscriptions you request. Use a tunnel accessible only to you. Access lasts 30 days.'));
+        ? `${tunnel.expires === null ? 'Access allowed with no automatic expiration.' : `Access allowed until ${localTime(tunnel.expires)}.`} In ChatGPT, choose Tunnel and select this ID. No OAuth login is needed.`
+        : 'Allow this personal tunnel to read collected messages and manage event subscriptions you request. Use a tunnel accessible only to you. Approval has no automatic expiration; you can disconnect it here.'));
+      if (tunnel.approved && tunnel.expires !== null) {
+        card.append(button('Remove approval expiration', async () => {
+          await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: true});
+          connectionSignature = ''; await refreshConnections();
+        }));
+      }
       card.append(button(tunnel.approved ? 'Disconnect tunnel' : 'Allow personal tunnel', async () => {
         await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: !tunnel.approved});
         connectionSignature = ''; await refreshConnections();

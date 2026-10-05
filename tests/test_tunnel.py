@@ -155,7 +155,7 @@ def test_oauth_still_works_and_all_tools_are_shared(bridge):
     assert "result" in call(public, "get_recent_messages")
 
 
-@pytest.mark.parametrize("reason", ["revoke", "expiry", "policy", "tunnel_change"])
+@pytest.mark.parametrize("reason", ["revoke", "legacy_expiry", "policy", "tunnel_change"])
 def test_connection_lifecycle_fails_closed(bridge, reason):
     private, _, control, state, keys, _, _, config = bridge
     approve(control)
@@ -163,7 +163,7 @@ def test_connection_lifecycle_fails_closed(bridge, reason):
     assert "result" in call(private, "get_profile")
     if reason == "revoke":
         approve(control, False)
-    elif reason == "expiry":
+    elif reason == "legacy_expiry":
         row = state.get("grant", identity)
         row["expires"] = time.time() - 1
         state.put("grant", identity, row)
@@ -206,6 +206,84 @@ def test_allow_is_idempotent_and_scopes_are_enforced(bridge):
     assert rpc(private, "events/list")["error"]["message"] == "insufficient_scope"
     assert call(private, "get_pending_messages")["error"]["message"] == "insufficient_scope"
     assert "result" in call(private, "search_messages", q="test")
+
+
+def test_permanent_approval_survives_time_cleanup_and_restart(bridge, monkeypatch):
+    _, public, control, state, keys, source, delivered, config = bridge
+    approve(control)
+    identity = state.get("settings", "tunnel_grant")
+    assert state.get("grant", identity)["expires"] is None
+    _, form = link(public)
+    tokens = public.post("/token", data=form).json()
+    public.headers["Authorization"] = "Bearer " + tokens["access_token"]
+    oauth_id, oauth_grant = next(
+        (key, row) for key, row in state.all("grant") if row.get("transport", "oauth") == "oauth"
+    )
+    assert time.time() < oauth_grant["expires"] <= time.time() + 30 * 86400
+    connections = control.get("/connections").json()
+    assert len(connections["grants"]) == 1
+    assert connections["tunnel"]["approved"]
+    assert connections["tunnel"]["expires"] is None
+
+    future = time.time() + 2 * 365 * 86400
+    monkeypatch.setattr(time, "time", lambda: future)
+    public.app.state.oauth.cleanup()
+    assert state.get("grant", oauth_id) is None
+    assert state.get("grant", identity)["expires"] is None
+    assert public.post("/mcp", json={}).status_code == 401
+    restarted = TestClient(
+        tunnel_app(
+            config,
+            State(config.database, config.storage_key),
+            AUTHORIZATION,
+            keys,
+            collector=source,
+            verifier=lambda sub: None,
+        )
+    )
+    restarted.headers["X-Bridge-Tunnel-Authorization"] = AUTHORIZATION
+    assert "result" in call(restarted, "get_profile")
+    assert "result" in rpc(restarted, "events/subscribe", subscription())
+    source.add("after restart")
+    public.app.state.events.tick()
+    assert len(delivered) == 1
+    assert public.app.state.oauth.active_grant(identity)
+    approve(control, False)
+    assert (
+        restarted.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/call"}).status_code
+        == 403
+    )
+
+
+def test_explicit_approval_removes_legacy_expiry_without_replacing_subscriptions(bridge):
+    private, _, control, state, *_ = bridge
+    approve(control)
+    identity = state.get("settings", "tunnel_grant")
+    row = state.get("grant", identity)
+    row["expires"] = time.time() + 86400
+    state.put("grant", identity, row)
+    assert control.get("/connections").json()["tunnel"]["expires"] == row["expires"]
+    assert "result" in rpc(private, "events/subscribe", subscription())
+    subscriptions = state.all("subscription")
+    approve(control)
+    assert state.get("settings", "tunnel_grant") == identity
+    assert state.get("grant", identity)["expires"] is None
+    assert state.all("subscription") == subscriptions
+    assert control.get("/connections").json()["tunnel"]["expires"] is None
+
+
+def test_missing_oauth_expiry_never_becomes_permanent(bridge):
+    _, public, control, state, *_ = bridge
+    _, form = link(public)
+    tokens = public.post("/token", data=form).json()
+    identity, row = state.all("grant")[0]
+    row["expires"] = None
+    state.put("grant", identity, row)
+    public.headers["Authorization"] = "Bearer " + tokens["access_token"]
+    assert public.post("/mcp", json={}).status_code == 401
+    assert control.get("/connections").json()["grants"] == []
+    public.app.state.oauth.cleanup()
+    assert state.get("grant", identity) is None
 
 
 def test_event_worker_preserves_pending_ack_and_stops_after_revoke(bridge):
