@@ -41,7 +41,7 @@
 API와 Iris가 실행 중인 서버에서 `.env`의 `DOT_PUBLIC_URL`을 실제 HTTPS 출처로 설정하세요. 끝에 `/`나 `/mcp`를 붙이지 않습니다.
 
 ```bash
-uv run python scripts/init-dot-secrets.py
+./bridge install --source
 sudo chown 10001:10001 secrets/mcp_link_key secrets/mcp_storage_key
 sudo chmod 400 secrets/mcp_link_key secrets/mcp_storage_key
 sudo chmod 444 secrets/mcp_approval_token secrets/mcp_passkey_token

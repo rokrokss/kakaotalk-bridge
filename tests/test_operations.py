@@ -100,7 +100,7 @@ def test_release_manifest_requires_immutable_official_refs(tmp_path):
     for bad in (
         "evil.example/server@sha256:" + "a" * 64,
         "ghcr.io/example/another-project-server@sha256:" + "a" * 64,
-        cli.REGISTRY + "server:latest",
+        "ghcr.io/rokrokss/kakaotalk-bridge-server:latest",
     ):
         data["images"]["server"] = bad
         path.write_text(json.dumps(data))

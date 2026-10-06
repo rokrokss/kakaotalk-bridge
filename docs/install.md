@@ -14,10 +14,10 @@ Linux amd64/arm64의 단일 계정용 Docker Compose 구성입니다. Docker Eng
 
 ```bash
 cp .env.example .env
-./scripts/preflight.sh
+./bridge doctor
 ```
 
-`preflight`가 실패하면 Linux 커널과 binder 설정을 먼저 해결하세요. 공유 메모리는 `androidboot.use_memfd=1`을 사용합니다.
+`doctor`가 실패하면 Linux 커널과 binder 설정을 먼저 해결하세요. 공유 메모리는 `androidboot.use_memfd=1`을 사용합니다.
 
 `.env`의 `DEVICE_SUBNET`이 LAN·VPN·다른 Docker 네트워크와 겹치지 않는지 확인하세요. 변경하면 `GATEWAY_IP`, `DEVICE_IP_RANGE`도 함께 바꾸고 고정 게이트웨이 주소를 자동 할당 범위 밖에 두세요. 기본값은 각각 `172.29.87.0/24`, `172.29.87.3`, `172.29.87.128/25`입니다.
 

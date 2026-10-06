@@ -36,7 +36,6 @@ from webui.event_settings import EventSource
 from webui.setup import SetupBusy, SetupClient
 
 COOKIE = "__Secure-kakao-admin-v2"
-LEGACY_COOKIE = "__Host-kakao-admin"
 COOKIE_PATH = "/admin"
 STATIC = Path(__file__).with_name("static")
 
@@ -210,10 +209,6 @@ def create_app(
             if request.headers.get("origin") != expected:
                 return JSONResponse({"detail": "invalid_origin"}, status_code=403)
         response = await call_next(request)
-        if LEGACY_COOKIE in request.cookies:
-            response.delete_cookie(
-                LEGACY_COOKIE, secure=True, httponly=True, samesite="strict", path="/"
-            )
         response.headers.update(
             {
                 "Cache-Control": "no-store",

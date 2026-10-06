@@ -34,7 +34,6 @@ VOLUMES = [
     "dot-state",
     "passkey-state",
 ]
-REGISTRY = "ghcr.io/rokrokss/kakaotalk-bridge-"
 
 
 class KoreanArgumentParser(argparse.ArgumentParser):

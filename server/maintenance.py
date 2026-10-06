@@ -1,6 +1,5 @@
 """Offline restore / online SQLite backup, encrypted with streaming AES-256-GCM."""
 
-import argparse
 import os
 import sqlite3
 import tempfile
@@ -107,21 +106,3 @@ def restore(source: str, db_path: str, replace=False):
         os.replace(scratch, target)
     finally:
         Path(scratch).unlink(missing_ok=True)
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["backup", "restore"])
-    parser.add_argument("file")
-    parser.add_argument("--replace", action="store_true")
-    args = parser.parse_args()
-    path = os.getenv("DB_PATH", "/data/collector.db")
-    if args.command == "backup":
-        backup(path, args.file)
-    else:
-        restore(args.file, path, args.replace)
-    print(f"{args.command}: completed")
-
-
-if __name__ == "__main__":
-    main()

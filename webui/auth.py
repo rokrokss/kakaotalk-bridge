@@ -21,9 +21,6 @@ class OwnerAuth:
     def __init__(self, path, token):
         key = base64.urlsafe_b64encode(hashlib.sha256(("admin-auth-v1:" + token).encode()).digest())
         self.state = State(str(path), key)
-        from server.auth_migration import retire_social_login
-
-        retire_social_login(self.state)
 
     def configured(self):
         return bool(self.state.get("owner", "password"))

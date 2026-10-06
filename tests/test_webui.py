@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from webui import device
-from webui.app import COOKIE, LEGACY_COOKIE, create_app
+from webui.app import COOKIE, create_app
 from webui.auth import digest
 
 TOKEN = "test-admin-" + "a" * 64
@@ -85,10 +85,6 @@ def test_cookie_is_admin_scoped_and_old_sessions_cannot_be_renamed(console):
     del record["cookie_scope"]
     owner.state.put("session", digest(key), record)
     assert client.get("/admin/api/session").status_code == 401
-    client.cookies.set(LEGACY_COOKIE, key, path="/")
-    response = client.get("/admin/")
-    assert LEGACY_COOKIE in response.headers["set-cookie"]
-    assert "Max-Age=0" in response.headers["set-cookie"]
 
 
 def test_cross_origin_csrf_and_arbitrary_keys_are_rejected(console):

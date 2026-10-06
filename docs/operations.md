@@ -14,8 +14,7 @@ Linux 호스트 기준 명령입니다. Mac의 Lima에서는 `docker compose` �
 관리 화면의 **내 Bridge**에서 시작하세요. 수집, 원격 AI 사용 기록, 휴대폰 직접 확인은 독립된 상태입니다. 서비스는 **AI 연결 → 연결 추가 또는 변경 → 서버 연결 확인**, 승인·활동은 **연결 새로고침**으로 확인합니다. 성공 시각은 과거 사용 기록이며 현재 연결을 보장하지 않습니다. 전체 요청 경로를 검증하려면 연결된 AI에 수집 상태를 요청하세요.
 
 ```bash
-docker compose --profile dot ps
-./scripts/status.sh
+./bridge doctor
 docker compose logs --tail 30 iris-collector
 ```
 
@@ -98,32 +97,6 @@ docker compose up -d --no-build
 | `dot-state` | OAuth·터널 승인, 원격 호출 성공 시각, 대화 이벤트 권한·구독·처리 커서·웹훅 대기열 |
 
 서버는 매시간 기본 30일 이전 메시지를 정리합니다. `RETENTION_DAYS`로 변경하세요. 재전송 중복 제거도 이 기간 안에 적용합니다. Android DB, 이전 알림 격리 데이터, 백업 파일은 정리하지 않습니다. 컨테이너 로그는 각각 10 MB 파일 3개로 제한합니다.
-
-<a id="back-up-the-collection-database"></a>
-## 수집 DB 백업
-
-```bash
-./scripts/backup.sh
-```
-
-SQLite 온라인 백업 API로 일관된 사본을 만들고 AES-256-GCM으로 암호화합니다. `secrets/backup_key`를 백업과 분리해 보관하세요. 키를 잃으면 복구할 수 없습니다. 자동 삭제·원격 복제는 직접 구성해야 합니다.
-
-복구 전에 API를 중지하세요.
-
-```bash
-docker compose stop api
-./scripts/restore.sh backups/collector-TIMESTAMP.kcb
-docker compose start api
-./scripts/status.sh
-```
-
-인증 태그·DB 무결성·스키마를 검사합니다. `cursor_epoch`가 바뀌므로 API 소비자는 페이지 커서를 초기화해야 합니다. Iris는 복구된 서버 커서부터 이어갑니다.
-
-스크립트가 실행되는 호스트의 Docker Engine을 사용합니다. 수동 Lima에서는 VM 내부에서 실행하세요.
-
-```bash
-limactl shell --workdir=/srv/kakaotalk-collector kakaotalk-test sudo ./scripts/backup.sh
-```
 
 <a id="back-up-android-and-mcp-state"></a>
 ## Android·MCP 상태 백업
