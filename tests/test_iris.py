@@ -360,8 +360,25 @@ def test_older_or_stopped_iris_is_replaced_with_this_images_build(monkeypatch):
     assert len(started) == 1 and iris.REMOTE_APK in started[0][1]
     stop = next(c for c in calls if "kill" in " ".join(c))
     assert iris.PID_FILE in stop[1] and iris.LEGACY_PID_FILE in stop[1]
-    assert calls[-1][1].startswith("rm -rf /data/local/tmp/kakaocollector-iris.apk*")
-    assert iris.enrollment.LEGACY_ENROLLMENT in calls[-1][1]
+    # A rollback to the previous release still needs its files.
+    assert not any("rm -rf" in " ".join(c) for c in calls)
+
+
+def test_previous_release_files_outlive_the_update_rollback_window(monkeypatch):
+    calls = []
+    monkeypatch.setattr(iris.cli, "adb", lambda *args, **kwargs: calls.append(args) or "")
+    clock = [1000.0]
+    monkeypatch.setattr(iris.time, "monotonic", lambda: clock[0])
+    collector = iris.Collector(api=Mock())
+    clock[0] += iris.LEGACY_GRACE_SECONDS - 1
+    collector.remove_legacy()
+    assert calls == []
+    clock[0] += 1
+    collector.remove_legacy()
+    collector.remove_legacy()
+    assert len(calls) == 1
+    assert calls[0][1].startswith("rm -rf /data/local/tmp/kakaocollector-iris.apk*")
+    assert iris.enrollment.LEGACY_ENROLLMENT in calls[0][1]
 
 
 def test_same_build_already_on_device_is_not_uploaded_again(monkeypatch):

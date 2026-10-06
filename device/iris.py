@@ -25,7 +25,9 @@ HOME = enrollment.HOME
 REMOTE_APK = HOME + "/iris.apk"
 PID_FILE = HOME + "/iris.pid"
 AUTH_FILE = HOME + "/iris-auth.json"
-# Locations used by releases before 0.2. Removed once the current build is running.
+# Locations used by releases before 0.2. An unhealthy update rolls back to the previous
+# images within minutes, and they still need these files, so remove them only after
+# this build has collected for longer than that.
 LEGACY_PID_FILE = "/data/local/tmp/kakaocollector-iris.pid"
 LEGACY_FILES = (
     "/data/local/tmp/kakaocollector-iris.apk*",
@@ -33,6 +35,7 @@ LEGACY_FILES = (
     "/data/kakaocollector-iris",
     enrollment.LEGACY_ENROLLMENT,
 )
+LEGACY_GRACE_SECONDS = 600
 # The API accepts 1 MiB bodies; leave room for the JSON envelope.
 MAX_BATCH_BYTES = 768 * 1024
 SKIP_REASONS = {"decrypt_failed", "metadata_unreadable"}
@@ -139,7 +142,6 @@ def ensure_started(epoch):
         except (OSError, ValueError):
             time.sleep(1)
             continue
-        cli.adb("shell", "rm -rf " + " ".join(LEGACY_FILES), check=False)
         return token
     raise RuntimeError("iris_start_failed")
 
@@ -221,6 +223,8 @@ class Collector:
         self.iris_token = None
         self.iris_epoch = None
         self.has_more = False
+        self.started = time.monotonic()
+        self.legacy_removed = False
 
     def api_request(self, path, payload=None):
         return request(
@@ -232,6 +236,12 @@ class Collector:
     def reset(self):
         self.connected = False
         self.iris_token = None
+
+    def remove_legacy(self):
+        if self.legacy_removed or time.monotonic() - self.started < LEGACY_GRACE_SECONDS:
+            return
+        cli.adb("shell", "rm -rf " + " ".join(LEGACY_FILES), check=False)
+        self.legacy_removed = True
 
     def heartbeat(self, allowed, connected):
         self.api(
@@ -365,6 +375,7 @@ def watch():
     while True:
         try:
             count = collector.tick()
+            collector.remove_legacy()
             print(json.dumps({"iris": "polling", "committed_rows": count}), flush=True)
             time.sleep(0.2 if collector.has_more else 3)
         except (

@@ -179,7 +179,7 @@ def test_write_keeps_contents_off_the_command_line():
     enrollment.write(CONFIG, adb)
     assert [c[0] for c in calls] == ["shell", "push", "shell"]
     assert calls[1][2] == enrollment.ENROLLMENT + ".next"
-    # The legacy copy is removed only after the new Iris starts (see device.iris).
+    # The legacy copy outlives an update rollback (see device.iris).
     assert enrollment.LEGACY_ENROLLMENT not in " ".join(" ".join(c) for c in calls)
     assert all("personal-tablet" not in " ".join(c) for c in calls)
 
