@@ -1,4 +1,4 @@
-# 내 계정으로 메시지 보내기
+# 메시지 보내기
 
 [README](../README.md) · [MCP 연결](dot-plugin.md) · [조회 API](api.md)
 

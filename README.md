@@ -4,7 +4,7 @@
 
 <h1>KakaoTalk Bridge</h1>
 
-가상 Android 태블릿으로 카카오톡 메시지를 수집해 ChatGPT나 MCP 지원 AI에서 검색·요약하고 내 계정으로 텍스트 메시지를 보냅니다.
+카카오톡 메시지를 AI에서 검색·요약하고 보낼 수 있는 MCP 서버입니다.
 
 직접 호스팅 · 브라우저에서 설정 · 메시지 조회·전송
 
@@ -144,7 +144,7 @@ Mac VM에는 CPU 6개와 메모리 8 GiB가 설정됩니다. 측정된 최소 �
 | --- | --- |
 | 설치하고 로그인하기 | [빠른 시작](docs/quickstart.md) · [관리 화면](docs/web-ui.md) |
 | AI 연결하기 | [OpenAI 터널](docs/openai-tunnel.md) · [HTTPS/OAuth](docs/dot-plugin.md) · [로컬/SSH 클라이언트](docs/api.md#stdio-mcp) |
-| 내 계정으로 메시지 보내기 | [전송 권한·상태·제한](docs/sending.md) |
+| 메시지 보내기 | [전송 권한·상태·제한](docs/sending.md) |
 | 이벤트를 보낼 대화 선택하기 | [MCP Events](docs/events.md) |
 | 접근 관리·업데이트·복구 | [패스키](docs/passkeys.md) · [운영](docs/operations.md) |
 | 배포 또는 내부 기능 개발 | [고급 설치](docs/onboarding.md) · [구조](docs/design.md) · [개발](docs/development.md) |

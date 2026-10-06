@@ -2,7 +2,7 @@
 
 [README](../README.md) · [이벤트](events.md) · [보안](security.md)
 
-`dot-plugin`은 수집 API에 저장된 메시지를 OAuth로 제공하는 원격 MCP 서버입니다. 카카오톡에 다시 로그인하지 않습니다. 메시지 조회·검색·수집 상태 확인과 승인된 계정의 텍스트 전송에 사용합니다. 이 문서는 공개 HTTPS/OAuth를 다룹니다. 서버에서 나가는 연결만 사용하려면 [개인 터널](openai-tunnel.md)을 참고하세요.
+`dot-plugin`은 ChatGPT 등 원격 AI 클라이언트를 연결하는 OAuth MCP 서버입니다. 이 문서는 공개 HTTPS 연결을 다룹니다. 서버에서 나가는 연결만 사용하려면 [개인 터널](openai-tunnel.md)을 참고하세요.
 
 <a id="connect"></a>
 ## 연결
