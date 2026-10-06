@@ -240,7 +240,7 @@ def main():
         keyboard_checked = False
         while True:
             payload = sample()
-            if payload["state"] == "android_ready" and not keyboard_checked:
+            if payload.get("bridge_installed") and not keyboard_checked:
                 keyboard_checked = True
                 try:
                     if ensure_keyboard_app():
