@@ -48,7 +48,8 @@ RUN python -m pip install --no-cache-dir --require-hashes -r build-requirements.
 FROM python:3.12-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3
 ARG VCS_REF=development
 LABEL org.opencontainers.image.source="https://github.com/rokrokss/kakaotalk-bridge" \
-      org.opencontainers.image.revision="${VCS_REF}"
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.licenses="MIT AND GPL-3.0-only"
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends adb ca-certificates openjdk-17-jre-headless \
     && rm -rf /var/lib/apt/lists/* \
@@ -62,6 +63,7 @@ COPY webui/ webui/
 COPY dot_plugin/ dot_plugin/
 COPY --from=android-build /opt/android-sdk/build-tools/35.0.0/lib/apksigner.jar /opt/apksigner.jar
 COPY assets/logo.svg assets/
+COPY LICENSE .
 COPY --from=bridge-build /src/bridge/build/outputs/apk/release/bridge-release.apk /opt/bridge.apk
 COPY --from=iris-build /iris/app/build/outputs/apk/release/app-release-unsigned.apk /opt/iris.apk
 COPY --from=iris-build /opt/iris-source.tar.gz /opt/iris-source.tar.gz

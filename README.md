@@ -152,5 +152,5 @@ Mac VM에는 CPU 6개와 메모리 8 GiB가 설정됩니다. 측정된 최소 �
 <a id="license-and-attribution"></a>
 ## 라이선스와 출처
 
-프로젝트 전체 라이선스는 아직 지정되지 않았습니다. 수정된 Iris 빌드에는 별도의 [라이선스 및 소스 배포 조건](iris/NOTICE.md)이 적용됩니다.
+이 저장소는 [MIT 라이선스](LICENSE)로 제공합니다. 단, `iris/` 코드를 원본 Iris와 함께 빌드한 Iris APK에는 원본의 GPL-3.0 파일이 포함되므로 APK 전체에 GPL-3.0 조건이 적용됩니다. [라이선스 및 소스 배포 조건](iris/NOTICE.md)
 KakaoTalk Bridge는 카카오의 공식 서비스가 아닙니다.
