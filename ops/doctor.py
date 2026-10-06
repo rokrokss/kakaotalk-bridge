@@ -1,6 +1,7 @@
 """Health report for the host, Docker services and credentials."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ops import cli
@@ -47,6 +48,7 @@ def doctor(report=True):
         )
         if not (cli.ROOT / "secrets" / name).is_file()
     ]
+    reports["certificate"] = certificate()
     if cli.read_env().get("OPENAI_TUNNEL_ENABLED") == "1":
         from ops.tunnel import status
 
@@ -63,7 +65,7 @@ def doctor(report=True):
         if row["State"] == "running" and row["Health"] in ("", "healthy")
     }
     ok = (
-        all(reports[name]["ok"] for name in ("docker", "compose", "binder"))
+        all(reports[name]["ok"] for name in ("docker", "compose", "binder", "certificate"))
         and not reports["missing_secrets"]
         and expected <= healthy
     )
@@ -74,21 +76,60 @@ def doctor(report=True):
     return ok
 
 
+def certificate():
+    """Days left on the private HTTPS certificate; it is valid for a year and renewed by hand."""
+    path = cli.ROOT / "secrets/tls_cert.pem"
+    if not path.is_file():
+        return {"ok": True, "days": None}
+    try:
+        end = cli.run(["openssl", "x509", "-enddate", "-noout", "-in", str(path)], capture=True)
+        # OpenSSL prints the end date in GMT, e.g. "notAfter=Oct  6 12:00:00 2027 GMT".
+        stamp = end.removeprefix("notAfter=").strip().removesuffix(" GMT") + " +0000"
+        expires = datetime.strptime(stamp, "%b %d %H:%M:%S %Y %z")
+    except (RuntimeError, OSError, ValueError):
+        return {"ok": True, "days": None}
+    days = (expires - datetime.now(UTC)).days
+    return {"ok": days >= 0, "days": days, "expires": expires.date().isoformat()}
+
+
 def doctor_text(reports, expected, ok):
     def line(label, good, detail=""):
         return f"  {label}: {'정상' if good else '확인 필요'}{f' ({detail})' if detail else ''}"
 
-    states = {"running": "실행 중", "exited": "중지됨", "created": "시작 전", "restarting": "다시 시작 중"}
+    def certificate_line(cert):
+        if cert["days"] is None:
+            return line("HTTPS 인증서", True, "만료일 확인 안 함")
+        if cert["days"] < 0:
+            return line(
+                "HTTPS 인증서",
+                False,
+                f"{cert['expires']}에 만료됨, 운영 안내의 인증서 갱신을 따르세요",
+            )
+        if cert["days"] < 30:
+            return f"  HTTPS 인증서: 곧 만료 ({cert['days']}일 남음, 운영 안내의 인증서 갱신을 따르세요)"
+        return line("HTTPS 인증서", True, f"{cert['expires']}까지")
+
+    states = {
+        "running": "실행 중",
+        "exited": "중지됨",
+        "created": "시작 전",
+        "restarting": "다시 시작 중",
+    }
     lines = [
         "KakaoTalk Bridge 상태 점검",
         line("Docker", reports["docker"]["ok"], reports["docker"].get("version", "")),
         line("Docker Compose", reports["compose"]["ok"], reports["compose"].get("version", "")),
-        line("Android Binder", reports["binder"]["ok"], "" if reports["binder"]["ok"] else "Binder를 지원하는 커널이 필요합니다"),
+        line(
+            "Android Binder",
+            reports["binder"]["ok"],
+            "" if reports["binder"]["ok"] else "Binder를 지원하는 커널이 필요합니다",
+        ),
         line(
             "인증 키",
             not reports["missing_secrets"],
             "없음: " + ", ".join(reports["missing_secrets"]) if reports["missing_secrets"] else "",
         ),
+        certificate_line(reports["certificate"]),
         "  서비스:",
     ]
     running = {row["Service"]: row for row in reports["services"]}
@@ -97,11 +138,26 @@ def doctor_text(reports, expected, ok):
         state = states.get(row["State"], row["State"]) if row else "없음"
         if row and name not in expected and row["State"] == "exited":
             state = "1회 실행 완료"
-        health = {"healthy": ", 응답 정상", "unhealthy": ", 응답 없음", "starting": ", 시작 확인 중"}.get(
-            row.get("Health", "") if row else "", ""
-        )
+        health = {
+            "healthy": ", 응답 정상",
+            "unhealthy": ", 응답 없음",
+            "starting": ", 시작 확인 중",
+        }.get(row.get("Health", "") if row else "", "")
         lines.append(f"    {name}: {state}{health}")
     if "tunnel" in reports:
-        lines.append(line("개인 OpenAI 터널", reports["tunnel"]["ready"], "연결됨" if reports["tunnel"]["ready"] else "연결 대기"))
-    lines.append("결과: " + ("모든 항목이 정상입니다." if ok else "확인이 필요한 항목이 있습니다. 위 내용을 확인하세요."))
+        lines.append(
+            line(
+                "개인 OpenAI 터널",
+                reports["tunnel"]["ready"],
+                "연결됨" if reports["tunnel"]["ready"] else "연결 대기",
+            )
+        )
+    lines.append(
+        "결과: "
+        + (
+            "모든 항목이 정상입니다."
+            if ok
+            else "확인이 필요한 항목이 있습니다. 위 내용을 확인하세요."
+        )
+    )
     return "\n".join(lines)

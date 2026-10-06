@@ -446,3 +446,30 @@ def test_shared_code_is_readable_but_private_state_is_untouched(tmp_path):
     assert mode("ops") == "0o755" and mode("ops/cli.py") == "0o644" and mode("bridge") == "0o755"
     assert mode(".env") == "0o644" and mode(".env.local") == "0o600"
     assert mode("secrets") == "0o700" and mode("secrets/admin_token") == "0o600"
+
+
+@pytest.mark.parametrize(
+    "days, ok, text", [(400, True, "까지"), (10, True, "곧 만료"), (-1, False, "만료됨")]
+)
+def test_doctor_reports_certificate_expiry(tmp_path, monkeypatch, days, ok, text):
+    from datetime import UTC, datetime, timedelta
+
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    (tmp_path / "secrets").mkdir()
+    (tmp_path / "secrets/tls_cert.pem").write_text("certificate")
+    end = (datetime.now(UTC) + timedelta(days=days, hours=1)).strftime("%b %d %H:%M:%S %Y GMT")
+    monkeypatch.setattr(cli, "run", lambda *a, **k: "notAfter=" + end)
+    report = doctor.certificate()
+    assert report["ok"] is ok and abs(report["days"] - days) <= 1
+    assert text in doctor.doctor_text(
+        {
+            "docker": {"ok": True},
+            "compose": {"ok": True},
+            "binder": {"ok": True},
+            "missing_secrets": [],
+            "services": [],
+            "certificate": report,
+        },
+        set(),
+        ok,
+    )
