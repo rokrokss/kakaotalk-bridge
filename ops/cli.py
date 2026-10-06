@@ -1285,6 +1285,12 @@ def mac(args):
 
     else:
         if args.command == "start":
+            instances = run(["limactl", "list", "--format", "{{.Name}}"], capture=True).splitlines()
+            if vm not in instances:
+                raise RuntimeError(
+                    "The managed Lima VM no longer exists. Run ./bridge up to recreate it "
+                    "from the project template."
+                )
             run(["limactl", "start", "--tty=false", vm])
         options = [args.command]
         if args.command == "connect":

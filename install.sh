@@ -72,7 +72,7 @@ elif sys.platform == "darwin":
     # mac.json is written before the VM finishes its first installation.
     installed = False
 
-if installed and (root / "release.json").is_file() and not (root / ".git").exists():
+if (root / marker).is_file() and (root / "release.json").is_file() and not (root / ".git").exists():
     sys.path.insert(0, str(root))
     from ops.cli import KoreanArgumentParser
     from ops.onboarding import add_arguments
@@ -80,15 +80,42 @@ if installed and (root / "release.json").is_file() and not (root / ".git").exist
     parser = KoreanArgumentParser(prog="bridge up")
     add_arguments(parser)
     options = parser.parse_args(arguments)
-    if not (options.plan or options.source or options.manifest):
+    if (installed or sys.platform == "darwin") and not (
+        options.plan or options.source or options.manifest
+    ):
         try:
             # Validate all setup options before changing the installed version.
             subprocess.run([*command, "up", "--plan", *arguments],
                            stdout=subprocess.DEVNULL, check=True)
-            print("릴리스 업데이트 확인 중…", flush=True)
-            subprocess.run([*command, "upgrade", "--version", version], check=True)
+            if sys.platform == "darwin":
+                from ops.onboarding import prepare_mac
+
+                prepare_mac(options)
+                config = json.loads((root / marker).read_text())
+                instances = subprocess.run(
+                    ["limactl", "list", "--format", "{{.Name}}"],
+                    capture_output=True, text=True, check=True,
+                ).stdout.splitlines()
+                if config["vm"] not in instances:
+                    # Published versions of up can create a default Lima VM when
+                    # mac.json outlives the guest. Their install command already
+                    # uses our template and saved ports, so repair before up.
+                    print("기존 VM이 없어 Bridge 템플릿으로 다시 준비합니다.", flush=True)
+                    subprocess.run(
+                        [*command, "install", "--manifest", str(root / "release.json")],
+                        check=True,
+                    )
+                    installed = False
+            if installed:
+                print("릴리스 업데이트 확인 중…", flush=True)
+                subprocess.run([*command, "upgrade", "--version", version], check=True)
         except subprocess.CalledProcessError as error:
             sys.exit(error.returncode)
+        except (OSError, RuntimeError, ValueError) as error:
+            from ops.setup_output import report_error
+
+            report_error(error)
+            sys.exit(1)
 
 os.execv(sys.executable, [*command, "up", *arguments])
 '

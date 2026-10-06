@@ -24,6 +24,7 @@ docker compose logs --tail 30 iris-collector
 | 증상 | 확인할 내용 |
 | --- | --- |
 | Android 화면 없음 | redroid 시작과 호스트 binder 기기 |
+| Mac에서 VM을 삭제한 뒤 다시 설치 | 설치 명령을 다시 실행하면 저장된 VM 이름과 포트로 Bridge 템플릿을 사용해 생성합니다. VM과 함께 삭제된 데이터는 백업에서 복구해야 합니다. |
 | 수집 승인 잠김 | 로그인 사전 점검과 두 기기 직접 확인 |
 | 앱 업데이트 후 수집 중단 | versionCode가 바뀌면 새 로그인 확인 필요 |
 | 복호화·JSON 오류 | Iris 로그. 잘못된 메시지를 건너뛰지 않고 수집 중단 |

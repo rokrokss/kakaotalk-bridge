@@ -348,6 +348,9 @@ class Runtime:
         if not config_path.exists():
             return False
         config = json.loads(config_path.read_text())
+        instances = run(["limactl", "list", "--format", "{{.Name}}"], capture=True).splitlines()
+        if config["vm"] not in instances:
+            return False
         run(["limactl", "start", "--tty=false", config["vm"]])
         try:
             run(

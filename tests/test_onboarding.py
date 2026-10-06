@@ -292,11 +292,114 @@ def test_mac_start_wakes_vm_before_running_compose(home, monkeypatch):
         json.dumps({"vm": "existing", "directory": "/srv/bridge", "admin_port": 18443})
     )
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/limactl")
-    execute = Mock()
+    execute = Mock(side_effect=["existing\n", "", ""])
     monkeypatch.setattr(cli, "run", execute)
     cli.mac(argparse.Namespace(command="start"))
-    assert execute.call_args_list[0].args[0] == ["limactl", "start", "--tty=false", "existing"]
-    assert execute.call_args_list[1].args[0][-2:] == ["--local", "start"]
+    assert execute.call_args_list[0].args[0] == ["limactl", "list", "--format", "{{.Name}}"]
+    assert execute.call_args_list[1].args[0] == ["limactl", "start", "--tty=false", "existing"]
+    assert execute.call_args_list[2].args[0][-2:] == ["--local", "start"]
+
+
+def test_mac_start_never_creates_a_missing_vm_by_name(home, monkeypatch):
+    config = home / ".bridge/mac.json"
+    cli.atomic(config, json.dumps({"vm": "deleted", "directory": "/srv/bridge"}))
+    monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/limactl")
+    execute = Mock(return_value="unrelated-vm\n")
+    monkeypatch.setattr(cli, "run", execute)
+
+    with pytest.raises(RuntimeError, match="no longer exists"):
+        cli.mac(argparse.Namespace(command="start"))
+
+    execute.assert_called_once_with(["limactl", "list", "--format", "{{.Name}}"], capture=True)
+    assert json.loads(config.read_text())["vm"] == "deleted"
+
+
+@pytest.mark.parametrize("guest_installed", [False, True])
+def test_mac_installed_checks_vm_exists_before_starting(home, monkeypatch, guest_installed):
+    cli.atomic(
+        home / ".bridge/mac.json",
+        json.dumps({"vm": "existing", "directory": "/srv/bridge"}),
+    )
+    execute = Mock(
+        side_effect=["existing\nunrelated-vm\n", "", "" if guest_installed else RuntimeError()]
+    )
+    monkeypatch.setattr(onboarding, "run", execute)
+
+    assert onboarding.Runtime().installed() is guest_installed
+
+    assert [call.args[0] for call in execute.call_args_list] == [
+        ["limactl", "list", "--format", "{{.Name}}"],
+        ["limactl", "start", "--tty=false", "existing"],
+        ["limactl", "shell", "--workdir=/", "existing", "sudo", "test", "-f",
+         "/srv/bridge/.bridge/installed"],
+    ]
+
+
+def test_mac_vm_listing_failure_never_starts_or_creates_vm(home, monkeypatch):
+    cli.atomic(home / ".bridge/mac.json", json.dumps({"vm": "saved"}))
+    execute = Mock(side_effect=RuntimeError("cannot list VMs"))
+    monkeypatch.setattr(onboarding, "run", execute)
+
+    with pytest.raises(RuntimeError, match="cannot list"):
+        onboarding.Runtime().installed()
+
+    execute.assert_called_once_with(["limactl", "list", "--format", "{{.Name}}"], capture=True)
+
+
+def test_deleted_vm_reuses_project_template_and_saved_ports(home, monkeypatch):
+    from pathlib import Path
+
+    (home / "deploy").mkdir()
+    template = (Path(__file__).resolve().parents[1] / "deploy/lima.yaml").read_text()
+    (home / "deploy/lima.yaml").write_text(template)
+    config = {
+        "vm": "saved-vm", "directory": "/srv/bridge", "admin_port": 39443,
+        "mcp_port": 39787, "local_admin_port": 39789,
+    }
+    saved = home / ".bridge/mac.json"
+    cli.atomic(saved, json.dumps(config))
+    (home / ".bridge/onboarding.json").write_text('{"state":"ready"}')
+    (home / ".env").write_text("HOST_SETTING=keep\n")
+    monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/limactl")
+    monkeypatch.setattr(cli, "available_port", Mock(side_effect=AssertionError("reuse ports")))
+    socket_factory = Mock()
+    socket_factory.return_value.__enter__ = Mock(
+        return_value=Mock(connect_ex=Mock(return_value=1))
+    )
+    socket_factory.return_value.__exit__ = Mock(return_value=False)
+    monkeypatch.setattr(cli.socket, "socket", socket_factory)
+    monkeypatch.setattr(cli, "package_source", lambda path: path.write_bytes(b"fixture"))
+    calls = []
+    rendered = []
+
+    def execute(command, **kwargs):
+        calls.append(command)
+        if command[1] == "list":
+            return "unrelated-vm\n"
+        if command[1] == "start":
+            assert command[:5] == ["limactl", "start", "--tty=false", "--name", "saved-vm"]
+            rendered.append(Path(command[5]).read_text())
+        return ""
+
+    monkeypatch.setattr(cli, "run", execute)
+
+    assert onboarding.Runtime().installed() is False
+    assert calls == [["limactl", "list", "--format", "{{.Name}}"]]
+    assert json.loads(saved.read_text()) == config
+    cli.mac(argparse.Namespace(
+        command="install", vm="kakaotalk-bridge", admin_port=None, mcp_port=None,
+        source=True, manifest=None,
+    ))
+
+    assert len(rendered) == 1
+    assert "template:_images/ubuntu-24.04" in rendered[0]
+    assert "cpus: 6" in rendered[0] and "memory: 8GiB" in rendered[0]
+    assert "docker.io docker-compose-v2" in rendered[0]
+    for port in (39443, 39787, 39789):
+        assert f"hostPort: {port}" in rendered[0]
+    assert json.loads(saved.read_text()) == config
+    assert (home / ".env").read_text() == "HOST_SETTING=keep\n"
+    assert any(command[-3:] == ["--local", "install", "--source"] for command in calls)
 
 
 def test_repeated_apk_import_preserves_identical_set_and_rejects_mixing(home, monkeypatch):
