@@ -30,7 +30,7 @@ uv export --frozen --no-dev --no-emit-project --output-file requirements.lock
 | 경로 | 역할 |
 | --- | --- |
 | `device/` | redroid 설정, 로그인 확인, Iris 수집기 |
-| `iris/` | 읽기 전용 Iris 진입점과 라이선스 고지 |
+| `iris/` | Iris 조회·제한된 텍스트 전송 진입점과 라이선스 고지 |
 | `android/` | 등록 앱·웹 키보드, 이전 알림 수집 코드 |
 | `server/` | 저장소, API, stdio MCP, 백업 |
 | `webui/` | 관리 인증, 기기 제어, 웹 화면 |

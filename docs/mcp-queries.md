@@ -60,7 +60,7 @@ MCP 조회 도구는 이전 숫자 `after`·`cursor_epoch` 대신 불투명 `cur
 
 과거 이름 보완은 이미 수집한 행을 사용하므로 API·MCP 서버만 갱신하면 됩니다. Iris 교체·카카오톡 재설치·재로그인은 필요하지 않습니다. 먼저 수집 DB를 백업하세요. 다음 구성 요소 교체는 Android 프로필 리더 자체를 갱신할 때 적용합니다.
 
-최신 암호화 프로필은 Iris v3부터 지원하며 현재 v4는 `/collector/metadata`, `/collector/rows`도 인증합니다. Android 구성 요소와 Python 수집기를 함께 갱신하세요. 서버만 바꿔서는 이름 조회나 호출자 인증을 추가할 수 없습니다. 기존 등록과 Android 앱 데이터를 유지하고 새 `bootstrap` 대신 아래의 명시적 `bootstrap iris-upgrade`를 사용하세요.
+최신 암호화 프로필은 Iris v3부터 지원하며 현재 v5는 `/collector/metadata`, `/collector/rows`와 [텍스트 전송 경로](sending.md)를 인증합니다. Android 구성 요소와 Python 수집기를 함께 갱신하세요. 서버만 바꿔서는 이름 조회나 호출자 인증을 추가할 수 없습니다. 기존 등록과 Android 앱 데이터를 유지하고 새 `bootstrap` 대신 아래의 명시적 `bootstrap iris-upgrade`를 사용하세요.
 
 DB·설정을 백업하고 두 이미지를 빌드·적재한 뒤 `iris-collector`를 중지합니다. `DEVICE_IMAGE`를 새 이미지로 설정하고 이전 APK의 정확한 SHA-256으로 실행하세요.
 

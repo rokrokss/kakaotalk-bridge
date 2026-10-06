@@ -2,7 +2,7 @@
 
 [README](../README.md) · [이벤트](events.md) · [보안](security.md)
 
-`dot-plugin`은 수집 API에 저장된 메시지를 OAuth로 제공하는 원격 MCP 서버입니다. 카카오톡에 다시 로그인하지 않습니다. 메시지 조회·검색·수집 상태 확인에 사용합니다. 이 문서는 공개 HTTPS/OAuth를 다룹니다. 서버에서 나가는 연결만 사용하려면 [개인 터널](openai-tunnel.md)을 참고하세요.
+`dot-plugin`은 수집 API에 저장된 메시지를 OAuth로 제공하는 원격 MCP 서버입니다. 카카오톡에 다시 로그인하지 않습니다. 메시지 조회·검색·수집 상태 확인과 별도로 승인한 텍스트 전송에 사용합니다. 이 문서는 공개 HTTPS/OAuth를 다룹니다. 서버에서 나가는 연결만 사용하려면 [개인 터널](openai-tunnel.md)을 참고하세요.
 
 <a id="connect"></a>
 ## 연결
@@ -32,8 +32,10 @@
 | `get_profile` | 연결을 식별하는 불투명 프로필 ID |
 | `get_pending_messages` | 소비자의 미처리 메시지 조회 |
 | `acknowledge_messages` | 조회한 페이지까지 처리 완료 기록 |
+| `send_message` | 내 계정으로 기존 방에 텍스트 전송 (`kakao.send`) |
+| `get_message_send_status` | 요청 ID로 전송 상태 조회 (`kakao.send`) |
 
-최근·검색 결과는 발신 시각 내림차순이며 불투명 커서를 사용합니다. 대화 필터는 개수 제한 전에 적용합니다. 이름·시간·문맥·호환성은 [메시지 조회](mcp-queries.md)를 참고하세요. 메시지 전송·로그인·ADB 조작 도구는 없습니다.
+최근·검색 결과는 발신 시각 내림차순이며 불투명 커서를 사용합니다. 대화 필터는 개수 제한 전에 적용합니다. 이름·시간·문맥·호환성은 [메시지 조회](mcp-queries.md)를 참고하세요. [텍스트 전송](sending.md)은 `kakao.send` 권한이 필요합니다. 로그인·ADB 조작 도구는 없습니다.
 
 <a id="deploy-on-linux"></a>
 ## Linux 배포
@@ -50,7 +52,7 @@ docker compose --profile dot up -d --no-deps dot-plugin dot-control dot-ingress
 # Update the device/admin image too, then run ./bridge passkey-login.
 ```
 
-공개 프록시는 기본 `127.0.0.1:18787`의 `dot-ingress`로 전달합니다. **이 포트만 공개하세요.** API·관리 게이트웨이나 dot-plugin을 직접 공개하지 마세요. 진입점이 내부 경로를 차단하고 MCP 경로의 관리자 쿠키를 제거합니다. 기기·API·제어망이 아닌 전용 관리 진입망에 연결됩니다. 관리 화면을 비공개로 유지하려면 공개 프록시에서 `/admin`, `/admin/*`를 거부하세요. 그렇지 않으면 해당 호스트에 인증된 관리 화면을 제공합니다. dot-plugin은 API 읽기 토큰만 사용하며 Android 볼륨이나 관리자 토큰을 받지 않습니다.
+공개 프록시는 기본 `127.0.0.1:18787`의 `dot-ingress`로 전달합니다. **이 포트만 공개하세요.** API·관리 게이트웨이나 dot-plugin을 직접 공개하지 마세요. 진입점이 내부 경로를 차단하고 MCP 경로의 관리자 쿠키를 제거합니다. 기기·API·제어망이 아닌 전용 관리 진입망에 연결됩니다. 관리 화면을 비공개로 유지하려면 공개 프록시에서 `/admin`, `/admin/*`를 거부하세요. 그렇지 않으면 해당 호스트에 인증된 관리 화면을 제공합니다. dot-plugin은 API 읽기·전송 토큰을 사용하며 Android 볼륨이나 관리자 토큰을 받지 않습니다.
 
 <a id="deploy-in-lima-on-a-mac"></a>
 ## Mac의 Lima 배포
@@ -94,6 +96,6 @@ Linux에서는 `scripts/lima-compose.sh` 대신 `docker compose`를 사용하세
 <a id="protocol"></a>
 ## 프로토콜
 
-MCP `2026-07-28`과 `kakao.read`, `kakao.events` 범위를 제공합니다. DCR·ChatGPT CIMD를 지원하며 CIMD 가져오기에 실패했다고 임의 리디렉션을 허용하지 않습니다. CIMD는 `none`, DCR은 `none`, `client_secret_basic`, `client_secret_post`를 지원합니다. `private_key_jwt`는 지원하지 않습니다.
+MCP `2026-07-28`과 `kakao.read`, `kakao.events`, `kakao.send` 범위를 제공합니다. DCR·ChatGPT CIMD를 지원하며 CIMD 가져오기에 실패했다고 임의 리디렉션을 허용하지 않습니다. CIMD는 `none`, DCR은 `none`, `client_secret_basic`, `client_secret_post`를 지원합니다. `private_key_jwt`는 지원하지 않습니다.
 
 [OpenAI MCP Events](https://developers.openai.com/plugins/build/mcp-events) · [OAuth 인증](https://developers.openai.com/plugins/build/auth) · [ChatGPT 연결](https://developers.openai.com/plugins/build/app-quickstart#connect-your-mcp-server-in-chatgpt)

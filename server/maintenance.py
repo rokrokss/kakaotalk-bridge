@@ -87,6 +87,13 @@ def restore(source: str, db_path: str, replace=False):
                 (str(uuid.uuid4()),),
             )
             instant = datetime.now(UTC).isoformat()
+            if restored.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='outgoing'"
+            ).fetchone():
+                restored.execute(
+                    "UPDATE outgoing SET status='unknown',reason='backup_restored',text=NULL "
+                    "WHERE status IN ('queued','dispatching')"
+                )
             restored.execute(
                 "INSERT INTO gaps(started_at,ended_at,reason) VALUES(?,?,?)",
                 (instant, instant, "backup_restored_reset_consumer_cursor"),

@@ -219,6 +219,13 @@ def destination_tree(root):
 
 def test_full_snapshot_roundtrip_and_authentication_before_restore(tmp_path):
     volumes, project = source_tree(tmp_path / "original")
+    with sqlite3.connect(volumes / "collector-data/collector.db") as db:
+        db.executescript(
+            "CREATE TABLE outgoing(status TEXT, reason TEXT, text TEXT);"
+            "INSERT INTO outgoing VALUES('queued',NULL,'unsent text');"
+            "INSERT INTO outgoing VALUES('dispatching',NULL,NULL);"
+            "INSERT INTO outgoing VALUES('submitted',NULL,NULL);"
+        )
     output = io.BytesIO()
     key = b"k" * 32
     snapshot.create(output, key, volumes, project)
@@ -236,6 +243,11 @@ def test_full_snapshot_roundtrip_and_authentication_before_restore(tmp_path):
     assert (destination / "android-data/private").read_text() == "private message fixture"
     assert os.readlink(destination / "android-data/link") == "/data/private"
     with sqlite3.connect(destination / "collector-data/collector.db") as db:
+        assert db.execute("SELECT status,text FROM outgoing").fetchall() == [
+            ("unknown", None),
+            ("unknown", None),
+            ("submitted", None),
+        ]
         assert (
             db.execute("SELECT value FROM metadata WHERE key='cursor_epoch'").fetchone()[0] != "old"
         )

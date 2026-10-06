@@ -625,7 +625,7 @@ def create_app(
 
     @app.post("/admin/api/tunnel/decision")
     def tunnel_decision(body: TunnelDecision, current: Annotated[dict, Depends(authenticated)]):
-        return connection_call("POST", "/tunnel/decision", body.model_dump())
+        return connection_call("POST", "/tunnel/decision", body.model_dump(exclude_none=True))
 
     @app.post("/admin/api/connections/{identity}/decide")
     def decide(

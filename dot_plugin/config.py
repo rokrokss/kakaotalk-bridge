@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 PROTOCOL = "2026-07-28"
-SCOPES = "kakao.read kakao.events"
+SCOPES = "kakao.read kakao.events kakao.send"
 EVENT = "message.created"
 
 
@@ -19,6 +19,7 @@ class Config:
     read_token: str = ""
     approval_mode: str = "passkey"
     tunnel_id: str = ""
+    send_token: str = ""
 
     def __post_init__(self):
         if self.tunnel_id and not re.fullmatch(r"tunnel_[a-z0-9]{32}", self.tunnel_id):
@@ -67,4 +68,5 @@ class Config:
             os.getenv("OPENAI_TUNNEL_ID", "")
             if os.getenv("OPENAI_TUNNEL_ENABLED", "1") == "1"
             else "",
+            send_token="" if control else secret("SEND_TOKEN"),
         )

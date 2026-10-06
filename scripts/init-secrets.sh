@@ -3,11 +3,11 @@ source "$(dirname "$0")/common.sh"
 umask 077
 mkdir -p secrets inputs/kakao artifacts backups
 chmod 700 secrets backups
-for name in admin_token ingest_token read_token device_token bridge_key_password backup_key mcp_approval_token mcp_passkey_token; do
+for name in admin_token ingest_token read_token send_token device_token bridge_key_password backup_key mcp_approval_token mcp_passkey_token; do
     if [[ ! -s "secrets/$name" ]]; then openssl rand -hex 32 > "secrets/$name"; fi
 done
 # Parent directory is 0700; mounted runtime files must be readable by container UID 10001.
-chmod 444 secrets/admin_token secrets/ingest_token secrets/read_token secrets/device_token secrets/backup_key secrets/mcp_approval_token secrets/mcp_passkey_token
+chmod 444 secrets/admin_token secrets/ingest_token secrets/read_token secrets/send_token secrets/device_token secrets/backup_key secrets/mcp_approval_token secrets/mcp_passkey_token
 if [[ -e secrets/tls_cert.pem || -e secrets/tls_key.pem ]]; then
     [[ -s secrets/tls_cert.pem && -s secrets/tls_key.pem ]] || { echo 'TLS 인증서 또는 키가 없습니다. 인증서와 키를 함께 복구하세요.' >&2; exit 1; }
 else

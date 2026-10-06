@@ -21,7 +21,7 @@ import java.io.File
 object CollectorMain {
     private const val CONFIG = "/data/user/0/dev.kakaocollector.bridge/files/enrollment.json"
     private const val DB = "/data/user/0/com.kakao.talk/databases/KakaoTalk.db"
-    private const val BUILD = "iris-ee1dc978-collector-v4"
+    private const val BUILD = "iris-ee1dc978-collector-v5"
     private const val AUTH = "/data/kakaocollector-iris/auth.json"
     private val readOnlyErrorHandler = android.database.DatabaseErrorHandler { throw IllegalStateException("source_database_unavailable") }
 
@@ -144,9 +144,48 @@ object CollectorMain {
     }
 
     @JvmStatic fun main(args: Array<String>) {
-        // ADB forward is the only intended access path. No /reply, /aot, or arbitrary SQL route.
+        // ADB forward is the only intended access path. No upstream /reply or arbitrary SQL.
         embeddedServer(Netty, host = "127.0.0.1", port = 3000) {
             routing {
+                post("/collector/send") {
+                    val epoch = authorize(call) ?: return@post
+                    var attempted = false
+                    try {
+                        val result = synchronized(CollectorMain) {
+                            val config = enrolled()
+                            require(config.getString("enrollment_epoch") == epoch)
+                            require((call.request.headers["Content-Length"]?.toLongOrNull() ?: 0L) in 1L..32768L)
+                            config
+                        }
+                        val body = JSONObject(call.receiveText())
+                        val response = synchronized(CollectorMain) {
+                            require(enrolled().toString() == result.toString())
+                            require(body.getString("enrollment_epoch") == epoch)
+                            val requestId = body.getString("request_id")
+                            require(java.util.UUID.fromString(requestId).toString() == requestId)
+                            val stat = Os.stat(DB)
+                            require(body.getString("database_id") == "${stat.st_dev}:${stat.st_ino}")
+                            val chat = body.getString("chat_id").toLong()
+                            SQLiteDatabase.openDatabase(DB,null,SQLiteDatabase.OPEN_READONLY,readOnlyErrorHandler).use { db ->
+                                db.rawQuery("SELECT id FROM chat_rooms WHERE id=?",arrayOf(chat.toString())).use {
+                                    require(it.moveToFirst())
+                                }
+                            }
+                            val intent = CollectorSender.prepare(chat, body.getString("text"))
+                            require(enrolled().toString() == result.toString())
+                            attempted = true
+                            CollectorSender.submit(intent)
+                            JSONObject().put("build",BUILD).put("status","submitted")
+                                .put("enrollment_epoch",epoch).put("database_id",body.getString("database_id"))
+                                .put("request_id",requestId).toString()
+                        }
+                        call.respondText(response,ContentType.Application.Json)
+                    } catch (_: Exception) {
+                        // An exception after IPC may still have sent. Never claim a safe retry.
+                        call.respondText(JSONObject().put("status",if (attempted) "unknown" else "failed")
+                            .toString(),ContentType.Application.Json)
+                    }
+                }
                 get("/collector/health") {
                     val result = JSONObject().put("build", BUILD)
                     val challenge = call.request.queryParameters["challenge"]

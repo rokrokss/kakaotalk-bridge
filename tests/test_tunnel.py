@@ -174,7 +174,7 @@ def test_oauth_still_works_and_all_tools_are_shared(bridge):
     )
     actual = rpc(private, "tools/list")["result"]["tools"]
     expected = tool_definitions()
-    assert len(actual) == 8
+    assert len(actual) == 10
     for a, e in zip(actual, expected, strict=True):
         assert a.pop("securitySchemes") == [{"type": "noauth"}]
         assert e.pop("securitySchemes")[0]["type"] == "oauth2"
@@ -395,6 +395,7 @@ def test_status_contains_only_metadata_and_wrong_tunnel_cannot_be_approved(bridg
     assert before == {
         "configured": True,
         "approved": False,
+        "allow_send": False,
         "tunnel_id": TUNNEL,
         "expires": None,
         "last_tool_at": None,
@@ -422,7 +423,7 @@ def test_sidecar_probe_before_approval_and_legacy_tool_calls(bridge, version):
     assert initialized["protocolVersion"] == version
     assert initialized["capabilities"] == {"tools": {}}
     assert "resultType" not in initialized
-    assert len(rpc(private, "tools/list")["result"]["tools"]) == 8
+    assert len(rpc(private, "tools/list")["result"]["tools"]) == 10
     assert private.get("/mcp").status_code == 405
     for method in ("tools/call", "events/list", "events/subscribe"):
         response = private.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": method})
@@ -471,10 +472,61 @@ def test_official_python_mcp_client_can_initialize_list_and_call(bridge):
         ):
             result = await session.initialize()
             assert result.serverInfo.name == "kakaotalk-bridge"
-            assert len((await session.list_tools()).tools) == 8
+            assert len((await session.list_tools()).tools) == 10
             approve(control)
             result = await session.call_tool("get_profile", {})
             assert not result.isError
             assert result.structuredContent["id"]
 
     anyio.run(connect)
+
+
+def test_send_permission_is_explicit_and_survives_restart(bridge, monkeypatch):
+    private, _, control, state, _, source, *_ = bridge
+    approve(control)
+    calls = []
+    monkeypatch.setattr(
+        source,
+        "outgoing",
+        lambda **kwargs: calls.append(kwargs) or {"status": "queued"},
+        raising=False,
+    )
+    args = {
+        "request_id": "01234567-1234-1234-1234-123456789012",
+        "conversation_ref": "room-a",
+        "text": "hello",
+    }
+    assert call(private, "send_message", **args)["error"]["message"] == "insufficient_scope"
+    grant = state.get("settings", "tunnel_grant")
+    assert (
+        control.post(
+            "/tunnel/decision", json={"tunnel_id": TUNNEL, "approve": True, "allow_send": True}
+        ).status_code
+        == 200
+    )
+    assert state.get("settings", "tunnel_grant") == grant
+    assert (
+        call(private, "send_message", **args)["result"]["structuredContent"]["status"] == "queued"
+    )
+    approve(control)  # Repeated approval does not silently remove existing send consent.
+    assert "kakao.send" in state.get("grant", grant)["scope"].split()
+    assert (
+        control.post(
+            "/tunnel/decision", json={"tunnel_id": TUNNEL, "approve": True, "allow_send": False}
+        ).status_code
+        == 200
+    )
+    assert call(private, "send_message", **args)["error"]["message"] == "insufficient_scope"
+    assert len(calls) == 1
+
+
+def test_revoked_send_permission_is_not_restored_by_basic_approval(bridge):
+    _, _, control, state, *_ = bridge
+    response = control.post(
+        "/tunnel/decision", json={"tunnel_id": TUNNEL, "approve": True, "allow_send": True}
+    )
+    assert response.status_code == 200
+    approve(control, allow=False)
+    approve(control)
+    grant = state.get("grant", state.get("settings", "tunnel_grant"))
+    assert grant["scope"] == "kakao.read kakao.events"

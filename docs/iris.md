@@ -47,10 +47,10 @@ docker compose logs --tail 30 iris-collector
 
 - 원본: [dolidolih/Iris](https://github.com/dolidolih/Iris), 커밋 `ee1dc978ec465df11642596e40f74caff497301d`.
 - 빌드 시 압축 파일의 SHA-256 `1b194b137b0912ef360a4a0b511c6ed5169aaaf0da85c1de1cf59b325bebfcd0`을 확인합니다.
-- 수정 빌드는 `iris/CollectorMain.kt`를 추가합니다. 원본 `Main`을 실행하지 않고 DB 읽기와 Iris 복호화만 사용합니다. Android SQLite `OPEN_READONLY`로 DB를 엽니다.
-- 원본의 메시지 전송, 알림 폴링, 파일 삭제, 대시보드, `/query`, `/reply`, `/aot`는 실행하지 않습니다. 제한된 고정 SELECT용 `/collector/rows`, `/collector/metadata`와 빌드 확인용 `/collector/health`만 제공합니다.
+- 수정 빌드는 `iris/CollectorMain.kt`를 추가합니다. 원본 `Main`을 실행하지 않고 DB 읽기·Iris 복호화와 제한된 텍스트 전송 경로를 사용합니다. Android SQLite `OPEN_READONLY`로 DB를 엽니다.
+- 원본의 메시지 전송, 알림 폴링, 파일 삭제, 대시보드, `/query`, `/reply`, `/aot`는 실행하지 않습니다. 제한된 고정 SELECT용 `/collector/rows`, `/collector/metadata`, 빌드 확인용 `/collector/health`, 등록·DB·방 ID를 검사하는 텍스트 전송용 `/collector/send`를 제공합니다.
 - Android `127.0.0.1:3000`에만 바인딩하고 수집기 내부 루프백 ADB 포워딩으로 접근합니다. Compose는 호스트에 3000 포트를 공개하지 않습니다. root ADB 권한이 있는 호스트·컨테이너는 신뢰 경계 안에 있습니다.
-- Iris v4는 DB 접근 전에 등록별 무작위 bearer로 인증합니다. 인증 파일은 `/data/kakaocollector-iris`(0700) 안에 root 소유·0600으로 저장합니다. nonce/HMAC 상태 확인으로 리스너를 검증한 뒤 Python이 bearer를 보냅니다. 키는 로그나 프로세스 인수에 넣지 않습니다.
+- Iris v5는 DB 접근과 전송 전에 등록별 무작위 bearer로 인증합니다. 인증 파일은 `/data/kakaocollector-iris`(0700) 안에 root 소유·0600으로 저장합니다. nonce/HMAC 상태 확인으로 리스너를 검증한 뒤 Python이 bearer를 보냅니다. 키는 로그나 프로세스 인수에 넣지 않습니다.
 - `adb-init`이 Android 시작 전에 기존 기기·Iris 수집기 공개 키를 등록합니다. `ro.adb.secure=1`은 미등록 ADB 클라이언트를 거부하고, 승인된 수집기는 Iris에 필요한 root 권한을 사용합니다. 개인 키는 상태 볼륨에 남으므로 Android 데이터와 함께 백업·복구하세요.
 - 요청마다 등록 모드, 보조 로그인 확인, Android 지문, 카카오톡 versionCode를 검사합니다. Python도 페이지 조회 전후와 각 행 전송 전에 태블릿 설정과 등록을 검사합니다.
 - APK는 앱 설치용 서명 패키지가 아니라 `app_process` 빌드 산출물입니다. bootstrap은 읽기 전용으로 배포하고, 수집기는 시작 시 이미지 안 APK와 SHA-256을 비교합니다.

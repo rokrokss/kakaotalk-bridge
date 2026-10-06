@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 
 from device import cli, login_guard
 
-BUILD = "iris-ee1dc978-collector-v4"
+BUILD = "iris-ee1dc978-collector-v5"
 REMOTE_APK = "/data/local/tmp/kakaocollector-iris.apk"
 PID_FILE = "/data/local/tmp/kakaocollector-iris.pid"
 ENTRY = "party.qwer.iris.CollectorMain"
@@ -229,6 +229,7 @@ class Collector:
                 "source": "iris_db",
                 "database_id": self.database_id,
                 "secondary_login_confirmed": allowed,
+                "supports_message_send": True,
                 "listener_connected": connected,
                 "outbox_depth": 0,
                 "last_source_seq": self.last_seq,
@@ -283,7 +284,54 @@ class Collector:
                 self.refresh_metadata(config)
             except (OSError, ValueError, KeyError, RuntimeError):
                 print('{"iris_metadata":"unavailable","action":"check_profile_lookup"}', flush=True)
+        self.send_pending(config)
         return len(events)
+
+    def send_pending(self, config):
+        if check_enrollment() != config:
+            raise RuntimeError("enrollment_changed")
+        item = self.api(
+            "/internal/v1/outgoing/claim",
+            {
+                "enrollment_epoch": self.epoch,
+                "database_id": self.database_id,
+            },
+        )["item"]
+        if item is None:
+            return
+        status = "failed"
+        try:
+            if (
+                check_enrollment() != config
+                or item["epoch"] != self.epoch
+                or item["database_id"] != self.database_id
+            ):
+                raise RuntimeError("send_enrollment_mismatch")
+            status = "unknown"  # Any loss after beginning HTTP is ambiguous; do not retry.
+            result = request(
+                "http://127.0.0.1:3000/collector/send",
+                {
+                    "request_id": item["request_id"],
+                    "chat_id": item["chat_id"],
+                    "text": item["text"],
+                    "database_id": self.database_id,
+                    "enrollment_epoch": config["enrollment_epoch"],
+                },
+                self.iris_token,
+            )
+            if result.get("status") in {"failed", "unknown"}:
+                status = result["status"]
+            elif (
+                result.get("status") == "submitted"
+                and result.get("build") == BUILD
+                and result.get("request_id") == item["request_id"]
+                and result.get("enrollment_epoch") == config["enrollment_epoch"]
+                and result.get("database_id") == self.database_id
+            ):
+                status = "submitted"
+        except (OSError, ValueError, KeyError, RuntimeError, subprocess.TimeoutExpired):
+            pass
+        self.api("/internal/v1/outgoing/" + item["request_id"] + "/result", {"status": status})
 
     def refresh_metadata(self, config):
         targets = self.api(

@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from server.config import Settings
 from server.models import Batch, DeviceStatus, Heartbeat, MetadataBatch, Observation
+from server.outgoing import Claim, Outgoing, SendError, SendMessage, SendResult
 from server.queries import Queries
 from server.store import Conflict, Store
 
@@ -44,6 +45,7 @@ def create_app(settings: Settings | None = None):
     config = settings or Settings.from_env()
     store = Store(config.db_path)
     queries = Queries(store)
+    outgoing = Outgoing(store, config)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -51,6 +53,8 @@ def create_app(settings: Settings | None = None):
             while True:
                 try:
                     await asyncio.to_thread(store.prune, config.retention_days)
+                    with store.connect() as db:
+                        outgoing.expire(db)
                 except sqlite3.Error:
                     # No SQL exception/body logging; expose failure through readiness/status.
                     app.state.maintenance_failed = True
@@ -72,6 +76,7 @@ def create_app(settings: Settings | None = None):
         openapi_url=None,
     )
     app.state.store = store
+    app.state.outgoing = outgoing
     app.state.maintenance_failed = False
     app.add_middleware(BodyLimit)
 
@@ -85,6 +90,31 @@ def create_app(settings: Settings | None = None):
     ingest_auth, read_auth, device_auth = [
         auth(t) for t in (config.ingest_token, config.read_token, config.device_token)
     ]
+
+    def send_auth(authorization: str = Header(default="")):
+        if not config.send_token:
+            raise HTTPException(503, "sending_not_configured")
+        auth(config.send_token)(authorization)
+
+    @app.exception_handler(SendError)
+    async def send_error(request, exc):
+        return JSONResponse({"error": exc.reason}, exc.code)
+
+    @app.post("/v1/outgoing", dependencies=[Depends(send_auth)])
+    def send_message(body: SendMessage):
+        return outgoing.enqueue(body)
+
+    @app.get("/v1/outgoing/{request_id}", dependencies=[Depends(send_auth)])
+    def send_status(request_id: UUID):
+        return outgoing.status(str(request_id))
+
+    @app.post("/internal/v1/outgoing/claim", dependencies=[Depends(ingest_auth)])
+    def claim_send(body: Claim):
+        return outgoing.claim(body)
+
+    @app.post("/internal/v1/outgoing/{request_id}/result", dependencies=[Depends(ingest_auth)])
+    def complete_send(request_id: UUID, body: SendResult):
+        return outgoing.complete(str(request_id), body)
 
     def check_device(device_id):
         if device_id != config.device_id:

@@ -7,7 +7,7 @@
 
 이름이 포함된 메시지, 발신 시각 기준 최근 조회, 대화·발신자·시간 필터와 문맥 조회에는 [v2 조회 API](mcp-queries.md)를 사용하세요. 아래 v1 경로는 기존 소비자를 위해 수집 순서를 유지합니다.
 
-모든 `/v1/*`, `/v2/*` 경로에는 읽기 토큰이 필요합니다. 수집·기기 토큰으로는 조회할 수 없습니다. 다음 예시는 Linux 서버에서 TLS 인증서를 검증하며 실행합니다.
+아래 조회 경로에는 읽기 토큰이 필요합니다. `/v1/outgoing` 전송·상태 경로는 별도 전송 토큰을 사용합니다. 수집·기기 토큰으로는 조회할 수 없습니다. 다음 예시는 Linux 서버에서 TLS 인증서를 검증하며 실행합니다.
 
 ```bash
 # Pass the token through stdin, not as a curl argument.
@@ -49,4 +49,4 @@ Iris 메시지는 `source=iris_db`입니다. `database_ref`의 DB 메시지·대
 }
 ```
 
-도구는 `get_recent_messages`, `search_messages`, `list_conversations`, `get_conversation_context`, `get_collector_status`입니다. 원격 서버에서는 SSH로 명령을 실행하도록 설정하세요. MCP 서비스는 클라이언트가 `run`으로 시작하며 `up`으로 계속 실행해 두지 않습니다.
+도구는 `get_recent_messages`, `search_messages`, `list_conversations`, `get_conversation_context`, `get_collector_status`, `send_message`, `get_message_send_status`입니다. [전송 API와 요청 예시](sending.md)를 참고하세요. 원격 서버에서는 SSH로 명령을 실행하도록 설정하세요. MCP 서비스는 클라이언트가 `run`으로 시작하며 `up`으로 계속 실행해 두지 않습니다.

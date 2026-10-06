@@ -19,6 +19,14 @@ class Settings:
     device_id: str = "personal-tablet"
     retention_days: int = 30
     heartbeat_timeout: int = 180
+    send_token: str = ""
+
+    def __post_init__(self):
+        if self.send_token and (
+            len(self.send_token) < 32
+            or self.send_token in {self.ingest_token, self.read_token, self.device_token}
+        ):
+            raise ValueError("Use a distinct send credential of at least 32 characters")
 
     @classmethod
     def from_env(cls):
@@ -30,4 +38,5 @@ class Settings:
             *tokens,
             device_id=os.getenv("DEVICE_ID", "personal-tablet"),
             retention_days=max(1, int(os.getenv("RETENTION_DAYS", "30"))),
+            send_token=secret("SEND_TOKEN"),
         )
