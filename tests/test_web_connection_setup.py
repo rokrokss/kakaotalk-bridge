@@ -16,7 +16,7 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 
-from ops import cli, onboarding, setup_agent, tunnel
+from ops import access, cli, expose, lima, onboarding, setup_agent, tunnel
 from server.connection_setup import validate
 from tests.test_webui import ORIGIN, TOKEN, signin
 from webui.app import create_app
@@ -207,8 +207,8 @@ def test_tunnel_uses_private_temporary_file_then_explicit_approval(root, monkeyp
     approval = Mock(side_effect=lambda *args: calls.append("approve"))
     monkeypatch.setattr(tunnel, "control_call", approval)
     monkeypatch.setattr(tunnel, "status", lambda: {"ready": True})
-    monkeypatch.setattr(cli, "expose", Mock(side_effect=AssertionError("no Tailscale")))
-    monkeypatch.setattr(cli, "connect", Mock(side_effect=AssertionError("no OAuth")))
+    monkeypatch.setattr(expose, "expose", Mock(side_effect=AssertionError("no Tailscale")))
+    monkeypatch.setattr(access, "connect", Mock(side_effect=AssertionError("no OAuth")))
     assert setup_agent.execute(tunnel_request())["tunnel_ready"]
     assert calls == ["configure", "approve"]
     assert not paths[0].exists()
@@ -241,8 +241,8 @@ def test_oauth_configuration_preserves_admin_origin(root, monkeypatch):
     cli.env_update({"ADMIN_AUTH_MODE": "passkey", "OPENAI_TUNNEL_ENABLED": "1"})
     cli.atomic(root / ".bridge/admin-url", "http://localhost:18789/admin/")
     connect, passkey = Mock(), Mock()
-    monkeypatch.setattr(cli, "connect", connect)
-    monkeypatch.setattr(cli, "passkey_setup", passkey)
+    monkeypatch.setattr(access, "connect", connect)
+    monkeypatch.setattr(access, "passkey_setup", passkey)
     setup_agent.execute(request("https", url="https://ai.test"))
     connect.assert_called_once_with("https://ai.test")
     args = passkey.call_args.args[0]
@@ -277,17 +277,17 @@ def test_tailscale_approval_link_is_returned_without_other_output(monkeypatch, t
 
 
 def test_tailscale_setup_runs_on_server_and_respects_existing_route_guard(root, monkeypatch):
-    monkeypatch.setattr(cli, "tailscale_binary", lambda: "/usr/bin/tailscale")
+    monkeypatch.setattr(expose, "tailscale_binary", lambda: "/usr/bin/tailscale")
     monkeypatch.setattr(onboarding, "network_status", lambda _: {"BackendState": "Running"})
     run = Mock()
     monkeypatch.setattr(cli, "run", run)
-    expose = Mock(side_effect=RuntimeError("another app"))
-    monkeypatch.setattr(cli, "expose", expose)
+    publish = Mock(side_effect=RuntimeError("another app"))
+    monkeypatch.setattr(expose, "expose", publish)
     oauth = Mock()
     monkeypatch.setattr(setup_agent, "configure_oauth", oauth)
     with pytest.raises(RuntimeError, match="another app"):
         setup_agent.execute(request("tailscale", install_tailscale=True))
-    assert expose.call_args.args[0].local is True
+    assert publish.call_args.args[0].local is True
     oauth.assert_not_called()
     run.assert_called_once_with(["systemctl", "start", "tailscaled"])
 
@@ -315,7 +315,7 @@ def test_mac_agent_install_saves_desktop_stdio_without_changing_other_host_netwo
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/limactl")
     run = Mock()
     monkeypatch.setattr(cli, "run", run)
-    cli.mac(argparse.Namespace(command="setup-agent", agent_command="install"))
+    lima.mac(argparse.Namespace(command="setup-agent", agent_command="install"))
     first, second = run.call_args_list
     data = json.loads(first.kwargs["input"])
     assert data["args"] == [str(root / "bridge"), "mcp"]

@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from ops import cli, onboarding, tunnel
+from ops import cli, expose, onboarding, tunnel
 from tests.test_onboarding import options
 
 TUNNEL = "tunnel_" + "a" * 32
@@ -152,7 +152,7 @@ def test_tunnel_onboarding_skips_public_network_and_opens_only_admin(home, monke
         str(key),
         "--no-browser",
     )
-    monkeypatch.setattr(cli, "tailscale_binary", Mock(side_effect=AssertionError("no Tailscale")))
+    monkeypatch.setattr(expose, "tailscale_binary", Mock(side_effect=AssertionError("no Tailscale")))
     onboarding.validate(args)
     runtime = Mock()
     runtime.call.return_value = "https://admin.test/admin/"

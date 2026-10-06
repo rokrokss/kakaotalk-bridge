@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>KakaoTalk Bridge · Social preview</title>
+<!-- GitHub social preview source. Render at 1280×640 and upload the PNG in Settings → General → Social preview. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+  :root {
+    --bg: #f7f8f2;
+    --ink: #272720;
+    --muted: #676b61;
+    --line: #dedfd5;
+    --yellow: #f6df80;
+    --cream: #fff7d8;
+    --sage: #456851;
+    --sage-soft: #eef3ea;
+    --sage-line: #d6dfd0;
+    --bubble: #f0f2eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    position: relative;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* backdrop: dot grid + soft color orbs */
+  .grid {
+    position: absolute; inset: 0;
+    background-image: radial-gradient(circle, #d3d5c8 1.3px, transparent 1.6px);
+    background-size: 26px 26px;
+    -webkit-mask-image: radial-gradient(ellipse 62% 78% at 76% 50%, #000 30%, transparent 78%);
+            mask-image: radial-gradient(ellipse 62% 78% at 76% 50%, #000 30%, transparent 78%);
+  }
+  .orb { position: absolute; border-radius: 50%; filter: blur(70px); }
+  .orb.y { width: 520px; height: 520px; right: 40px; top: -150px; background: var(--yellow); opacity: .62; }
+  .orb.g { width: 460px; height: 460px; right: 300px; bottom: -260px; background: #c9dcc2; opacity: .75; }
+  .orb.c { width: 380px; height: 300px; left: -160px; top: -120px; background: var(--cream); opacity: .9; }
+
+  /* left column */
+  .copy { position: absolute; left: 84px; top: 92px; width: 610px; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand svg { width: 52px; height: 52px; display: block; }
+  .brand b { font-size: 27px; font-weight: 700; letter-spacing: -0.02em; }
+
+  h1 {
+    margin-top: 62px;
+    font-size: 74px; line-height: 1.12; font-weight: 800; letter-spacing: -0.045em;
+  }
+  h1 .mark {
+    background: linear-gradient(transparent 58%, var(--yellow) 58%, var(--yellow) 92%, transparent 92%);
+    padding: 0 4px; margin: 0 -4px;
+  }
+  .sub {
+    margin-top: 26px;
+    font-size: 25px; line-height: 1.5; font-weight: 500; color: var(--muted); letter-spacing: -0.02em;
+  }
+  .sub strong { color: var(--ink); font-weight: 650; }
+
+  .chips { display: flex; gap: 10px; margin-top: 34px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 42px; padding: 0 17px 0 14px;
+    border: 1px solid var(--line); border-radius: 999px;
+    background: rgba(255,255,255,.78);
+    font-size: 18px; font-weight: 600; letter-spacing: -0.02em;
+  }
+  .chip svg { width: 18px; height: 18px; flex: none; }
+
+  /* right column: conversation → AI vignette */
+  .stage { position: absolute; left: 730px; top: 14px; width: 470px; height: 640px; }
+  .card {
+    position: absolute; background: #fff;
+    border: 1px solid var(--line); border-radius: 24px;
+    box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 28px 50px -22px rgba(39,39,32,.28), 0 6px 14px -6px rgba(39,39,32,.10);
+  }
+  .label { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+  .label svg { width: 28px; height: 28px; }
+
+  .chat { left: 0; top: 86px; width: 384px; padding: 22px 22px 24px; transform: rotate(-2.2deg); }
+  .bubble { margin-top: 14px; padding: 13px 17px; border-radius: 16px; font-size: 18px; line-height: 1.42; font-weight: 500; letter-spacing: -0.02em; width: fit-content; }
+  .bubble.in { background: var(--bubble); border-top-left-radius: 6px; }
+  .bubble.out { background: var(--yellow); margin-left: auto; border-top-right-radius: 6px; }
+  .meta { margin-top: 12px; font-size: 13px; color: var(--muted); font-weight: 500; }
+
+  .mcp {
+    position: absolute; left: 178px; top: 316px; z-index: 3;
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 38px; padding: 0 16px 0 12px; border-radius: 999px;
+    background: var(--ink); color: #fff;
+    font: 700 15px/1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .04em;
+    box-shadow: 0 12px 24px -10px rgba(39,39,32,.5);
+  }
+  .mcp i { width: 9px; height: 9px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 0 4px rgba(246,223,128,.25); }
+
+  .ai { left: 64px; top: 340px; width: 406px; padding: 22px 22px 22px; background: var(--sage-soft); border-color: var(--sage-line); transform: rotate(1.6deg); z-index: 2; }
+  .ai .label { color: var(--sage); }
+  .ask { margin-top: 14px; background: #fff; border-radius: 14px; padding: 12px 16px; font-size: 17px; font-weight: 500; letter-spacing: -0.02em; }
+  .answer { margin-top: 16px; font-size: 27px; font-weight: 750; letter-spacing: -0.035em; }
+  .why { margin-top: 6px; font-size: 16px; color: var(--sage); font-weight: 550; letter-spacing: -0.02em; }
+
+  .lock {
+    position: absolute; left: 300px; top: 62px; z-index: 4;
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 34px; padding: 0 14px 0 11px; border-radius: 999px;
+    background: #fff; border: 1px solid var(--line);
+    font-size: 14px; font-weight: 650; letter-spacing: -0.01em;
+    box-shadow: 0 10px 22px -12px rgba(39,39,32,.35);
+    transform: rotate(3deg);
+  }
+  .lock svg { width: 15px; height: 15px; }
+</style>
+</head>
+<body>
+  <div class="orb c"></div>
+  <div class="orb y"></div>
+  <div class="orb g"></div>
+  <div class="grid"></div>
+
+  <section class="copy">
+    <div class="brand">
+      <svg viewBox="0 0 128 128" aria-hidden="true"><rect width="128" height="128" rx="28" fill="#f6df80"/><path d="M39 27h50a13 13 0 0 1 13 13v35a13 13 0 0 1-13 13H62l-22 17V88h-1a13 13 0 0 1-13-13V40a13 13 0 0 1 13-13Z" fill="#272720"/></svg>
+      <b>KakaoTalk Bridge</b>
+    </div>
+
+    <h1>내 카카오톡 대화,<br><span class="mark">AI에게</span> 물어보세요.</h1>
+
+    <p class="sub">수집한 메시지를 <strong>ChatGPT나 MCP 지원 AI</strong>에서<br>검색하고 요약합니다.</p>
+
+    <div class="chips">
+      <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#456851" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>직접 호스팅</span>
+      <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#456851" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18"/></svg>브라우저에서 설정</span>
+    </div>
+  </section>
+
+  <section class="stage" aria-hidden="true">
+    <div class="card chat">
+      <div class="label"><svg viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="#f6df80"/><path d="M39 27h50a13 13 0 0 1 13 13v35a13 13 0 0 1-13 13H62l-22 17V88h-1a13 13 0 0 1-13-13V40a13 13 0 0 1 13-13Z" fill="#272720"/></svg>수집한 대화</div>
+      <div class="bubble in">금요일 모임은 저녁 7시야.<br>지난번 그 카페에서 만나.</div>
+      <div class="bubble out">7시 반으로 바뀌었어.<br>장소는 그대로야.</div>
+    </div>
+
+    <div class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="#272720" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M11 16h2"/></svg>가상 Android 태블릿</div>
+
+    <div class="mcp"><i></i>MCP</div>
+
+    <div class="card ai">
+      <div class="label"><svg viewBox="0 0 24 24" fill="#456851"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/><path d="M19 15l.9 2.1 2.1.9-2.1.9L19 21l-.9-2.1-2.1-.9 2.1-.9z"/></svg>연결한 AI</div>
+      <div class="ask">금요일 모임 몇 시야? 장소도 바뀌었어?</div>
+      <div class="answer">저녁 7시 30분, 같은 카페예요.</div>
+      <div class="why">수집한 메시지 2개를 찾아 답했어요.</div>
+    </div>
+  </section>
+</body>
+</html>

@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ops import cli, onboarding, tunnel
+from ops import access, cli, onboarding, tunnel
 from ops.errors import BridgeError
 
 METHODS = ("none", "stdio", "https", "tailscale", "openai-tunnel")
@@ -73,7 +73,7 @@ def setup(args):
     with tempfile.TemporaryDirectory(prefix="bridge-connection-") as folder:
         if method == "https":
             args.url = args.url or ask("공개 HTTPS 주소 (https://your-host): ")
-            cli.validate_public_url(args.url)
+            access.validate_public_url(args.url)
         if method == "openai-tunnel":
             print(
                 "OpenAI 워크스페이스의 터널 ID와 실행용 API 키를 사용하세요.\n"

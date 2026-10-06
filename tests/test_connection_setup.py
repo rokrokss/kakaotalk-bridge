@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from ops import cli, connections, onboarding
+from ops import cli, connections, expose, onboarding
 
 
 def options(*args):
@@ -38,7 +38,7 @@ def test_https_wizard_automates_consent_without_changing_admin(tmp_path, monkeyp
     runtime = Mock()
     runtime.call.return_value = "http://localhost:18789/admin/"
     monkeypatch.setattr(onboarding, "Runtime", lambda: runtime)
-    monkeypatch.setattr(cli, "tailscale_binary", Mock(side_effect=AssertionError("no Tailscale")))
+    monkeypatch.setattr(expose, "tailscale_binary", Mock(side_effect=AssertionError("no Tailscale")))
     connections.setup(options("--method", "https", "--url", "https://ai.test", "--no-browser"))
     assert runtime.call.call_args_list[1].args == ("connect", "--url", "https://ai.test")
     assert runtime.call.call_args_list[2].args == (

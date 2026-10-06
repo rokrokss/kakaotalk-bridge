@@ -14,7 +14,7 @@ import webbrowser
 from pathlib import Path
 from urllib.request import urlopen
 
-from ops import cli
+from ops import access, cli, expose
 from ops.errors import BridgeError
 from ops.setup_output import SetupOutput, progress, provider_line, run
 
@@ -101,7 +101,7 @@ def validate(args):
         if not args.admin_url and saved.exists() and os.access(saved, os.R_OK):
             args.admin_url = saved.read_text().strip().removesuffix("/admin/")
         if args.admin_url:
-            cli.private_url(args.admin_url)
+            access.private_url(args.admin_url)
         if bool(args.tunnel_id) != bool(args.api_key_file):
             raise BridgeError("--tunnel-id와 --api-key-file을 함께 지정하세요.")
         if args.tunnel_id:
@@ -123,14 +123,14 @@ def validate(args):
     if args.url:
         if args.admin_url or args.public_url:
             raise BridgeError("--url만 지정하거나, --admin-url과 --public-url을 함께 지정하세요.")
-        cli.validate_public_url(args.url)
+        access.validate_public_url(args.url)
         args.admin_url = args.public_url = args.url
     if args.connection == "none" and (args.url or args.public_url):
         raise BridgeError("--connection none과 공개 MCP 주소는 함께 지정할 수 없습니다.")
     if args.admin_url:
-        cli.private_url(args.admin_url)
+        access.private_url(args.admin_url)
     if args.public_url:
-        cli.validate_public_url(args.public_url)
+        access.validate_public_url(args.public_url)
     for port in (args.admin_port, args.mcp_port):
         if port is not None and not 1024 <= port <= 65535:
             raise BridgeError("포트는 1024에서 65535 사이로 지정하세요.")
@@ -214,7 +214,7 @@ def prepare_mac(args):
                 interactive=True,
             )
         run(["brew", "install", "qemu"])
-    if args.connection == "tailscale" and not cli.tailscale_binary():
+    if args.connection == "tailscale" and not expose.tailscale_binary():
         require_install(args, "Tailscale for your secure browser connection")
         if not shutil.which("brew"):
             install_script(
@@ -289,7 +289,7 @@ def prepare_linux(args):
             ]
         )
         privileged(["systemctl", "enable", "--now", "docker"])
-    if args.connection == "tailscale" and not cli.tailscale_binary():
+    if args.connection == "tailscale" and not expose.tailscale_binary():
         require_install(args, "Tailscale for your secure browser connection")
         install_script("https://tailscale.com/install.sh")
 
@@ -398,7 +398,7 @@ def connect_network(args, runtime):
         return
     if args.connection != "tailscale":
         return
-    tailscale = cli.tailscale_binary()
+    tailscale = expose.tailscale_binary()
     if not tailscale:
         raise BridgeError("보안 연결 도구(Tailscale)가 설치되지 않았습니다. ./bridge up을 다시 실행하세요.")
     prefix = ["sudo"] if platform.system() == "Linux" and os.geteuid() != 0 else []
@@ -446,7 +446,7 @@ def open_setup(args, runtime):
         command += ["--public-url", args.public_url]
     link = runtime.call(*command, capture=True).strip()
     base, _, fragment = link.partition("#")
-    cli.private_url(base)
+    access.private_url(base)
     if fragment and not re.fullmatch(r"passkey-setup=[A-Za-z0-9_-]{43}", fragment):
         raise BridgeError("패스키 등록 링크를 받지 못했습니다. ./bridge passkey-login을 실행하세요.")
     if base.startswith("http://localhost:") and (

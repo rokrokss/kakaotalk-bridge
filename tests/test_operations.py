@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from ops import cli, snapshot
+from ops import access, backup, cli, doctor, expose, install, lima, snapshot
 
 
 @pytest.mark.parametrize("system,legacy", [("Linux", False), ("Linux", True), ("Darwin", True)])
@@ -19,9 +19,9 @@ def test_expose_uses_shared_https_and_migrates_only_owned_routes(
     monkeypatch.setattr(cli, "ROOT", tmp_path)
     monkeypatch.setattr(cli.platform, "system", lambda: system)
     monkeypatch.setattr(cli.os, "geteuid", lambda: 0)
-    monkeypatch.setattr(cli, "tailscale_binary", lambda: "tailscale")
-    monkeypatch.setattr(cli, "connect", Mock())
-    monkeypatch.setattr(cli, "mac", Mock())
+    monkeypatch.setattr(expose, "tailscale_binary", lambda: "tailscale")
+    monkeypatch.setattr(access, "connect", Mock())
+    monkeypatch.setattr(lima, "mac", Mock())
     (tmp_path / ".bridge").mkdir()
     (tmp_path / ".bridge/mac.json").write_text(json.dumps({"mcp_port": 28787}))
     host = "bridge.example.ts.net"
@@ -52,20 +52,20 @@ def test_expose_uses_shared_https_and_migrates_only_owned_routes(
 
     monkeypatch.setattr(cli, "run", run)
     args = argparse.Namespace(local=False)
-    cli.expose(args)
+    expose.expose(args)
     port = 28787 if system == "Darwin" else 18787
     assert ["tailscale", "funnel", "--bg", "--https=443", f"http://127.0.0.1:{port}"] in calls
     assert list(config["Web"]) == [host + ":443"]
     assert (tmp_path / ".bridge/admin-url").read_text() == "https://" + host
     assert (tmp_path / ".bridge/public-url").read_text() == "https://" + host
     calls.clear()
-    cli.expose(args)
+    expose.expose(args)
     assert not any("off" in command for command in calls)
     # An unrelated route added later must prevent all mutations.
     config["Web"][host + ":10000"] = {"Handlers": {"/": {"Proxy": "http://localhost:9999"}}}
     calls.clear()
     with pytest.raises(RuntimeError, match="그대로 두었습니다"):
-        cli.expose(args)
+        expose.expose(args)
     assert all(command[-1] == "--json" for command in calls)
 
 
@@ -79,7 +79,7 @@ def test_mac_passkey_setup_uses_saved_shared_origin(tmp_path, monkeypatch):
     (tmp_path / ".bridge/admin-url").write_text("https://bridge.example.ts.net")
     execute = Mock(return_value="https://bridge.example.ts.net/admin/")
     monkeypatch.setattr(cli, "run", execute)
-    cli.passkey_setup(
+    access.passkey_setup(
         argparse.Namespace(local=False, url=None, public_url=None, enroll=False, link_only=True)
     )
     assert execute.call_args.args[0][-2:] == ["--url", "https://bridge.example.ts.net"]
@@ -112,11 +112,11 @@ def test_admin_uses_private_serve_url_and_allows_tunnel_override(tmp_path, monke
     monkeypatch.setattr(cli, "ROOT", tmp_path)
     monkeypatch.setattr(cli.platform, "system", lambda: "Linux")
     pairing = Mock(return_value="test-pair-code")
-    monkeypatch.setattr(cli, "admin_code", pairing)
-    monkeypatch.setattr(cli, "admin_info", lambda: {"origin": None})
-    monkeypatch.setattr(cli, "recover_activation", Mock())
+    monkeypatch.setattr(access, "admin_code", pairing)
+    monkeypatch.setattr(access, "admin_info", lambda: {"origin": None})
+    monkeypatch.setattr(backup, "recover_activation", Mock())
     opener = Mock()
-    monkeypatch.setattr(cli, "open_admin_page", opener)
+    monkeypatch.setattr(access, "open_admin_page", opener)
     (tmp_path / ".bridge").mkdir()
     (tmp_path / ".bridge/admin-url").write_text("https://bridge.example.ts.net:8443")
     monkeypatch.setattr(cli.sys, "argv", ["bridge", "admin"])
@@ -126,7 +126,7 @@ def test_admin_uses_private_serve_url_and_allows_tunnel_override(tmp_path, monke
     monkeypatch.setattr(cli.sys, "argv", ["bridge", "admin", "--url", "https://localhost:18443"])
     cli.main()
     opener.assert_called_with("https://localhost:18443")
-    monkeypatch.setattr(cli, "open_admin", opener)
+    monkeypatch.setattr(access, "open_admin", opener)
     monkeypatch.setattr(cli.sys, "argv", ["bridge", "admin", "--recovery"])
     cli.main()
     pairing.assert_called_once()
@@ -152,7 +152,7 @@ def test_existing_keys_are_not_regenerated_when_incomplete(tmp_path, monkeypatch
     run = Mock()
     monkeypatch.setattr(cli, "run", run)
     with pytest.raises(RuntimeError, match="인증 키가 없거나 비어"):
-        cli.init_secrets(False)
+        install.init_secrets(False)
     run.assert_not_called()
 
 
@@ -160,17 +160,17 @@ def test_legacy_mode_migration_preserves_installation_and_explicit_fallback(tmp_
     monkeypatch.setattr(cli, "ROOT", tmp_path)
     path = tmp_path / ".env"
     path.write_text("ADMIN_AUTH_MODE=kakao\nDOT_APPROVAL_MODE=kakao\nDEVICE_ID=existing\n")
-    cli.migrate_auth_modes()
+    install.migrate_auth_modes()
     assert cli.read_env() == {
         "ADMIN_AUTH_MODE": "passkey",
         "DOT_APPROVAL_MODE": "passkey",
         "DEVICE_ID": "existing",
     }
     unchanged = path.read_bytes()
-    cli.migrate_auth_modes()
+    install.migrate_auth_modes()
     assert path.read_bytes() == unchanged
     path.write_text("ADMIN_AUTH_MODE=local\nDOT_APPROVAL_MODE=admin\n")
-    cli.migrate_auth_modes()
+    install.migrate_auth_modes()
     assert cli.read_env() == {"ADMIN_AUTH_MODE": "local", "DOT_APPROVAL_MODE": "admin"}
 
 
@@ -275,7 +275,7 @@ def test_restore_never_runs_against_running_stack(tmp_path, monkeypatch):
     run = Mock()
     monkeypatch.setattr(cli, "run", run)
     with pytest.raises(RuntimeError, match="서비스를 중지하세요"):
-        cli.restore(archive, key)
+        backup.restore(archive, key)
     run.assert_not_called()
 
 
@@ -297,7 +297,7 @@ def test_restore_activation_rolls_back_partial_configuration(tmp_path, monkeypat
 
     monkeypatch.setattr(cli, "atomic", fail_override)
     with pytest.raises(OSError):
-        cli.activate_restore(stage, {"android-data": "new_volume"})
+        backup.activate_restore(stage, {"android-data": "new_volume"})
     assert (tmp_path / "secrets/key").read_text() == "old"
     assert (tmp_path / ".env").read_text() == "DEVICE_ID=old\n"
     assert not (tmp_path / ".bridge/restore-activation.json").exists()
@@ -336,16 +336,16 @@ def test_source_image_identity_changes_for_dependencies_and_renames(tmp_path, mo
     (tmp_path / "requirements.lock").write_text("dependency version one")
     (tmp_path / "module.py").write_text("content")
     args = Namespace(source=True, manifest=None)
-    first = cli.image_config(args)
+    first = install.image_config(args)
     (tmp_path / "requirements.lock").write_text("dependency version two")
-    second = cli.image_config(args)
+    second = install.image_config(args)
     assert first != second
     (tmp_path / "module.py").rename(tmp_path / "renamed.py")
-    assert second != cli.image_config(args)
-    unchanged = cli.image_config(args)
+    assert second != install.image_config(args)
+    unchanged = install.image_config(args)
     (tmp_path / "secrets").mkdir()
     (tmp_path / "secrets/private").write_text("not part of image identity")
-    assert unchanged == cli.image_config(args)
+    assert unchanged == install.image_config(args)
 
 
 def test_default_admin_mode_starts_private_passkey_authority(tmp_path, monkeypatch):
@@ -359,7 +359,7 @@ def test_android_builder_repairs_broken_arm_emulation_then_verifies(monkeypatch)
     monkeypatch.setattr(cli.platform, "machine", lambda: "aarch64")
     execute = Mock(side_effect=[RuntimeError("emulator crash"), "", ""])
     monkeypatch.setattr(cli, "run", execute)
-    cli.prepare_android_builder()
+    install.prepare_android_builder()
     commands = [call.args[0] for call in execute.call_args_list]
     assert commands[0] == commands[2]
     assert "--privileged" in commands[1]
@@ -371,11 +371,11 @@ def test_android_builder_preserves_working_emulation_and_skips_intel(monkeypatch
     execute = Mock(return_value="")
     monkeypatch.setattr(cli, "run", execute)
     monkeypatch.setattr(cli.platform, "machine", lambda: "aarch64")
-    cli.prepare_android_builder()
+    install.prepare_android_builder()
     assert execute.call_count == 1
     assert "--privileged" not in execute.call_args.args[0]
     monkeypatch.setattr(cli.platform, "machine", lambda: "x86_64")
-    cli.prepare_android_builder()
+    install.prepare_android_builder()
     assert execute.call_count == 1
 
 
@@ -419,11 +419,11 @@ def test_doctor_prints_a_korean_summary_and_json_on_request(tmp_path, monkeypatc
     rows[1] = {"Service": "api", "State": "exited", "Health": ""}
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: json.dumps(rows))
     monkeypatch.setattr(cli.Path, "exists", lambda self: True)
-    assert cli.doctor() is False
+    assert doctor.doctor() is False
     text = capsys.readouterr().out
     assert "KakaoTalk Bridge 상태 점검" in text and "api: 중지됨" in text
     assert "확인이 필요한 항목" in text and "{" not in text
-    cli.doctor(report="json")
+    doctor.doctor(report="json")
     assert json.loads(capsys.readouterr().out)["services"][1]["State"] == "exited"
 
 

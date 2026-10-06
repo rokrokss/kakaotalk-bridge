@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from ops import cli, onboarding
+from ops import backup, cli, expose, lima, onboarding
 
 
 def options(*extra):
@@ -196,7 +196,7 @@ def test_admin_and_ai_connections_are_independent(home):
 
 def test_default_does_not_touch_network_providers(home, monkeypatch):
     runtime = Mock()
-    monkeypatch.setattr(cli, "tailscale_binary", Mock(side_effect=AssertionError("no provider")))
+    monkeypatch.setattr(expose, "tailscale_binary", Mock(side_effect=AssertionError("no provider")))
     args = options()
     onboarding.validate(args)
     onboarding.connect_network(args, runtime)
@@ -227,7 +227,7 @@ def test_shared_proxy_uses_one_origin_for_setup_and_mcp(home, monkeypatch):
 
 def test_existing_proxy_skips_tailscale(home, monkeypatch):
     runtime = Mock()
-    monkeypatch.setattr(cli, "tailscale_binary", Mock(side_effect=AssertionError("not needed")))
+    monkeypatch.setattr(expose, "tailscale_binary", Mock(side_effect=AssertionError("not needed")))
     onboarding.connect_network(
         options("--admin-url", "https://a.test:8443", "--public-url", "https://a.test"), runtime
     )
@@ -282,7 +282,7 @@ def test_source_archive_without_git_excludes_state_builds_and_symlinks(home):
         path.write_text("test")
     (home / "ops/private").symlink_to(home / "secrets", target_is_directory=True)
     archive = home / "output.tar.gz"
-    cli.package_source(archive)
+    lima.package_source(archive)
     with tarfile.open(archive) as bundle:
         assert set(bundle.getnames()) == {"ops/cli.py", "compose.yaml"}
 
@@ -295,7 +295,7 @@ def test_mac_start_wakes_vm_before_running_compose(home, monkeypatch):
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/limactl")
     execute = Mock(side_effect=["existing\n", "", ""])
     monkeypatch.setattr(cli, "run", execute)
-    cli.mac(argparse.Namespace(command="start"))
+    lima.mac(argparse.Namespace(command="start"))
     assert execute.call_args_list[0].args[0] == ["limactl", "list", "--format", "{{.Name}}"]
     assert execute.call_args_list[1].args[0] == ["limactl", "start", "--tty=false", "existing"]
     assert execute.call_args_list[2].args[0][-2:] == ["--local", "start"]
@@ -309,7 +309,7 @@ def test_mac_start_never_creates_a_missing_vm_by_name(home, monkeypatch):
     monkeypatch.setattr(cli, "run", execute)
 
     with pytest.raises(RuntimeError, match="Lima VM이 없습니다"):
-        cli.mac(argparse.Namespace(command="start"))
+        lima.mac(argparse.Namespace(command="start"))
 
     execute.assert_called_once_with(["limactl", "list", "--format", "{{.Name}}"], capture=True)
     assert json.loads(config.read_text())["vm"] == "deleted"
@@ -362,14 +362,14 @@ def test_deleted_vm_reuses_project_template_and_saved_ports(home, monkeypatch):
     (home / ".bridge/onboarding.json").write_text('{"state":"ready"}')
     (home / ".env").write_text("HOST_SETTING=keep\n")
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/limactl")
-    monkeypatch.setattr(cli, "available_port", Mock(side_effect=AssertionError("reuse ports")))
+    monkeypatch.setattr(lima, "available_port", Mock(side_effect=AssertionError("reuse ports")))
     socket_factory = Mock()
     socket_factory.return_value.__enter__ = Mock(
         return_value=Mock(connect_ex=Mock(return_value=1))
     )
     socket_factory.return_value.__exit__ = Mock(return_value=False)
-    monkeypatch.setattr(cli.socket, "socket", socket_factory)
-    monkeypatch.setattr(cli, "package_source", lambda path: path.write_bytes(b"fixture"))
+    monkeypatch.setattr(lima.socket, "socket", socket_factory)
+    monkeypatch.setattr(lima, "package_source", lambda path: path.write_bytes(b"fixture"))
     calls = []
     rendered = []
 
@@ -387,7 +387,7 @@ def test_deleted_vm_reuses_project_template_and_saved_ports(home, monkeypatch):
     assert onboarding.Runtime().installed() is False
     assert calls == [["limactl", "list", "--format", "{{.Name}}"]]
     assert json.loads(saved.read_text()) == config
-    cli.mac(argparse.Namespace(
+    lima.mac(argparse.Namespace(
         command="install", vm="kakaotalk-bridge", admin_port=None, mcp_port=None,
         source=True, manifest=None,
     ))
@@ -408,7 +408,7 @@ def test_repeated_apk_import_preserves_identical_set_and_rejects_mixing(home, mo
     source.mkdir()
     (source / "base.apk").write_bytes(b"synthetic package")
     monkeypatch.setattr(cli.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(cli, "recover_activation", Mock())
+    monkeypatch.setattr(backup, "recover_activation", Mock())
     monkeypatch.setattr(cli.sys, "argv", ["bridge", "import-apks", str(source)])
     cli.main()
     imported = home / "inputs/kakao/0.apk"
@@ -533,9 +533,9 @@ def test_occupied_default_port_is_automatic_but_explicit_port_is_not():
     with socket.socket() as occupied:
         occupied.bind(("127.0.0.1", 0))
         port = occupied.getsockname()[1]
-        assert cli.available_port(port) != port
+        assert lima.available_port(port) != port
         with pytest.raises(RuntimeError, match="이미 사용 중"):
-            cli.available_port(port, port)
+            lima.available_port(port, port)
 
 
 def test_failed_first_vm_boot_retains_selected_ports_for_retry(home, monkeypatch):
@@ -543,7 +543,7 @@ def test_failed_first_vm_boot_retains_selected_ports_for_retry(home, monkeypatch
     (home / "deploy/lima.yaml").write_text("hostPort: 18443\n  - guestPortRange:\n")
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/limactl")
     choose = Mock(side_effect=[39443, 38787, 38789])
-    monkeypatch.setattr(cli, "available_port", choose)
+    monkeypatch.setattr(lima, "available_port", choose)
 
     def execute(args, **kwargs):
         if args[1] == "list":
@@ -555,11 +555,11 @@ def test_failed_first_vm_boot_retains_selected_ports_for_retry(home, monkeypatch
     monkeypatch.setattr(cli, "run", execute)
     args = argparse.Namespace(command="install", vm="fresh-test", admin_port=None, mcp_port=None)
     with pytest.raises(RuntimeError, match="interrupted"):
-        cli.mac(args)
+        lima.mac(args)
     saved = json.loads((home / ".bridge/mac.json").read_text())
     assert (saved["admin_port"], saved["mcp_port"]) == (39443, 38787)
     with pytest.raises(RuntimeError, match="interrupted"):
-        cli.mac(args)
+        lima.mac(args)
     assert choose.call_count == 3
     assert saved["local_admin_port"] == 38789
 
