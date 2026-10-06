@@ -61,7 +61,7 @@ def fresh_apk_hash():
 
 @pytest.fixture
 def pipeline(tmp_path, monkeypatch):
-    app = create_app(Settings(str(tmp_path / "iris.db"), INGEST, READ, DEVICE))
+    app = create_app(Settings(str(tmp_path / "iris.db"), INGEST, READ, DEVICE, send_token="s" * 64))
     with TestClient(app) as client:
 
         def api(path, payload=None):

@@ -26,6 +26,7 @@ class TunnelDecision(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     tunnel_id: str = Field(pattern=r"^tunnel_[a-z0-9]{32}$")
     approve: bool
+    allow_send: bool | None = None
 
 
 def create_app(config=None, state=None, control_token=None, passkeys=None, verifier_token=None):
@@ -78,6 +79,7 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
             "configured": bool(config.tunnel_id),
             "tunnel_id": config.tunnel_id,
             "approved": active,
+            "allow_send": active and "kakao.send" in row["scope"].split(),
             "expires": row["expires"] if active else None,
             "last_tool_at": state.get("connection_activity", identity, {}).get("last_tool_at")
             if active
@@ -93,20 +95,26 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
             db.execute("BEGIN IMMEDIATE")
             previous = state.get("settings", "tunnel_grant", "", db=db)
             row = state.get("grant", previous, db=db)
-            # Repeated approval preserves the grant and its subscriptions. Explicit
-            # approval also removes the expiry from an existing 30-day grant.
-            if (
-                body.approve
-                and row
+            reusable = bool(
+                row
                 and row.get("transport") == "tunnel"
                 and not row["revoked"]
                 and grant_unexpired(row)
                 and row["resource"] == config.tunnel_resource
                 and row.get("policy") == policy
-            ):
-                if row["expires"] is not None:
-                    row["expires"] = None
-                    state.put("grant", previous, row, db=db)
+            )
+            allow_send = (
+                body.allow_send
+                if body.allow_send is not None
+                else bool(reusable and "kakao.send" in row["scope"].split())
+            )
+            scope = SCOPES if allow_send else "kakao.read kakao.events"
+            # Repeated approval preserves the grant and its subscriptions. Explicit
+            # approval also removes the expiry from an existing 30-day grant.
+            if body.approve and reusable:
+                row["expires"] = None
+                row["scope"] = scope
+                state.put("grant", previous, row, db=db)
                 return {"ok": True}
             if row:
                 row["revoked"] = True
@@ -124,7 +132,7 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
                         "transport": "tunnel",
                         "client_id": "OpenAI personal tunnel",
                         "resource": config.tunnel_resource,
-                        "scope": SCOPES,
+                        "scope": scope,
                         "owner": digest(profile + ":personal-tunnel:" + config.tunnel_id),
                         "policy": policy,
                         "revoked": False,

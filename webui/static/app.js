@@ -608,6 +608,15 @@ async function refreshConnections() {
           connectionSignature = ''; await refreshConnections();
         }));
       }
+      if (tunnel.approved) {
+        card.append(paragraph(tunnel.allow_send
+          ? '이 터널의 AI가 내 계정으로 기존 카카오톡 대화방에 텍스트를 보낼 수 있습니다.'
+          : '메시지 전송을 허용하면 이 터널의 AI가 내 계정으로 기존 대화방에 텍스트를 보낼 수 있습니다.'));
+        card.append(button(tunnel.allow_send ? '메시지 전송 권한 해제' : '메시지 전송 허용', async () => {
+          await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: true, allow_send: !tunnel.allow_send});
+          connectionSignature = ''; await refreshConnections();
+        }));
+      }
       card.append(button(tunnel.approved ? '터널 연결 해제' : '개인 터널 허용', async () => {
         await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: !tunnel.approved});
         connectionSignature = ''; await refreshConnections();

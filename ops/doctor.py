@@ -39,6 +39,7 @@ def doctor(report=True):
             "admin_token",
             "ingest_token",
             "read_token",
+            "send_token",
             "device_token",
             "backup_key",
             "mcp_storage_key",

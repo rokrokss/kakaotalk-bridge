@@ -4,9 +4,9 @@
 
 <h1>KakaoTalk Bridge</h1>
 
-가상 Android 태블릿으로 카카오톡 메시지를 수집해 ChatGPT나 MCP 지원 AI에서 검색하고 요약합니다.
+가상 Android 태블릿으로 카카오톡 메시지를 수집해 ChatGPT나 MCP 지원 AI에서 검색·요약하고 내 계정으로 텍스트 메시지를 보냅니다.
 
-직접 호스팅 · 브라우저에서 설정 · 메시지 읽기 전용
+직접 호스팅 · 브라우저에서 설정 · 메시지 조회·전송
 
 [가상 태블릿을 쓰는 이유](#why-a-virtual-tablet) · [시작하기](#getting-started) · [첫 질문 해보기](#try-your-first-question) · [AI 연결하기](#connect-your-ai) · [사용 안내](#documentation)
 
@@ -61,7 +61,7 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
   </picture>
 </p>
 
-**대화 요약**, **키워드·날짜별 메시지 검색**, **수집 상태 확인**도 요청할 수 있습니다.
+**대화 요약**, **키워드·날짜별 메시지 검색**, **수집 상태 확인**도 요청할 수 있습니다. 전송 권한을 설정하면 **“이 방에 7시에 도착한다고 보내줘”**처럼 기존 대화방에 텍스트를 보낼 수 있습니다. [메시지 전송 안내](docs/sending.md)
 
 <a id="connect-your-ai"></a>
 ## AI 연결하기
@@ -130,7 +130,7 @@ Mac VM에는 CPU 6개와 메모리 8 GiB가 설정됩니다. 측정된 최소 �
 ## 데이터와 수집 범위
 
 - **보관:** 수집한 메시지는 설치한 서버에 기본 30일간 보관하며, 요청한 결과는 연결한 AI에 전달됩니다.
-- **권한:** MCP는 메시지 검색·조회만 지원하며 전송이나 태블릿 조작은 지원하지 않습니다.
+- **권한:** MCP는 검색·조회와 별도 권한의 텍스트 전송을 지원합니다. 태블릿 조작 도구는 제공하지 않습니다.
 - **수집 범위:** 보조 태블릿에 표시되는 메시지만 수집합니다. 휴대폰 전체 기록, 원본 첨부파일, 수정·삭제 동기화는 지원하지 않습니다.
 - **읽음 상태:** 태블릿에서 대화를 열면 읽음 상태가 바뀔 수 있습니다.
 
@@ -144,6 +144,7 @@ Mac VM에는 CPU 6개와 메모리 8 GiB가 설정됩니다. 측정된 최소 �
 | --- | --- |
 | 설치하고 로그인하기 | [빠른 시작](docs/quickstart.md) · [관리 화면](docs/web-ui.md) |
 | AI 연결하기 | [OpenAI 터널](docs/openai-tunnel.md) · [HTTPS/OAuth](docs/dot-plugin.md) · [로컬/SSH 클라이언트](docs/api.md#stdio-mcp) |
+| 내 계정으로 메시지 보내기 | [전송 권한·상태·제한](docs/sending.md) |
 | 이벤트를 보낼 대화 선택하기 | [MCP Events](docs/events.md) |
 | 접근 관리·업데이트·복구 | [패스키](docs/passkeys.md) · [운영](docs/operations.md) |
 | 배포 또는 내부 기능 개발 | [고급 설치](docs/onboarding.md) · [구조](docs/design.md) · [개발](docs/development.md) |

@@ -18,7 +18,7 @@ from urllib.request import Request, urlopen
 
 from device import cli, enrollment
 
-BUILD = "iris-ee1dc978-collector-v5"
+BUILD = "iris-ee1dc978-collector-v6"
 ENTRY = "party.qwer.iris.CollectorMain"
 LOCAL_APK = "/opt/iris.apk"
 HOME = enrollment.HOME
@@ -55,6 +55,14 @@ def request(url, payload=None, token=None):
 
 def identity(config):
     return str(uuid.uuid5(uuid.UUID(config["enrollment_epoch"]), "iris_db"))
+
+
+def account_identity(config):
+    return str(
+        uuid.uuid5(
+            uuid.UUID(config["enrollment_epoch"]), "kakao_account:" + config["approved_user_id"]
+        )
+    )
 
 
 @functools.cache
@@ -217,6 +225,7 @@ class Collector:
         self.epoch = str(uuid.UUID(int=0))
         self.last_seq = 0
         self.database_id = None
+        self.account_ref = None
         self.kakao_version = None
         self.metadata_checked = 0
         self.connected = False
@@ -252,6 +261,8 @@ class Collector:
                 "source": "iris_db",
                 "database_id": self.database_id,
                 "secondary_login_confirmed": allowed,
+                "supports_message_send": True,
+                "account_ref": self.account_ref,
                 "listener_connected": connected,
                 "last_source_seq": self.last_seq,
                 "kakao_version": self.kakao_version,
@@ -275,6 +286,7 @@ class Collector:
             self.connected = True
         snap = enrollment.require_approved()
         config = snap.config
+        self.account_ref = account_identity(config)
         self.kakao_version = snap.kakao_version
         self.epoch = identity(config)
         progress = self.api("/internal/v1/iris/cursor?" + urlencode({"epoch": self.epoch}))
@@ -310,7 +322,57 @@ class Collector:
                 self.refresh_metadata(config, token)
             except (OSError, ValueError, KeyError, RuntimeError):
                 print('{"iris_metadata":"unavailable","action":"check_profile_lookup"}', flush=True)
+        self.send_pending(config)
         return len(events)
+
+    def send_pending(self, config):
+        if enrollment.require_approved().config != config:
+            raise RuntimeError("enrollment_changed")
+        item = self.api(
+            "/internal/v1/outgoing/claim",
+            {
+                "enrollment_epoch": self.epoch,
+                "database_id": self.database_id,
+                "account_ref": self.account_ref,
+            },
+        )["item"]
+        if item is None:
+            return
+        status = "failed"
+        try:
+            if (
+                enrollment.require_approved().config != config
+                or item["epoch"] != self.epoch
+                or item["database_id"] != self.database_id
+                or item["account_ref"] != account_identity(config)
+            ):
+                raise RuntimeError("send_enrollment_mismatch")
+            status = "unknown"  # Any loss after beginning HTTP is ambiguous; do not retry.
+            result = request(
+                "http://127.0.0.1:3000/collector/send",
+                {
+                    "request_id": item["request_id"],
+                    "chat_id": item["chat_id"],
+                    "text": item["text"],
+                    "database_id": self.database_id,
+                    "enrollment_epoch": config["enrollment_epoch"],
+                    "approved_user_id": config["approved_user_id"],
+                },
+                self.iris_token,
+            )
+            if result.get("status") in {"failed", "unknown"}:
+                status = result["status"]
+            elif (
+                result.get("status") == "submitted"
+                and result.get("build") == BUILD
+                and result.get("request_id") == item["request_id"]
+                and result.get("enrollment_epoch") == config["enrollment_epoch"]
+                and result.get("database_id") == self.database_id
+            ):
+                status = "submitted"
+        except (OSError, ValueError, KeyError, RuntimeError, subprocess.TimeoutExpired):
+            pass
+        self.api("/internal/v1/outgoing/" + item["request_id"] + "/result", {"status": status})
 
     def commit(self, events):
         """Send rows in order. The cursor only moves past rows the server stored."""

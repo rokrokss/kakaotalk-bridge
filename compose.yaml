@@ -75,7 +75,7 @@ services:
       DEVICE_ID: ${DEVICE_ID:-personal-tablet}
       RETENTION_DAYS: ${RETENTION_DAYS:-30}
       DB_PATH: /data/collector.db
-    secrets: [ingest_token, read_token, device_token, backup_key]
+    secrets: [ingest_token, read_token, send_token, device_token, backup_key]
     volumes: [collector-data:/data]
     networks: [backend-net, public-read-net]
     healthcheck:
@@ -220,7 +220,7 @@ services:
     stdin_open: true
     environment:
       API_URL: http://api:8000
-    secrets: [read_token]
+    secrets: [read_token, send_token]
     networks: [backend-net]
 
   dot-plugin:
@@ -236,7 +236,7 @@ services:
       DOT_APPROVAL_MODE: ${DOT_APPROVAL_MODE:-passkey}
       OPENAI_TUNNEL_ID: ${OPENAI_TUNNEL_ID:-}
       OPENAI_TUNNEL_ENABLED: ${OPENAI_TUNNEL_ENABLED:-0}
-    secrets: [read_token, mcp_link_key, mcp_storage_key, mcp_passkey_token]
+    secrets: [read_token, send_token, mcp_link_key, mcp_storage_key, mcp_passkey_token]
     volumes: [dot-state:/data]
     networks: [public-read-net, public-assertion-net, public-ingress-net, dot-net]
     depends_on:
@@ -309,7 +309,7 @@ services:
       DOT_APPROVAL_MODE: ${DOT_APPROVAL_MODE:-passkey}
       OPENAI_TUNNEL_ID: ${OPENAI_TUNNEL_ID:-}
       OPENAI_TUNNEL_ENABLED: ${OPENAI_TUNNEL_ENABLED:-0}
-    secrets: [read_token, mcp_storage_key, mcp_passkey_token, mcp_tunnel_authorization]
+    secrets: [read_token, send_token, mcp_storage_key, mcp_passkey_token, mcp_tunnel_authorization]
     volumes: [dot-state:/data]
     networks: [public-read-net, public-assertion-net, tunnel-mcp-net]
     depends_on:
@@ -391,6 +391,8 @@ secrets:
     file: ./secrets/ingest_token
   read_token:
     file: ./secrets/read_token
+  send_token:
+    file: ./secrets/send_token
   device_token:
     file: ./secrets/device_token
   tls_cert:

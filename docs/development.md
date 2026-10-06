@@ -41,7 +41,7 @@ uv export --frozen --no-dev --no-emit-project --output-file requirements.lock
 | 경로 | 역할 |
 | --- | --- |
 | `device/` | redroid 준비, 등록과 수집 승인(`enrollment.py`), Iris 수집기, 키보드 앱 갱신, 기기 오류의 한국어 문구(`messages.py`) |
-| `iris/` | 읽기 전용 Iris 진입점과 라이선스 고지 |
+| `iris/` | DB 조회와 인증된 텍스트 전송을 위한 Iris 진입점, 라이선스 고지 |
 | `android/` | 웹 입력 키보드 앱(`SetupActivity`, `WebInputMethod`). 코드 패키지 `dev.kakaotalkbridge.android`, 앱 ID `dev.kakaocollector.bridge` |
 | `server/` | 저장소, API, stdio MCP, 백업 |
 | `webui/` | 관리 인증, 기기 제어, 웹 화면 |
@@ -94,7 +94,7 @@ uv run python -m tests.passkey_preview
 
 다른 터미널에서 `node tests/passkey_browser.cjs`를 실행하세요. 필요하면 `PLAYWRIGHT_MODULE`에 기존 Playwright 모듈 경로, `CHROME_EXECUTABLE`에 Chromium·Chrome 실행 파일을 지정합니다. 포트 19446·19447, 일회용 TLS 인증서와 임시 상태를 사용하며 브라우저 검사마다 재시작해야 합니다.
 
-가상 CTAP2 인증기와 Chromium의 WebAuthn으로 등록·재로그인·기억한 세션·새로고침·관리/MCP 포트 간 동일 키·명시적 동의·거부·PKCE 교환·갱신 토큰 교체·도구 목록을 검사합니다. 실제 계정·메시지·시스템 신뢰 설정은 사용하거나 변경하지 않습니다. 완료 후 Ctrl-C로 종료하세요. Python 테스트는 실제 ES256 서명과 잘못된 브라우저·출처·challenge·사용자 검증·RP·사용자 핸들 조합을 별도로 검사합니다.
+가상 CTAP2 인증기와 Chromium의 WebAuthn으로 등록·재로그인·기억한 세션·새로고침·관리/MCP 포트 간 동일 키·명시적 동의·거부·PKCE 교환·갱신 토큰 교체·도구 목록·전송 권한 동의·터널 전송 허용과 철회를 검사합니다. 실제 계정·메시지·시스템 신뢰 설정은 사용하거나 변경하지 않습니다. 완료 후 Ctrl-C로 종료하세요. Python 테스트는 실제 ES256 서명과 잘못된 브라우저·출처·challenge·사용자 검증·RP·사용자 핸들 조합을 별도로 검사합니다.
 
 <a id="connection-setup-and-overview-checks"></a>
 

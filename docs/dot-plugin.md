@@ -2,7 +2,7 @@
 
 [README](../README.md) · [이벤트](events.md) · [보안](security.md)
 
-`dot-plugin`은 수집 API에 저장된 메시지를 OAuth로 제공하는 원격 MCP 서버입니다. 카카오톡에 다시 로그인하지 않습니다. 메시지 조회·검색·수집 상태 확인에 사용합니다. 이 문서는 공개 HTTPS/OAuth를 다룹니다. 서버에서 나가는 연결만 사용하려면 [개인 터널](openai-tunnel.md)을 참고하세요.
+`dot-plugin`은 수집 API에 저장된 메시지를 OAuth로 제공하는 원격 MCP 서버입니다. 카카오톡에 다시 로그인하지 않습니다. 메시지 조회·검색·수집 상태 확인과 승인된 계정의 텍스트 전송에 사용합니다. 이 문서는 공개 HTTPS/OAuth를 다룹니다. 서버에서 나가는 연결만 사용하려면 [개인 터널](openai-tunnel.md)을 참고하세요.
 
 <a id="connect"></a>
 ## 연결
@@ -32,8 +32,10 @@
 | `get_profile` | 연결을 식별하는 불투명 프로필 ID |
 | `get_pending_messages` | 소비자의 미처리 메시지 조회 |
 | `acknowledge_messages` | 조회한 페이지까지 처리 완료 기록 |
+| `send_message` | 현재 계정으로 정확한 대화방에 텍스트 전송 (`kakao.send` 필요) |
+| `get_message_send_status` | 요청 UUID로 전송 상태 확인 (`kakao.send` 필요) |
 
-최근·검색 결과는 발신 시각 내림차순이며 불투명 커서를 사용합니다. 대화 필터는 개수 제한 전에 적용합니다. 이름·시간·문맥·호환성은 [메시지 조회](mcp-queries.md)를 참고하세요. 메시지 전송·로그인·ADB 조작 도구는 없습니다.
+최근·검색 결과는 발신 시각 내림차순이며 불투명 커서를 사용합니다. 대화 필터는 개수 제한 전에 적용합니다. 이름·시간·문맥·호환성은 [메시지 조회](mcp-queries.md)를 참고하세요. 전송에는 별도 `kakao.send` 동의가 필요하며 기존 승인은 자동 확장되지 않습니다. 클라이언트에서 전송 범위를 요청해 다시 연결하세요. [전송 권한·상태·제한](sending.md)을 참고하세요. 로그인·ADB 조작 도구는 없습니다.
 
 <a id="deploy-on-linux"></a>
 ## Linux 배포
@@ -47,7 +49,7 @@
 
 `connect`는 `.env`의 `DOT_PUBLIC_URL`을 저장하고 `dot-plugin`, `dot-control`, `dot-ingress`를 시작합니다. 필요한 키는 `./bridge install`이 이미 만들었습니다. `passkey-login`은 이 주소의 OAuth 승인 방식을 설정합니다. 관리 화면의 **기존 HTTPS 주소 사용**이나 `./bridge setup-connection --method https --url https://bridge.example.com`도 같은 설정을 합니다.
 
-공개 프록시는 기본 `127.0.0.1:18787`의 `dot-ingress`로 전달합니다. **이 포트만 공개하세요.** API·관리 게이트웨이나 dot-plugin을 직접 공개하지 마세요. 진입점이 내부 경로를 차단하고 MCP 경로의 관리자 쿠키를 제거합니다. 기기·API·제어망이 아닌 전용 관리 진입망에 연결됩니다. 관리 화면을 비공개로 유지하려면 공개 프록시에서 `/admin`, `/admin/*`를 거부하세요. 그렇지 않으면 해당 호스트에 인증된 관리 화면을 제공합니다. dot-plugin은 API 읽기 토큰만 사용하며 Android 볼륨이나 관리자 토큰을 받지 않습니다.
+공개 프록시는 기본 `127.0.0.1:18787`의 `dot-ingress`로 전달합니다. **이 포트만 공개하세요.** API·관리 게이트웨이나 dot-plugin을 직접 공개하지 마세요. 진입점이 내부 경로를 차단하고 MCP 경로의 관리자 쿠키를 제거합니다. 기기·API·제어망이 아닌 전용 관리 진입망에 연결됩니다. 관리 화면을 비공개로 유지하려면 공개 프록시에서 `/admin`, `/admin/*`를 거부하세요. 그렇지 않으면 해당 호스트에 인증된 관리 화면을 제공합니다. dot-plugin은 별도 API 읽기·전송 토큰을 사용하며 Android 볼륨이나 관리자 토큰을 받지 않습니다.
 
 <a id="deploy-in-lima-on-a-mac"></a>
 ## Mac의 Lima 배포

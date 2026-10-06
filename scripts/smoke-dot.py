@@ -101,14 +101,14 @@ def smoke(base, key_path):
             assert "2026-07-28" in discovery["supportedVersions"]
             assert "events" in discovery["capabilities"]
             tools = rpc("tools/list")["tools"]
-            assert len(tools) == 8
+            assert len(tools) == 10
             events = rpc("events/list")["events"]
             assert [e["name"] for e in events] == ["message.created"]
             profile = rpc("tools/call", name="get_profile", arguments={})
             assert profile["structuredContent"]["id"]
             status = rpc("tools/call", name="get_collector_status", arguments={})
             assert not status["isError"]
-            print("PASS MCP 2.0 discovery, 8 tools, message.created event, profile and status")
+            print("PASS MCP 2.0 discovery, 10 tools, message.created event, profile and status")
             recent = rpc("tools/call", name="get_recent_messages", arguments={"limit": 1})[
                 "structuredContent"
             ]

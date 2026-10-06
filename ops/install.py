@@ -236,6 +236,7 @@ def install(args):
 
 def update(args):
     ensure_passkey_verifier_secret()
+    ensure_send_secret()
     old = prepare_images(args)
     try:
         # The Iris collector replaces the Android-side reader with this image's build when it
@@ -270,6 +271,19 @@ def ensure_passkey_verifier_secret():
         path.chmod(0o444)
     if path.stat().st_size < 32:
         raise BridgeError("secrets/mcp_passkey_token이 올바르지 않습니다. 백업에서 복구한 뒤 계속하세요.")
+
+
+def ensure_send_secret():
+    path = cli.ROOT / "secrets/send_token"
+    if not path.exists():
+        cli.atomic(path, secrets.token_urlsafe(32) + "\n")
+        path.chmod(0o444)
+    value = path.read_text().strip()
+    if len(value) < 32 or any(
+        value == (cli.ROOT / "secrets" / name).read_text().strip()
+        for name in ("read_token", "ingest_token", "device_token")
+    ):
+        raise BridgeError("secrets/send_token이 올바르지 않습니다. 다른 인증 키와 구분되는 전송 키를 준비하세요.")
 
 
 def migrate_auth_modes():

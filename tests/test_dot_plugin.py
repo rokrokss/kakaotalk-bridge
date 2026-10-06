@@ -236,8 +236,8 @@ def test_discovery_401_oauth_metadata_and_complete_results(plugin):
     assert discovery["supportedVersions"] == ["2026-07-28"]
     assert discovery["capabilities"]["events"] == {}
     tools = rpc(client, "tools/list")["result"]["tools"]
-    assert len(tools) == 8
-    assert not any("send" in t["name"] for t in tools)
+    assert len(tools) == 10
+    assert next(t for t in tools if t["name"] == "send_message")["annotations"]["openWorldHint"]
     assert next(t for t in tools if t["name"] == "get_profile")["_meta"]["openai/profile"] is True
     assert rpc(client, "events/list")["result"]["events"][0]["name"] == EVENT
     assert "error" in rpc(client, "initialize")
@@ -626,3 +626,41 @@ def test_cimd_is_verified_and_failed_fetch_does_not_allow_redirect_wildcards(plu
 
     with pytest.raises(AuthError):
         app.state.oauth.client(url)
+
+
+def test_send_oauth_scope_annotations_and_argument_validation(plugin, monkeypatch):
+    client, app, source, *_ = plugin
+    calls = []
+    monkeypatch.setattr(
+        source,
+        "outgoing",
+        lambda **kwargs: calls.append(kwargs) or {"status": "queued"},
+        raising=False,
+    )
+    arguments = {
+        "request_id": "01234567-1234-1234-1234-123456789012",
+        "conversation_ref": "room-a",
+        "text": "안녕 👋",
+    }
+    assert (
+        call(client, "send_message", **arguments)["result"]["structuredContent"]["status"]
+        == "queued"
+    )
+    assert calls == [{"body": arguments}]
+    assert (
+        call(client, "send_message", **(arguments | {"request_id": "bad"}))["error"]["message"]
+        == "invalid_tool_arguments"
+    )
+    assert len(calls) == 1
+    principal = app.state.oauth.principal(client.headers["Authorization"])
+    grant = app.state.oauth.state.get("grant", principal["grant_id"])
+    grant["scope"] = "kakao.read kakao.events"
+    app.state.oauth.state.put("grant", principal["grant_id"], grant)
+    assert call(client, "send_message", **arguments)["error"]["message"] == "insufficient_scope"
+    assert (
+        call(client, "get_message_send_status", request_id=arguments["request_id"])["error"][
+            "message"
+        ]
+        == "insufficient_scope"
+    )
+    assert len(calls) == 1

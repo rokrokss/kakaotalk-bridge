@@ -48,6 +48,29 @@ const redirect = 'https://chatgpt.com/connector_platform_oauth_redirect';
       console.log('PASS: localhost HTTP native WebAuthn registration, login, persistent session, reload, Origin rejection and logout');
       return;
     }
+    // Synthetic tunnel responses exercise the send toggle without touching an account.
+    let allowSend = false;
+    const decisions = [];
+    await page.route(admin + '/admin/api/connections', route => route.fulfill({json: {
+      pending: [], grants: [], resource: publicOrigin + '/mcp', approval_mode: 'passkey',
+      tunnel: {configured:true, tunnel_id:'tunnel_'+'a'.repeat(32), approved:true,
+        expires:null, last_tool_at:null, allow_send:allowSend}
+    }}));
+    await page.route(admin + '/admin/api/tunnel/decision', route => {
+      const body = route.request().postDataJSON();
+      assert.equal(body.approve, true);
+      assert.equal(typeof body.allow_send, 'boolean');
+      assert(route.request().headers()['x-csrf-token']);
+      allowSend = body.allow_send; decisions.push(allowSend);
+      return route.fulfill({json:{ok:true}});
+    });
+    await page.getByRole('button', {name:'AI 연결', exact:true}).click();
+    await page.getByRole('button', {name:'메시지 전송 허용', exact:true}).click();
+    await page.getByRole('button', {name:'메시지 전송 권한 해제', exact:true}).waitFor();
+    await page.screenshot({path:'artifacts/send-permission.png', fullPage:true});
+    await page.getByRole('button', {name:'메시지 전송 권한 해제', exact:true}).click();
+    await page.getByRole('button', {name:'메시지 전송 허용', exact:true}).waitFor();
+    assert.deepEqual(decisions, [true, false]);
     cdp.on('Fetch.requestPaused', async event => {
       await cdp.send('Fetch.fulfillRequest', {requestId: event.requestId, responseCode: 200,
         responseHeaders: [{name:'Content-Type', value:'text/html'}],
@@ -58,6 +81,7 @@ const redirect = 'https://chatgpt.com/connector_platform_oauth_redirect';
     const clientId = new URL(page.url()).searchParams.get('client_id');
     await page.getByRole('button', {name:'패스키로 계속'}).click();
     await page.getByRole('heading', {name:'연결을 허용할까요?'}).waitFor();
+    assert(await page.getByText('내 카카오톡 계정으로 기존 대화방에 텍스트 메시지 전송', {exact:true}).isVisible());
     await page.screenshot({path:'artifacts/passkey-consent.png', fullPage:true});
     await page.getByRole('button', {name:'연결 허용', exact:true}).click();
     await page.getByRole('heading', {name:'Synthetic ChatGPT callback'}).waitFor();
@@ -72,6 +96,10 @@ const redirect = 'https://chatgpt.com/connector_platform_oauth_redirect';
     const tools = await context.request.post(publicOrigin+'/mcp', {headers:{Authorization:'Bearer '+tokens.access_token},
       data:{jsonrpc:'2.0', id:1, method:'tools/list'}});
     assert.equal(tools.status(), 200);
+    const sendTool = (await tools.json()).result.tools.find(tool => tool.name === 'send_message');
+    assert.equal(sendTool.annotations.readOnlyHint, false);
+    assert.equal(sendTool.annotations.openWorldHint, true);
+    assert.deepEqual(sendTool.securitySchemes[0].scopes, ['kakao.send']);
     assert.equal((await context.request.post(publicOrigin+'/token', {form})).status(), 400);
     const refreshed = await context.request.post(publicOrigin+'/token', {form:{grant_type:'refresh_token', client_id:clientId,
       resource:publicOrigin+'/mcp', refresh_token:tokens.refresh_token}});
@@ -86,6 +114,6 @@ const redirect = 'https://chatgpt.com/connector_platform_oauth_redirect';
     assert.equal(credentials.credentials.length,1);
     assert(credentials.credentials[0].signCount >= 3);
     assert.deepEqual(errors, []);
-    console.log('PASS: native passkey registration, login, seven-day session, reload, same passkey on both ports, explicit OAuth consent, PKCE, refresh, MCP tools, denial and code replay rejection');
+    console.log('PASS: native passkey registration, login, tunnel send permission toggle, explicit OAuth send consent, PKCE, refresh, MCP tools, denial and code replay rejection');
   } finally {await browser.close();}
 })().catch(error => {console.error(error); process.exitCode=1;});

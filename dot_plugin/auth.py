@@ -224,17 +224,15 @@ class OAuth:
     def permissions(scope):
         permissions = []
         if "kakao.read" in scope.split():
-            permissions.append(
-                "<li>저장된 메시지 조회·검색 및 수집 상태 확인</li>"
-            )
+            permissions.append("<li>저장된 메시지 조회·검색 및 수집 상태 확인</li>")
         if "kakao.events" in scope.split():
-            permissions.append(
-                "<li>요청한 새 메시지 이벤트 구독 및 처리 진행 상황 기록</li>"
-            )
+            permissions.append("<li>요청한 새 메시지 이벤트 구독 및 처리 진행 상황 기록</li>")
+        if "kakao.send" in scope.split():
+            permissions.append("<li>내 카카오톡 계정으로 기존 대화방에 텍스트 메시지 전송</li>")
         return (
             "<ul>" + "".join(permissions) + "</ul>"
             "<p>조회한 메시지는 연결된 클라이언트와 공유됩니다. "
-            "카카오톡 메시지 전송이나 기기 조작 권한은 포함되지 않습니다.</p>"
+            "기기 조작 권한은 포함되지 않습니다.</p>"
         )
 
     def approval(self, ticket, cookie, *, db=None):
@@ -321,21 +319,11 @@ class OAuth:
                 cookie,
                 redirect_origin(query["redirect_uri"]),
             )
-        permissions = []
-        if "kakao.read" in scope.split():
-            permissions.append(
-                "<li>저장된 메시지 조회·검색 및 수집 상태 확인</li>"
-            )
-        if "kakao.events" in scope.split():
-            permissions.append(
-                "<li>요청한 새 메시지 이벤트 구독 및 처리 진행 상황 기록</li>"
-            )
         page = render_page(
             "연결 승인",
             f'''<h1>연결 승인</h1>
 <p><strong>{esc(client["client_name"])}</strong>에 다음 권한을 허용합니다:</p>
-<ul>{"".join(permissions)}</ul>
-<p>조회한 메시지는 연결된 클라이언트와 공유됩니다. 카카오톡 메시지 전송이나 기기 조작 권한은 포함되지 않습니다.</p>
+{self.permissions(scope)}
 <form method="post" action="/authorize">
 <input type="hidden" name="ticket" value="{esc(ticket)}">
 <label for="link-key">서버 연결 키</label>
@@ -355,8 +343,7 @@ class OAuth:
 <code class="endpoint">{record["display_code"]}</code>
 <p><strong>{esc(client["client_name"])}</strong> · {esc(query["client_id"])}</p>
 <p>돌아갈 주소: {esc(redirect_origin(query["redirect_uri"]))}</p>
-<ul>{"".join(permissions)}</ul>
-<p>이 클라이언트가 조회한 메시지는 해당 클라이언트와 공유됩니다. 기기 조작 권한은 포함되지 않습니다.</p>
+{self.permissions(scope)}
 <form id="approval" method="post" action="/authorize">
 <input type="hidden" name="ticket" value="{esc(ticket)}">
 <button type="submit">승인 후 계속</button>

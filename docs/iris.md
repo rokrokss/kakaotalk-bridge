@@ -50,8 +50,8 @@ docker compose logs --tail 30 iris-collector
 
 - 원본: [dolidolih/Iris](https://github.com/dolidolih/Iris), 커밋 `ee1dc978ec465df11642596e40f74caff497301d`.
 - 빌드 시 압축 파일의 SHA-256 `1b194b137b0912ef360a4a0b511c6ed5169aaaf0da85c1de1cf59b325bebfcd0`을 확인합니다.
-- 수정 빌드는 `iris/CollectorMain.kt`를 추가합니다. 원본 `Main`을 실행하지 않고 DB 읽기와 Iris 복호화만 사용합니다. Android SQLite `OPEN_READONLY`로 DB를 엽니다. 빌드 식별자는 `iris-ee1dc978-collector-v5`입니다.
-- 원본의 메시지 전송, 알림 폴링, 파일 삭제, 대시보드, `/query`, `/reply`, `/aot`는 실행하지 않습니다. 제한된 고정 SELECT용 `/collector/rows`, `/collector/metadata`와 빌드 확인용 `/collector/health`만 제공합니다.
+- 수정 빌드는 `iris/CollectorMain.kt`를 추가합니다. 원본 `Main`을 실행하지 않고 DB 읽기·Iris 복호화와 제한된 알림 답장 전송 경로를 사용합니다. Android SQLite `OPEN_READONLY`로 DB를 엽니다. 빌드 식별자는 `iris-ee1dc978-collector-v6`입니다.
+- 원본의 비동기 전송 큐, 알림 폴링, 파일 삭제, 대시보드, `/query`, `/reply`, `/aot`는 실행하지 않습니다. 고정 SELECT용 `/collector/rows`, `/collector/metadata`, 빌드 확인용 `/collector/health`와 인증된 텍스트 전송용 `/collector/send`를 제공합니다. 전송은 현재 승인 계정·등록 세대·DB·방을 검사하고 카카오톡 알림 답장 서비스를 한 번 호출합니다. [전송 권한과 상태](sending.md)를 참고하세요.
 - Android `127.0.0.1:3000`에만 바인딩하고 수집기 내부 루프백 ADB 포워딩으로 접근합니다. Compose는 호스트에 3000 포트를 공개하지 않습니다. root ADB 권한이 있는 호스트·컨테이너는 신뢰 경계 안에 있습니다.
 - 태블릿 쪽 파일은 root 전용 `/data/kakaotalk-bridge/`(0700)에 둡니다. 등록 정보 `enrollment.json`(0600), Iris 빌드 `iris.apk`(0444), 프로세스 ID `iris.pid`, 인증 파일 `iris-auth.json`(0600), SQLCipher 네이티브 라이브러리 `native/`(0700)입니다.
 - Iris는 DB 접근 전에 등록별 무작위 bearer로 인증합니다. nonce/HMAC 상태 확인으로 리스너를 검증한 뒤 Python이 bearer를 보냅니다. 키는 로그나 프로세스 인수에 넣지 않으며 등록 세대가 바뀌면 새로 만듭니다.

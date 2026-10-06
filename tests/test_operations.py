@@ -219,6 +219,13 @@ def destination_tree(root):
 
 def test_full_snapshot_roundtrip_and_authentication_before_restore(tmp_path):
     volumes, project = source_tree(tmp_path / "original")
+    with sqlite3.connect(volumes / "collector-data/collector.db") as db:
+        db.executescript(
+            "CREATE TABLE outgoing(status TEXT, reason TEXT, text TEXT);"
+            "INSERT INTO outgoing VALUES('queued',NULL,'unsent text');"
+            "INSERT INTO outgoing VALUES('dispatching',NULL,NULL);"
+            "INSERT INTO outgoing VALUES('submitted',NULL,NULL);"
+        )
     output = io.BytesIO()
     key = b"k" * 32
     snapshot.create(output, key, volumes, project)
@@ -236,6 +243,11 @@ def test_full_snapshot_roundtrip_and_authentication_before_restore(tmp_path):
     assert (destination / "android-data/private").read_text() == "private message fixture"
     assert os.readlink(destination / "android-data/link") == "/data/private"
     with sqlite3.connect(destination / "collector-data/collector.db") as db:
+        assert db.execute("SELECT status,text FROM outgoing").fetchall() == [
+            ("unknown", None),
+            ("unknown", None),
+            ("submitted", None),
+        ]
         assert (
             db.execute("SELECT value FROM metadata WHERE key='cursor_epoch'").fetchone()[0] != "old"
         )
@@ -473,3 +485,67 @@ def test_doctor_reports_certificate_expiry(tmp_path, monkeypatch, days, ok, text
         set(),
         ok,
     )
+
+
+@pytest.mark.parametrize("healthy", [True, False])
+def test_update_provisions_send_key_before_compose_and_preserves_rollback(
+    tmp_path, monkeypatch, healthy
+):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    (tmp_path / "secrets").mkdir()
+    for name in ("read_token", "ingest_token", "device_token"):
+        (tmp_path / "secrets" / name).write_text(name * 8)
+    env = tmp_path / ".env"
+    old, new = "COLLECTOR_IMAGE=old\n", "COLLECTOR_IMAGE=new\n"
+    env.write_text(old)
+    before = {p.name: p.read_bytes() for p in (tmp_path / "secrets").iterdir()}
+    calls = []
+
+    def prepare(args):
+        assert len((tmp_path / "secrets/send_token").read_text().strip()) >= 32
+        env.write_text(new)
+        return old
+
+    def backup_old(**kwargs):
+        assert env.read_text() == old
+        assert (tmp_path / "secrets/send_token").exists()
+
+    monkeypatch.setattr(install, "prepare_images", prepare)
+    monkeypatch.setattr(install, "image_config", lambda args: {"COLLECTOR_IMAGE": "helper"})
+    monkeypatch.setattr(backup, "backup", backup_old)
+    monkeypatch.setattr(doctor, "doctor", lambda **kwargs: healthy)
+    monkeypatch.setattr(cli, "compose", lambda *args: calls.append(env.read_text()))
+    monkeypatch.setattr(cli, "services", lambda: ["api", "iris-collector"])
+    monkeypatch.setattr(cli, "share_code", Mock())
+    monkeypatch.setattr(install.time, "sleep", lambda seconds: None)
+    if healthy:
+        install.update(argparse.Namespace())
+        assert calls == [new]
+        assert env.read_text() == new
+    else:
+        with pytest.raises(RuntimeError, match="이전 버전으로 되돌렸습니다"):
+            install.update(argparse.Namespace())
+        assert calls == [new, old]
+        assert env.read_text() == old
+    path = tmp_path / "secrets/send_token"
+    first = path.read_bytes()
+    install.ensure_send_secret()
+    assert path.read_bytes() == first
+    assert path.stat().st_mode & 0o777 == 0o444
+    assert {name: (tmp_path / "secrets" / name).read_bytes() for name in before} == before
+
+
+@pytest.mark.parametrize("value", ["short", "read_token" * 8])
+def test_invalid_send_key_stops_update_without_replacing_credentials(tmp_path, monkeypatch, value):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    (tmp_path / "secrets").mkdir()
+    for name in ("read_token", "ingest_token", "device_token"):
+        (tmp_path / "secrets" / name).write_text(name * 8)
+    path = tmp_path / "secrets/send_token"
+    path.write_text(value)
+    prepare = Mock()
+    monkeypatch.setattr(install, "prepare_images", prepare)
+    with pytest.raises(RuntimeError, match="send_token"):
+        install.update(argparse.Namespace())
+    prepare.assert_not_called()
+    assert path.read_text() == value

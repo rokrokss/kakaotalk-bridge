@@ -17,21 +17,21 @@
 | 서비스 | 역할 | 받는 키 |
 | --- | --- | --- |
 | `redroid` | Android 실행. 유일한 특권 컨테이너 | 없음 |
-| `iris-collector` | 이미지의 Iris 설치·시작, 승인 확인, 페이지 조회와 순서대로 저장, 이름 갱신 | `ingest_token` |
-| `api` | 인증, 중복 제거, 메시지·커서의 원자적 저장, 조회, 보관 기간 정리 | `ingest_token`, `read_token`, `device_token`, `backup_key` |
+| `iris-collector` | 이미지의 Iris 설치·시작, 승인 확인, 페이지 조회와 순서대로 저장, 이름 갱신과 승인 계정의 전송 요청 처리 | `ingest_token` |
+| `api` | 인증, 중복 제거, 메시지·커서의 원자적 저장, 조회, 전송 대기열, 보관 기간 정리 | `ingest_token`, `send_token`, `read_token`, `device_token`, `backup_key` |
 | `device-agent` | ADB·Android 상태 보고, 키보드 앱 갱신 | `device_token` |
 | `gateway` | 비공개 HTTPS 및 API·관리 화면 라우팅 | `tls_cert`, `tls_key` |
 | `admin` | 패스키 로그인, 운영 현황, 설정 진행, 연결·이벤트 관리, 제한된 화면·입력 제어, 로그인 확인과 수집 승인 | `admin_token`, `read_token`, `mcp_approval_token` |
 | `dot-control` | 비공개 패스키 관리, OAuth·터널 승인과 철회, 활동 정보, 대화 이벤트 정책 | `mcp_storage_key`, `mcp_approval_token`, `mcp_passkey_token` |
-| `dot-plugin` | 패스키 검증, 명시적 OAuth 동의, 원격 MCP, 선택적 이벤트 전달 | `read_token`, `mcp_link_key`, `mcp_storage_key`, `mcp_passkey_token` |
+| `dot-plugin` | 패스키 검증, 명시적 OAuth 동의, 원격 MCP, 선택적 이벤트 전달 | `read_token`, `send_token`, `mcp_link_key`, `mcp_storage_key`, `mcp_passkey_token` |
 | `dot-ingress` | 관리 화면·MCP 공용 진입점. MCP 경로에서 관리 쿠키 제거 및 내부 경로 차단 | 없음 |
 | `admin-local` | 선택적 루프백 전용 관리 진입점. 정확한 localhost Host 확인 | 없음 |
-| `dot-tunnel` | 개인 OpenAI 터널용 비공개 MCP 리스너. 포트를 공개하지 않음 | `read_token`, `mcp_storage_key`, `mcp_passkey_token`, `mcp_tunnel_authorization` |
+| `dot-tunnel` | 개인 OpenAI 터널용 비공개 MCP 리스너. 포트를 공개하지 않음 | `read_token`, `send_token`, `mcp_storage_key`, `mcp_passkey_token`, `mcp_tunnel_authorization` |
 | `openai-tunnel` | 외부로 연결하는 OpenAI 터널 클라이언트 | `openai_tunnel_api_key`, `mcp_tunnel_authorization` |
 | 호스트 설정 서비스 | Compose 밖의 systemd 등에서 실행. 비공개 Unix 소켓으로 정해진 연결 작업만 처리 | — |
 | `adb-init` | Android 시작 전에 수집기 공개 키 두 개를 오프라인 등록 | 없음 |
 | `bootstrap` | 일회성 기기 작업(`python -m device.cli`): 새 태블릿 등록, CLI 승인 | 없음 |
-| `mcp` | 클라이언트가 실행하는 stdio 어댑터 | `read_token` |
+| `mcp` | 클라이언트가 실행하는 stdio 어댑터 | `read_token`, `send_token` |
 
 키 파일과 용도는 [키 관리](security.md#key-management)를 참고하세요.
 

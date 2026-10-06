@@ -190,6 +190,13 @@ def reset_external_state(snapshot, project):
             "INSERT INTO metadata VALUES('cursor_epoch',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (str(uuid.uuid4()),),
         )
+        if db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='outgoing'"
+        ).fetchone():
+            db.execute(
+                "UPDATE outgoing SET status='unknown',reason='backup_restored',text=NULL "
+                "WHERE status IN ('queued','dispatching')"
+            )
         db.execute(
             "INSERT INTO gaps(started_at,ended_at,reason) VALUES(?,?,?)",
             (datetime.now(UTC).isoformat(), None, "full_snapshot_restored"),

@@ -6,7 +6,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-def test_mcp_stdio_registers_only_read_tools():
+def test_mcp_stdio_registers_read_and_send_tools():
     async def exercise():
         params = StdioServerParameters(
             command=sys.executable, args=["-m", "server.mcp_adapter"], env=dict(os.environ)
@@ -23,7 +23,14 @@ def test_mcp_stdio_registers_only_read_tools():
                 "list_conversations",
                 "get_collector_status",
                 "get_conversation_context",
+                "send_message",
+                "get_message_send_status",
             }
-            assert all(t.annotations.readOnlyHint for t in response.tools)
+            send = next(t for t in response.tools if t.name == "send_message")
+            assert not send.annotations.readOnlyHint
+            assert send.annotations.openWorldHint and send.annotations.destructiveHint
+            assert all(
+                t.annotations.readOnlyHint for t in response.tools if t.name != "send_message"
+            )
 
     asyncio.run(exercise())
