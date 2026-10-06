@@ -47,10 +47,7 @@ event = {
     "package_name": "com.kakao.talk",
     "notification_key": "synthetic-test",
     "observed_at": datetime.now(UTC).isoformat(),
-    "payload": {
-        "title": "Synthetic test",
-        "messages": [{"body": "테스트: no KakaoTalk account involved", "sender": "123"}],
-    },
+    "payload": {"messages": [{"body": "테스트: no KakaoTalk account involved", "sender": "123"}]},
     "database_ref": {
         "database_id": "synthetic:1",
         "log_id": "1",
@@ -73,7 +70,6 @@ request(
         "database_id": "synthetic:1",
         "listener_connected": True,
         "secondary_login_confirmed": True,
-        "outbox_depth": 0,
         "last_source_seq": 1,
     },
 )

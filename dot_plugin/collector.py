@@ -42,6 +42,5 @@ class Collector:
     def checkpoint(self):
         return self.get("/v1/checkpoint")
 
-    def messages(self, after, limit=50, conversation_ref=None):
-        filters = {"conversation_ref": conversation_ref} if conversation_ref else {}
-        return self.get("/v1/messages", after=after, limit=limit, **filters)
+    def messages(self, after, limit=50):
+        return self.get("/v1/messages", after=after, limit=limit)

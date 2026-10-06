@@ -19,7 +19,7 @@ class CryptoProfiles private constructor(private val db: SQLiteDatabase, private
         @Synchronized private fun loadNative() {
             if (loaded) return
             val apk = System.getProperty("java.class.path").split(':').first { it.endsWith(".apk") }
-            val directory = File("/data/local/tmp/kakaocollector-native")
+            val directory = File("/data/kakaotalk-bridge/native")
             if (!directory.exists()) require(directory.mkdir())
             val stat = Os.lstat(directory.path)
             require(OsConstants.S_ISDIR(stat.st_mode) && stat.st_uid == 0)

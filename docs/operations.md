@@ -25,8 +25,8 @@ docker compose logs --tail 30 iris-collector
 | --- | --- |
 | Android 화면 없음 | redroid 시작과 호스트 binder 기기 |
 | Mac에서 VM을 삭제한 뒤 다시 설치 | 설치 명령을 다시 실행하면 저장된 VM 이름과 포트로 Bridge 템플릿을 사용해 생성합니다. VM과 함께 삭제된 데이터는 백업에서 복구해야 합니다. |
-| 수집 승인 잠김 | 로그인 사전 점검과 두 기기 직접 확인 |
-| 앱 업데이트 후 수집 중단 | versionCode가 바뀌면 새 로그인 확인 필요 |
+| 수집 승인 잠김 | 관리 화면의 승인 상태 사유 확인. 휴대폰을 확인하고 다시 승인 |
+| 읽지 못한 메시지 | 복호화하지 못한 행은 건너뛰고 수집 상태의 `skipped_rows`에 집계 |
 | 복호화·JSON 오류 | Iris 로그. 잘못된 메시지를 건너뛰지 않고 수집 중단 |
 | DB 교체·ID 역행 | Android 복구·DB 재생성 여부. 새 세대 등록 전에 원인 확인 |
 | HTTPS/OAuth 실패 | dot-ingress·dot-plugin·dot-control, 공개 HTTPS·동의. 같은 HTTPS는 패스키, 분리된 관리 화면은 코드 승인. 진입점 설정을 UID 10001이 읽을 수 있어야 함. [연결 설정](dot-plugin.md) |
@@ -59,7 +59,7 @@ Iris 바이너리와 Compose 구조도 바뀌므로 다음 순서를 따르세�
 
 1. 상태 볼륨 7개, 설정, 키를 포함한 전체 암호화 백업을 생성·검증하고 롤백용 이전 이미지 참조·APK 해시를 보관하세요.
 2. 서버·기기·게이트웨이 이미지와 Compose 파일을 함께 갱신하세요. 공개 이미지는 세 이미지 다이제스트를 모두 담은 매니페스트를 사용하세요.
-3. [명시적 Iris 이전](mcp-queries.md#updating-the-iris-component)을 수행하고 등록·카카오톡 데이터를 유지하세요. `./bridge update`는 Iris APK가 바뀌면 중단하며 자동 이전하지 않습니다. 로그인된 태블릿에 새 bootstrap을 실행하지 마세요.
+3. 수집기가 [Iris를 자동으로 교체](mcp-queries.md#updating-the-iris-component)하며 등록·카카오톡 데이터는 유지됩니다. 로그인된 태블릿에 새 bootstrap을 실행하지 마세요.
 4. 갱신된 Compose로 Android를 다시 생성해 `ro.adb.secure=1` 적용 전에 `adb-init`이 수집기 키를 준비하게 하세요. `android-data`, `device-state`, `iris-state`를 함께 유지하세요. Android 재시작 후 휴대폰·태블릿 로그인을 확인하세요.
 5. 맞는 버전의 서비스와 `dot-ingress`를 시작하세요. 공개 HTTPS는 기본 루프백 18787로 전달하고 관리 게이트웨이는 비공개로 유지하세요. 진입점 설정은 UID 10001이 읽을 수 있어야 하며 dot-plugin을 직접 공개하지 마세요.
 6. 기존 패스키로 로그인해 수집 상태와 연결된 MCP의 프로필·상태를 조회하세요. 인증 없는 `/mcp`는 401이어야 합니다. 관리 경로를 차단한 공개 프록시에서는 `/admin/`이 404인지 확인하세요.

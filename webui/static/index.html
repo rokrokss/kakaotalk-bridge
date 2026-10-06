@@ -273,20 +273,16 @@
               <ol class="login-steps">
                 <li>
                   <h3>보조 기기로 로그인</h3>
-                  <p>한국어 카카오톡 화면에서 <strong>다른 기기와 함께 사용</strong>을 선택한 뒤 확인을 실행하세요. 이 옵션이 없으면 로그인하지 마세요.</p>
-                  <button id="login-check" data-action="login-check" class="wide" aria-describedby="login-check-help">로그인 옵션 확인</button>
-                  <p id="login-check-help" class="hint">로그인하기 전에만 사용하세요. 확인에 성공한 뒤 30분 이내에 태블릿에 로그인하세요.</p>
-                  <p id="login-check-result" class="job" role="status" hidden></p>
+                  <p>태블릿 카카오톡 로그인 화면에서 <strong>다른 기기와 함께 사용</strong>을 선택한 뒤 로그인하세요. 이 옵션 없이 로그인하면 휴대폰의 카카오톡이 로그아웃될 수 있습니다.</p>
+                  <p id="login-option-status" class="hint" role="status"></p>
+                  <button data-action="session-check" class="quiet">태블릿 화면 다시 확인</button>
                 </li>
                 <li>
-                  <h3>태블릿 로그인 완료</h3>
-                  <p>확인에 성공하면 휴대폰 인증 등 필요한 절차를 거쳐 태블릿에서 카카오톡 로그인을 완료하세요. 휴대폰의 카카오톡을 열어 기존 로그인이 유지되는지 확인하세요.</p>
-                </li>
-                <li>
-                  <h3>두 기기의 로그인 확인</h3>
-                  <label class="check"><input id="phone-active" type="checkbox">휴대폰의 기존 로그인이 유지되고 있습니다.</label>
-                  <label class="check"><input id="tablet-active" type="checkbox">태블릿에 로그인했습니다.</label>
+                  <h3>휴대폰 확인 후 수집 시작</h3>
+                  <p id="tablet-login-status" class="hint" role="status"></p>
+                  <label class="check"><input id="phone-active" type="checkbox">휴대폰의 카카오톡 로그인이 유지되고 있습니다.</label>
                   <button id="confirm" class="primary wide" disabled>메시지 수집 시작</button>
+                  <p id="login-result" class="job" role="status" hidden></p>
                 </li>
               </ol>
             </div>

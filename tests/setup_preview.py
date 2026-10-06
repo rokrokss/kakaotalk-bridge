@@ -50,6 +50,11 @@ def preview():
         android.setup["kakao_installed"] = True
         return {"ok": True}
 
+    @app.post("/test/sign-in")
+    def sign_in():
+        android.logged_in = True
+        return {"ok": True}
+
     @app.get("/test/calls")
     def calls():
         return [name for name, _ in android.calls]

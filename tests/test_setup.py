@@ -4,7 +4,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from device import cli, setup
+from device import cli, enrollment, iris, setup
+from tests.test_enrollment import snap
 
 
 def test_prepare_does_not_mutate_existing_tablet(monkeypatch):
@@ -69,35 +70,54 @@ def test_wrong_aurora_artifact_is_never_installed(monkeypatch, tmp_path):
     assert all("install" not in call.args for call in adb.call_args_list)
 
 
-def test_preserve_bootstrap_keeps_identity_proof_and_approval(monkeypatch, tmp_path):
+def test_preserve_bootstrap_keeps_identity_and_approval(monkeypatch, tmp_path):
     identity = {"device_id": "personal-tablet", "enrollment_epoch": "e"}
     host = tmp_path / "enrollment.json"
     host.write_text(json.dumps(identity))
-    proof = tmp_path / "prelogin.json"
-    proof.write_text("existing proof")
     original_path = Path
     monkeypatch.setattr(
         cli, "Path", lambda p: host if p == "/state/enrollment.json" else original_path(p)
     )
     monkeypatch.setattr(cli, "sample", lambda: {"state": "android_ready"})
     monkeypatch.setattr(cli, "connect", Mock())
+    monkeypatch.setattr(
+        enrollment, "current", lambda adb=None: snap({**identity, "approved_user_id": "123"})
+    )
+    write = Mock()
+    monkeypatch.setattr(enrollment, "write", write)
     calls = []
 
     def adb(*args, **kwargs):
         calls.append(args)
-        if args == ("shell", "id", "-u"):
-            return "0"
-        if args[:3] == ("shell", "sh", "-c"):
-            return "present"
-        if args == ("shell", "cat", cli.REMOTE_CONFIG):
-            return json.dumps({**identity, "secondary_login_version": 29260820})
-        return ""
+        return "0" if args == ("shell", "id", "-u") else ""
 
     monkeypatch.setattr(cli, "adb", adb)
     assert cli.bootstrap(preserve=True) is False
     assert json.loads(host.read_text()) == identity
-    assert proof.read_text() == "existing proof"
+    write.assert_not_called()
     assert all(call[0] not in ("install", "install-multiple", "push") for call in calls)
+
+
+def test_new_enrollment_starts_locked_without_secrets_on_the_device(monkeypatch, tmp_path):
+    host = tmp_path / "enrollment.json"
+    original_path = Path
+    monkeypatch.setattr(
+        cli, "Path", lambda p: host if p == "/state/enrollment.json" else original_path(p)
+    )
+    monkeypatch.setattr(cli, "sample", lambda: {"state": "android_ready"})
+    monkeypatch.setattr(cli, "connect", Mock())
+    monkeypatch.setattr(cli, "is_installed", lambda package: True)
+    monkeypatch.setattr(enrollment, "current", lambda adb=None: snap(None))
+    monkeypatch.setattr(iris, "stop", Mock())
+    write = Mock()
+    monkeypatch.setattr(enrollment, "write", write)
+    monkeypatch.setattr(
+        cli, "adb", lambda *args, **kwargs: "0" if args == ("shell", "id", "-u") else ""
+    )
+    assert cli.bootstrap() is True
+    written = write.call_args.args[0]
+    assert set(written) == {"device_id", "enrollment_epoch"}
+    assert written == json.loads(host.read_text())
 
 
 def test_publisher_signature_is_required(monkeypatch):

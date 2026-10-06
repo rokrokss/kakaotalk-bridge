@@ -4,7 +4,40 @@ import math
 import time
 import xml.etree.ElementTree as ET
 
-from device.login_guard import KAKAO, inspect_option
+from device import enrollment
+
+KAKAO = "com.kakao.talk"
+OPTION = "다른 기기와 함께 사용"
+
+
+def option_selected(root) -> bool:
+    """Whether the Korean login screen has the secondary-device option checked."""
+    parents = {child: parent for parent in root.iter() for child in parent}
+    labels = [
+        n
+        for n in root.iter("node")
+        if n.get("package") == KAKAO
+        and OPTION in " ".join((n.get("text", "") + " " + n.get("content-desc", "")).split())
+    ]
+    if len(labels) != 1:
+        return False
+    label = labels[0]
+    # Match the label itself or its immediate row, never an unrelated screen-wide checkbox.
+    row = label if label.get("checkable") == "true" else parents.get(label)
+    checks = (
+        []
+        if row is None
+        else [
+            n
+            for n in row.iter("node")
+            if n.get("package") == KAKAO and n.get("checkable") == "true"
+        ]
+    )
+    return (
+        len(checks) == 1
+        and checks[0].get("checked") == "true"
+        and checks[0].get("enabled") == "true"
+    )
 
 
 def screen_evidence(xml):
@@ -22,11 +55,7 @@ def screen_evidence(xml):
     if any(n.get("class", "").endswith("EditText") for n in nodes) and any(
         n.get("text") == "로그인" and n.get("clickable") == "true" for n in nodes
     ):
-        try:
-            inspect_option(xml)
-            selected = "selected"
-        except RuntimeError:
-            selected = "not_verified"
+        selected = "selected" if option_selected(root) else "not_verified"
         return {"state": "login_required", "secondary_option": selected}
     # Recognize an explicit tab bar only. Generic chat text is not login evidence.
     for parent in nodes:
@@ -53,40 +82,38 @@ def timestamp(value, now):
     return None
 
 
-def enrollment_evidence(config, proof, signature, now=None):
+def evidence(snap, now=None):
+    """Approval and login state for the admin screen. Never returns account IDs."""
     now = time.time() if now is None else now
-    matches = bool(signature) and (
-        config.get("collector_mode") == "iris"
-        and config.get("secondary_login_version", 0) == signature["kakao_version"]
-        and config.get("device_fingerprint") == signature["fingerprint"]
-    )
-    checked = timestamp(proof.get("checked_at"), now)
-    proof_matches = bool(signature) and (
-        proof.get("epoch") == config.get("enrollment_epoch") and proof.get("signature") == signature
-    )
-    precheck = "missing"
-    if proof:
-        precheck = "valid" if checked and proof_matches and now - checked <= 1800 else "expired"
+    if snap is None:
+        return {
+            "collection_approval": "unknown",
+            "approval_reason": None,
+            "kakao": {"login": "unknown", "version": None},
+            "approved_at": None,
+            "phone": {
+                "state": "unknown",
+                "confirmed_at": None,
+                "reported_at": None,
+                "automatic": False,
+            },
+        }
+    config = snap.config or {}
+    state, reason = enrollment.approval(snap)
+    user, login = enrollment.account(snap)
     phone_at = timestamp(config.get("phone_session_confirmed_at"), now)
-    tablet_at = timestamp(config.get("tablet_session_confirmed_at", phone_at), now)
     report_at = timestamp(config.get("phone_session_reported_at"), now)
     if config.get("phone_session_report") == "lost" and report_at:
         phone = "reported_lost"
-    elif matches and phone_at:
+    elif state == "approved" and phone_at:
         phone = "operator_confirmed" if now - phone_at <= 86400 else "recheck_due"
     else:
         phone = "unknown"
     return {
-        "collection_approval": "unknown" if not signature else "approved" if matches else "locked",
-        "precheck": {
-            "state": precheck,
-            "checked_at": checked,
-            "expires_at": checked + 1800 if checked else None,
-        },
-        "tablet": {
-            "state": "operator_confirmed" if matches and tablet_at else "unknown",
-            "confirmed_at": tablet_at if matches else None,
-        },
+        "collection_approval": state,
+        "approval_reason": reason,
+        "kakao": {"login": "logged_in" if user else login, "version": snap.kakao_version},
+        "approved_at": timestamp(config.get("approved_at"), now) if state == "approved" else None,
         "phone": {
             "state": phone,
             "confirmed_at": phone_at,

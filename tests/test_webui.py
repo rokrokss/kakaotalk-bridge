@@ -177,29 +177,28 @@ def test_screenshot_and_coordinate_mapping_bounds(console):
     )
 
 
-def test_confirmation_requires_both_sessions_and_preserves_guard(console):
+def test_approval_requires_the_phone_check(console):
     client, android = console
     headers = signin(client)
     assert (
+        client.post("/admin/api/action", json={"name": "approve"}, headers=headers).status_code
+        == 422
+    )
+    assert (
         client.post(
-            "/admin/api/action",
-            json={"name": "confirm-secondary", "phone_active": True},
-            headers=headers,
+            "/admin/api/action", json={"name": "approve", "tablet_active": True}, headers=headers
         ).status_code
         == 422
     )
-    android.confirm.assert_not_called()
+    android.approve.assert_not_called()
     response = client.post(
-        "/admin/api/action",
-        json={"name": "confirm-secondary", "phone_active": True, "tablet_active": True},
-        headers=headers,
+        "/admin/api/action", json={"name": "approve", "phone_active": True}, headers=headers
     )
     assert response.status_code == 202
-    for _ in range(100):
-        if client.get("/admin/api/state").json()["job"]["state"] != "running":
-            break
-        time.sleep(0.01)
-    android.confirm.assert_called_once_with(True, True)
+    result = wait_job(client)
+    assert result["job"]["state"] == "done"
+    android.approve.assert_called_once_with(True)
+    android.session_status.assert_called()
 
 
 def test_long_job_blocks_device_controls_and_sanitizes_failures(console):
@@ -328,28 +327,20 @@ def wait_job(client):
     raise AssertionError("job did not finish")
 
 
-def test_login_check_reports_existing_approval_without_restarting_setup(console):
+def test_approval_failure_explains_the_reason_without_leaking_content(console):
     client, android = console
     headers = signin(client)
-    android.login_check.return_value = False
-    client.post("/admin/api/action", json={"name": "login-check"}, headers=headers)
-    result = wait_job(client)
-    assert result["job"]["state"] == "done"
-    assert "이미 수집이 승인되었습니다" in result["job"]["message"]
-    android.session_status.assert_called_once()
-    android.bootstrap.assert_not_called()
-    android.confirm.assert_not_called()
-
-
-def test_login_check_failure_explains_required_screen_without_leaking_content(console):
-    client, android = console
-    headers = signin(client)
-    android.login_check.side_effect = RuntimeError("private account and UI contents")
-    client.post("/admin/api/action", json={"name": "login-check"}, headers=headers)
+    android.approve.side_effect = RuntimeError("kakao_login_required")
+    client.post("/admin/api/action", json={"name": "approve", "phone_active": True}, headers=headers)
     result = wait_job(client)
     assert result["job"]["state"] == "failed"
-    assert "로그인 전에" in result["job"]["message"]
-    assert "private account" not in json.dumps(result)
+    assert "아직 로그인되지 않았습니다" in result["job"]["message"]
+    android.approve.side_effect = RuntimeError("private account and UI contents 비밀 계정")
+    client.post("/admin/api/action", json={"name": "approve", "phone_active": True}, headers=headers)
+    result = wait_job(client)
+    assert result["job"]["state"] == "failed"
+    assert "private account" not in json.dumps(result) and "비밀" not in json.dumps(result)
+    android.bootstrap.assert_not_called()
 
 
 def test_session_inspection_is_authenticated_and_invalidates_after_input(console):

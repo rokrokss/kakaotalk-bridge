@@ -358,10 +358,16 @@ class Queries:
                 )
             ]
 
-    def metadata_update(self, device, epoch, database_id, items):
+    def metadata_update(self, device, epoch, database_id, items, self_source=None):
         updated = datetime.now(UTC).isoformat()
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            if self_source:
+                db.execute(
+                    "INSERT INTO metadata VALUES('self_identity_source',?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (self_source,),
+                )
             for item in items:
                 room = f"{device}:{epoch}:{item.chat_id}"
                 sender = f"{device}:{epoch}:{item.user_id}"
@@ -408,4 +414,11 @@ class Queries:
                 FROM (SELECT conversation_ref,sender_ref,MAX(is_mine) is_mine FROM message_lookup
                   WHERE conversation_ref IS NOT NULL GROUP BY conversation_ref,sender_ref) m
                 {name_history.JOINS} GROUP BY sender_status,room_status""").fetchall()
-            return {"scope": "observed_room_sender_pairs", "states": [dict(r) for r in rows]}
+            source = db.execute(
+                "SELECT value FROM metadata WHERE key='self_identity_source'"
+            ).fetchone()
+            return {
+                "scope": "observed_room_sender_pairs",
+                "states": [dict(r) for r in rows],
+                "self_identity_source": source[0] if source else None,
+            }

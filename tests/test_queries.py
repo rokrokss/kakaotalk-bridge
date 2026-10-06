@@ -47,7 +47,6 @@ def metadata(api, room="101", user="201", name="Alice", title="Team"):
             "database_id": "1:100",
             "listener_connected": True,
             "secondary_login_confirmed": True,
-            "outbox_depth": 0,
             "last_source_seq": 10,
         },
     )
@@ -223,7 +222,6 @@ def test_metadata_refresh_resolves_existing_messages_without_advancing_event_cur
     collector.epoch = iris.identity(CONFIG)
     collector.database_id = "1:100"
     collector.iris_token = "a" * 43
-    monkeypatch.setattr(iris, "check_enrollment", lambda: CONFIG)
 
     def fake(url, payload, token):
         assert token == collector.iris_token
@@ -254,7 +252,7 @@ def test_metadata_refresh_resolves_existing_messages_without_advancing_event_cur
 
     monkeypatch.setattr(iris, "request", fake)
     cursor = api.app.state.store.checkpoint()["cursor"]
-    collector.refresh_metadata(CONFIG)
+    collector.refresh_metadata(CONFIG, collector.iris_token)
     assert get(api)["items"][0]["sender"]["name"] == "Scoped Nick"
     assert api.app.state.store.checkpoint()["cursor"] == cursor
 

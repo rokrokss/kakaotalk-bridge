@@ -15,7 +15,8 @@ from webui.app import create_app
 class PreviewAndroid(FakeAndroid):
     def __init__(self):
         super().__init__()
-        self.confirm(True, True)
+        self.logged_in = True
+        self.approve(True)
 
     def setup_status(self):
         return {"state": "ready", "enrolled": True, "kakao_installed": True}

@@ -4,7 +4,8 @@ import struct
 import time
 import zlib
 
-from device.session_status import enrollment_evidence
+from device.enrollment import Snapshot
+from device.session_status import evidence
 from webui.app import create_app
 
 
@@ -26,8 +27,8 @@ def png():
 class FakeAndroid:
     def __init__(self):
         self.calls = []
-        self.config = {}
-        self.proof = {}
+        self.config = {"enrollment_epoch": "preview", "device_id": "personal-tablet"}
+        self.logged_in = False
 
     def screenshot(self):
         return png(), 360, 640
@@ -46,8 +47,7 @@ class FakeAndroid:
 
     def bootstrap(self):
         self.calls.append(("bootstrap", ()))
-        self.config = {}
-        self.proof = {}
+        self.config = {"enrollment_epoch": "preview", "device_id": "personal-tablet"}
 
     def enable_keyboard(self):
         self.calls.append(("keyboard", ()))
@@ -55,22 +55,17 @@ class FakeAndroid:
     def open_kakao(self):
         self.calls.append(("open-kakao", ()))
 
-    def login_check(self):
-        self.calls.append(("login-check", ()))
-        self.proof = {
-            "checked_at": time.time(),
-            "signature": {"kakao_version": 1234, "fingerprint": "test"},
-        }
-
-    def confirm(self, *args):
-        self.calls.append(("confirm", args))
-        self.proof = {}
-        self.config = {
-            "collector_mode": "iris",
-            "secondary_login_version": 1234,
-            "device_fingerprint": "test",
-            "phone_session_confirmed_at": time.time(),
-        }
+    def approve(self, phone_active):
+        self.calls.append(("approve", (phone_active,)))
+        now = time.time()
+        self.config.update(
+            approved_user_id="1",
+            approved_at=now,
+            device_fingerprint="test",
+            phone_session_confirmed_at=now,
+            phone_session_report="active",
+            phone_session_reported_at=now,
+        )
 
     def record_phone(self, active):
         self.calls.append(("phone-active" if active else "phone-lost", ()))
@@ -79,19 +74,33 @@ class FakeAndroid:
         if active:
             self.config["phone_session_confirmed_at"] = time.time()
         else:
-            self.config["secondary_login_version"] = 0
+            self.config["approved_user_id"] = None
+
+    def snapshot(self):
+        return Snapshot(
+            config=dict(self.config),
+            legacy=False,
+            characteristics="tablet",
+            fingerprint="test",
+            width=1200,
+            height=1920,
+            dpi=240,
+            kakao_version=1234,
+            account_ids=(1,) if self.logged_in else (),
+        )
+
+    def approved(self):
+        return evidence(self.snapshot())["collection_approval"] == "approved"
 
     def session_status(self):
         return {
             "checked_at": time.time(),
             "device": "android_ready",
             "screen": {
-                "state": "main_screen_observed" if self.config else "login_required",
-                "secondary_option": "unknown",
+                "state": "main_screen_observed" if self.logged_in else "login_required",
+                "secondary_option": "unknown" if self.logged_in else "selected",
             },
-            **enrollment_evidence(
-                self.config, self.proof, {"kakao_version": 1234, "fingerprint": "test"}
-            ),
+            **evidence(self.snapshot()),
         }
 
 
@@ -101,9 +110,7 @@ def create_preview():
         "preview-only-key-" + "0" * 32,
         android,
         lambda: {
-            "state": "collecting_partial"
-            if android.config.get("secondary_login_version")
-            else "needs_attention",
+            "state": "collecting_partial" if android.approved() else "needs_attention",
             "warnings": [],
         },
         auth_mode="local",

@@ -58,18 +58,4 @@ MCP 조회 도구는 이전 숫자 `after`·`cursor_epoch` 대신 불투명 `cur
 
 ## Iris 구성 요소 업데이트
 
-과거 이름 보완은 이미 수집한 행을 사용하므로 API·MCP 서버만 갱신하면 됩니다. Iris 교체·카카오톡 재설치·재로그인은 필요하지 않습니다. 먼저 수집 DB를 백업하세요. 다음 구성 요소 교체는 Android 프로필 리더 자체를 갱신할 때 적용합니다.
-
-최신 암호화 프로필은 Iris v3부터 지원하며 현재 v4는 `/collector/metadata`, `/collector/rows`도 인증합니다. Android 구성 요소와 Python 수집기를 함께 갱신하세요. 서버만 바꿔서는 이름 조회나 호출자 인증을 추가할 수 없습니다. 기존 등록과 Android 앱 데이터를 유지하고 새 `bootstrap` 대신 아래의 명시적 `bootstrap iris-upgrade`를 사용하세요.
-
-DB·설정을 백업하고 두 이미지를 빌드·적재한 뒤 `iris-collector`를 중지합니다. `DEVICE_IMAGE`를 새 이미지로 설정하고 이전 APK의 정확한 SHA-256으로 실행하세요.
-
-```bash
-docker compose stop iris-collector
-docker compose --profile setup run --rm --no-deps bootstrap iris-upgrade \
-  --expected-iris-sha256 <previous-iris-apk-sha256>
-```
-
-현재 APK와 업로드한 교체본을 검증하고 Android에 `kakaocollector-iris.apk.backup-<sha256>` 백업을 남긴 뒤 root `app_process` 구성 요소만 교체합니다. 업로드 전후 등록을 검사하며 카카오톡 재설치나 로그인 확인 변경은 하지 않습니다. 시작 실패 시 이전 APK를 복구하므로 이전 이미지를 선택하고 수집기를 재시작하세요.
-
-새 API·원격 MCP·`iris-collector`를 시작하고 `/v2/messages`와 이름 조회 상태를 확인하세요. 인증 ADB와 공개 진입점은 [보안 업데이트 안내](operations.md#upgrading-to-the-security-update)를 따르세요. 일반 `./bridge update`는 계속 Iris 바이너리 변경을 거부하여 명시적 교체가 실수로 실행되지 않게 합니다.
+수집기는 Iris를 시작할 때 기기에 있는 Iris가 실행 중인 이미지의 빌드와 같은지 SHA-256으로 확인합니다. 다르면 이전 프로세스를 멈추고 검증된 업로드로 교체한 뒤 다시 시작합니다. 업데이트와 되돌리기 모두 별도 명령이 필요하지 않으며 카카오톡 재설치, 재로그인, 승인 변경은 하지 않습니다. 이전 릴리스가 쓰던 기기 내부 경로는 새 Iris가 정상 시작된 뒤 정리합니다.

@@ -76,13 +76,8 @@ class Source:
             "pruned_through_cursor": self.floor,
         }
 
-    def messages(self, after, limit=50, conversation_ref=None):
-        rows = [
-            r
-            for r in self.rows
-            if r["id"] > after
-            and (not conversation_ref or r["conversation_ref"] == conversation_ref)
-        ]
+    def messages(self, after, limit=50):
+        rows = [r for r in self.rows if r["id"] > after]
         selected = deepcopy(rows[:limit])
         return {
             "items": selected,
@@ -94,20 +89,12 @@ class Source:
     def get(self, path, **params):
         if path == "/v1/status":
             return {"state": "collecting_partial", "warnings": []}
-        if path == "/v1/conversations":
-            return {
-                "items": [{"conversation_ref": "room-a"}],
-                "next_cursor": len(self.rows),
-                "has_more": False,
-            }
         if path == "/v2/messages":
             return {
                 "items": [r for r in self.rows if not params.get("q") or params["q"] in r["body"]],
                 "next_cursor": None,
                 "has_more": False,
             }
-        if path == "/v1/search":
-            return {"items": [r for r in self.rows if params["q"] in r["body"]]}
         raise AssertionError(path)
 
 
@@ -320,12 +307,8 @@ def test_approval_displays_requested_permissions_and_escapes_client_name(plugin,
     assert response.status_code == 200
     assert "<img src=x" not in response.text
     assert "<strong>&lt;img src=x onerror=&quot;alert(1)&quot;&gt;</strong>" in response.text
-    assert ("<li>저장된 메시지 조회·검색" in response.text) == (
-        "kakao.read" in scope.split()
-    )
-    assert ("<li>요청한 새 메시지 이벤트" in response.text) == (
-        "kakao.events" in scope.split()
-    )
+    assert ("<li>저장된 메시지 조회·검색" in response.text) == ("kakao.read" in scope.split())
+    assert ("<li>요청한 새 메시지 이벤트" in response.text) == ("kakao.events" in scope.split())
     policy = response.headers["content-security-policy"]
     assert "default-src 'none'; style-src 'self';" in policy
     assert "img-src 'self';" in policy

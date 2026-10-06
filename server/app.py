@@ -117,63 +117,62 @@ def create_app(settings: Settings | None = None):
             raise HTTPException(503, "maintenance_failed")
         return {"status": "ready"}
 
+    def collecting(epoch, database_id=None, bridge=None):
+        bridge = bridge or store.bridge_status(config.heartbeat_timeout)
+        if not bridge or bridge["stale"] or not bridge.get("secondary_login_confirmed"):
+            raise HTTPException(423, "secondary_login_confirmation_required")
+        if (
+            not bridge.get("listener_connected")
+            or bridge.get("enrollment_epoch") != str(epoch)
+            or (database_id is not None and bridge.get("database_id") != database_id)
+        ):
+            raise HTTPException(423, "iris_confirmation_mismatch")
+
     @app.post("/internal/v1/observations:batch", dependencies=[Depends(ingest_auth)])
     def ingest(batch: Batch):
-        results = []
+        bridge = store.bridge_status(config.heartbeat_timeout)
+        results, failed = [], False
         for index, raw in enumerate(batch.events):
+            # Rows commit in order. After a rejection the rest wait, so the shared cursor
+            # can never pass a row that was not stored.
+            if failed:
+                results.append({"index": index, "status": "not_processed"})
+                continue
             # Index correlation works even when an invalid event ID cannot be echoed.
             try:
                 event = Observation.model_validate(raw)
                 check_device(event.device_id)
-                bridge = store.status(config.heartbeat_timeout)["bridge"]
-                if not bridge or bridge["stale"] or not bridge.get("secondary_login_confirmed"):
-                    raise HTTPException(423, "secondary_login_confirmation_required")
-                if event.source != bridge.get("source", "notification"):
-                    raise HTTPException(423, "collector_source_mismatch")
-                if event.source == "iris_db" and (
-                    not bridge["listener_connected"]
-                    or str(event.enrollment_epoch) != bridge["enrollment_epoch"]
-                    or event.database_ref.database_id != bridge.get("database_id")
-                ):
-                    raise HTTPException(423, "iris_confirmation_mismatch")
+                collecting(event.enrollment_epoch, event.database_ref.database_id, bridge)
                 result = store.ingest(event)
                 results.append({"index": index, "event_id": str(event.event_id), "status": result})
             except ValidationError:
                 results.append({"index": index, "status": "rejected", "reason": "invalid_event"})
+                failed = True
             except Conflict as exc:
                 results.append({"index": index, "status": "rejected", "reason": str(exc)})
+                failed = True
         return {"results": results}
 
     @app.get("/internal/v1/iris/cursor", dependencies=[Depends(ingest_auth)])
     def iris_cursor(epoch: UUID):
         return store.iris_progress(config.device_id, str(epoch))
 
-    def metadata_gate(epoch, database_id=None):
-        bridge = store.status(config.heartbeat_timeout)["bridge"]
-        if (
-            not bridge
-            or bridge["stale"]
-            or not bridge.get("secondary_login_confirmed")
-            or not bridge.get("listener_connected")
-            or bridge.get("source") != "iris_db"
-            or bridge["enrollment_epoch"] != str(epoch)
-        ):
-            raise HTTPException(423, "iris_confirmation_mismatch")
-        if database_id is not None and bridge.get("database_id") != database_id:
-            raise HTTPException(423, "iris_confirmation_mismatch")
-
     @app.get("/internal/v1/iris/metadata-targets", dependencies=[Depends(ingest_auth)])
     def metadata_targets(epoch: UUID):
-        metadata_gate(epoch)
+        collecting(epoch)
         return {"items": queries.metadata_targets(config.device_id, str(epoch))}
 
     @app.post("/internal/v1/iris/metadata", dependencies=[Depends(ingest_auth)])
     def metadata_update(body: MetadataBatch):
         check_device(body.device_id)
-        metadata_gate(body.enrollment_epoch, body.database_id)
+        collecting(body.enrollment_epoch, body.database_id)
         try:
             return queries.metadata_update(
-                body.device_id, str(body.enrollment_epoch), body.database_id, body.items
+                body.device_id,
+                str(body.enrollment_epoch),
+                body.database_id,
+                body.items,
+                body.self_identity_source,
             )
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from None
@@ -198,36 +197,21 @@ def create_app(settings: Settings | None = None):
             "identity_metadata": queries.metadata_status(),
         }
 
+    def coverage():
+        return store.status(config.heartbeat_timeout)["coverage"]
+
     @app.get("/v1/checkpoint", dependencies=[Depends(read_auth)])
     def checkpoint():
         return store.checkpoint()
 
     @app.get("/v1/messages", dependencies=[Depends(read_auth)])
-    def messages(
-        after: int = Query(0, ge=0),
-        limit: int = Query(50, ge=1, le=200),
-        conversation_ref: str | None = Query(None, min_length=1, max_length=256),
-    ):
-        return {
-            **store.messages(after, limit, conversation_ref=conversation_ref),
-            "coverage": status()["coverage"],
-        }
-
-    @app.get("/v1/search", dependencies=[Depends(read_auth)])
-    def search(
-        q: str = Query(min_length=1, max_length=256),
-        after: int = Query(0, ge=0),
-        limit: int = Query(50, ge=1, le=200),
-    ):
-        return {**store.messages(after, limit, q), "coverage": status()["coverage"]}
-
-    @app.get("/v1/conversations", dependencies=[Depends(read_auth)])
-    def conversations(after: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200)):
-        return store.conversations(after, limit)
+    def messages(after: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200)):
+        """Numeric event cursor used by pending-message delivery."""
+        return {**store.messages(after, limit), "coverage": coverage()}
 
     def query_result(fn, **params):
         try:
-            return {**fn(**params), "coverage": status()["coverage"]}
+            return {**fn(**params), "coverage": coverage()}
         except (ValueError, OverflowError) as exc:
             reason = (
                 str(exc)

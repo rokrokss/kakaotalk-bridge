@@ -57,6 +57,18 @@ class ProfileDataTest {
         invalid(byteArrayOf(0))
         invalid(ByteArray(4*1024*1024+1))
     }
+    @Test fun accountIdsReadOnlyTheTwoLongIdKeys() {
+        val ids = entry("memochat_user_id", byteArrayOf(32) + integer(1234567)) +
+            entry("old_user_id", byteArrayOf(32) + integer(1234567)) +
+            entry("pch", byteArrayOf(42) + bytes("opaque".toByteArray())) +
+            entry("accountId", byteArrayOf(32) + integer(99))
+        assertEquals(listOf(1234567L, 1234567L), ProfileData.accountIds(ids))
+    }
+    @Test fun accountIdsIgnoreOtherTypesAndRejectTruncation() {
+        assertEquals(emptyList<Long>(), ProfileData.accountIds(entry("old_user_id", byteArrayOf(42) + bytes("1".toByteArray()))))
+        assertThrows(Exception::class.java) { ProfileData.accountIds(entry("old_user_id", byteArrayOf(32) + integer(5)).dropLast(1).toByteArray()) }
+        assertThrows(Exception::class.java) { ProfileData.accountIds(byteArrayOf()) }
+    }
     @Test fun otherPreferenceValuesAreIgnored() {
         assertArrayEquals(ProfileData.passphrase(salt(123)),ProfileData.passphrase(entry("unrelated",byteArrayOf(42,2,1,2))+salt(123)))
     }

@@ -102,10 +102,7 @@ services:
     volumes: [./docker/Caddyfile:/etc/caddy/Caddyfile:ro]
     secrets: [tls_cert, tls_key]
     ports: ["${HTTPS_BIND:-127.0.0.1}:${HTTPS_PORT:-8443}:8443"]
-    networks:
-      device-net:
-        ipv4_address: ${GATEWAY_IP:-172.29.87.3}
-      backend-net: {}
+    networks: [backend-net, gateway-edge-net]
     depends_on:
       api:
         condition: service_healthy
@@ -152,7 +149,6 @@ services:
       ADB_TARGET: redroid:5555
       DEVICE_ID: ${DEVICE_ID:-personal-tablet}
       API_URL: http://api:8000
-      BRIDGE_URL: https://${GATEWAY_IP:-172.29.87.3}:8443
       ADMIN_AUTH_DB: /auth/admin.db
       ADMIN_AUTH_MODE: ${ADMIN_AUTH_MODE:-passkey}
       ADMIN_LOCAL_ORIGIN: ${ADMIN_LOCAL_ORIGIN:-}
@@ -162,7 +158,7 @@ services:
       - admin-state:/auth
       - ./inputs/kakao:/inputs/kakao:ro
       - ./.bridge/setup-agent:/run/bridge-setup:ro
-    secrets: [admin_token, read_token, ingest_token, tls_cert, mcp_approval_token]
+    secrets: [admin_token, read_token, mcp_approval_token]
     networks: [device-net, backend-net, private-control-net, admin-ingress-net]
     depends_on:
       redroid:
@@ -182,11 +178,9 @@ services:
     environment:
       ADB_TARGET: redroid:5555
       DEVICE_ID: ${DEVICE_ID:-personal-tablet}
-      BRIDGE_URL: https://${GATEWAY_IP:-172.29.87.3}:8443
     volumes:
       - device-state:/state
       - ./inputs/kakao:/inputs/kakao:ro
-    secrets: [ingest_token, tls_cert]
     networks: [device-net]
     depends_on:
       redroid:
@@ -368,8 +362,9 @@ networks:
     ipam:
       config:
         - subnet: ${DEVICE_SUBNET:-172.29.87.0/24}
-          # Keep automatic assignments away from the fixed gateway IP after daemon restarts.
           ip_range: ${DEVICE_IP_RANGE:-172.29.87.128/25}
+  # Lets Docker publish the private HTTPS port; Android cannot reach the gateway.
+  gateway-edge-net:
   backend-net:
     internal: true
   public-read-net:

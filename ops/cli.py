@@ -931,34 +931,8 @@ def update(args):
     ensure_passkey_verifier_secret()
     old = prepare_images(args)
     try:
-        old_env = dict(
-            line.split("=", 1)
-            for line in old.splitlines()
-            if "=" in line and not line.startswith("#")
-        )
-        old_device = old_env.get("DEVICE_IMAGE", "kakaotalk-collector/device:0.1.0")
-        new_device = read_env()["DEVICE_IMAGE"]
-
-        def iris_hash(image):
-            return run(
-                [
-                    "docker",
-                    "run",
-                    "--rm",
-                    "--network",
-                    "none",
-                    "--entrypoint",
-                    "sha256sum",
-                    image,
-                    "/opt/iris.apk",
-                ],
-                capture=True,
-            ).split()[0]
-
-        if iris_hash(old_device) != iris_hash(new_device):
-            raise RuntimeError(
-                "This update changes the installed Iris binary. A separate component migration is required; images were not deployed."
-            )
+        # The Iris collector replaces the Android-side reader with this image's build when it
+        # starts, so new and rolled-back images bring their own matching component.
         # Back up under the old image selection so rollback restores a complete matching stack.
         new = (ROOT / ".env").read_text()
         atomic(ROOT / ".env", old)

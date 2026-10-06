@@ -1,4 +1,4 @@
-package dev.kakaocollector.bridge
+package dev.kakaotalkbridge.android
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -11,11 +11,13 @@ import org.json.JSONObject
 import java.io.File
 import androidx.core.content.ContextCompat
 
+private const val ACTION = "dev.kakaotalkbridge.android.WEB_TEXT"
+
 /** Explicit web input only. Never reads surrounding text, records keys, or submits a form. */
 class WebInputMethod : InputMethodService() {
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != "dev.kakaocollector.bridge.WEB_TEXT") return
+            if (intent.action != ACTION) return
             val pending = File(filesDir, "web-input.json")
             try {
                 val data = JSONObject(pending.readText())
@@ -39,7 +41,7 @@ class WebInputMethod : InputMethodService() {
     override fun onCreate() {
         super.onCreate()
         File(filesDir, "web-input.json").delete()
-        val filter = IntentFilter("dev.kakaocollector.bridge.WEB_TEXT")
+        val filter = IntentFilter(ACTION)
         // Only shell/root or another holder of the system DUMP permission may trigger input.
         ContextCompat.registerReceiver(this, receiver, filter, "android.permission.DUMP", null,
             ContextCompat.RECEIVER_EXPORTED)
