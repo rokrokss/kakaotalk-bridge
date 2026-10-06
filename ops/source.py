@@ -8,6 +8,11 @@ import tarfile
 import tempfile
 from pathlib import Path, PurePosixPath
 
+try:
+    from ops.errors import BridgeError
+except ImportError:  # Copied into the VM and run on its own.
+    BridgeError = RuntimeError
+
 PERSISTENT = {".bridge", ".env", ".git", "secrets", "inputs", "artifacts", "backups"}
 CODE_DIRS = {
     "android",
@@ -25,6 +30,25 @@ CODE_DIRS = {
     "webui",
     ".github",
 }
+
+
+def share_code(root):
+    """Keep code readable after a root-run update; secrets and state stay private.
+
+    The stdio MCP adapter runs as the SSH user, and that account must be able to
+    import Bridge and read .env, which holds only non-secret settings.
+    """
+    root = Path(root)
+    for folder, directories, files in os.walk(root):
+        here = Path(folder)
+        if here == root:
+            directories[:] = [d for d in directories if d not in PERSISTENT and d != ".venv"]
+        os.chmod(here, 0o755)
+        for name in files:
+            path = here / name
+            if path.is_symlink() or (here == root and name.startswith(".env") and name != ".env"):
+                continue
+            os.chmod(path, 0o755 if path.stat().st_mode & 0o100 else 0o644)
 
 
 def rollback(root):
@@ -65,13 +89,13 @@ def apply(root, archive_path):
                 or member.name.startswith("/")
                 or not (member.isfile() or member.isdir())
             ):
-                raise ValueError("Unsafe source archive")
+                raise BridgeError("설치 파일에 허용되지 않는 경로가 있어 중단했습니다.")
         archive.extractall(incoming, filter="data")
     names = {p.name for p in incoming.iterdir()} | {
         name for name in CODE_DIRS if (root / name).exists()
     }
     if not (incoming / "ops/cli.py").exists() or not (incoming / "compose.yaml").exists():
-        raise ValueError("Incomplete source archive")
+        raise BridgeError("설치 파일이 완전하지 않습니다.")
     journal = state / "source-journal.json"
     descriptor, temporary = tempfile.mkstemp(dir=state)
     with os.fdopen(descriptor, "w") as output:

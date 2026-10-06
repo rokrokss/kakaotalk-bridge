@@ -3,6 +3,7 @@
 import hmac
 import json
 import os
+import re
 import secrets
 import subprocess
 import tempfile
@@ -500,13 +501,18 @@ def create_app(
     def connection_call(method, path, data=None):
         try:
             return connections.call(method, path, data)
-        except RequestChanged:
+        except RequestChanged as exc:
+            # The approval service sends fixed Korean guidance for known conflicts.
+            detail = str(exc)
             raise HTTPException(
-                409, "코드가 올바르지 않거나 요청이 만료되었습니다. ‘AI 연결’을 새로고침하세요."
+                409,
+                detail
+                if re.search("[가-힣]", detail)
+                else "코드가 올바르지 않거나 요청이 만료되었습니다. ‘AI 연결’을 새로고침하세요.",
             ) from None
         except (OSError, ValueError):
             raise HTTPException(
-                503, "연결 서비스를 사용할 수 없습니다. dot 프로필을 시작하세요."
+                503, "연결 서비스를 사용할 수 없습니다. ./bridge start로 서비스를 다시 시작하세요."
             ) from None
 
     @app.get("/admin/api/connections")
@@ -539,10 +545,9 @@ def create_app(
     def setup_connection(data: dict, current: Annotated[dict, Depends(authenticated)]):
         try:
             validated = validate_connection_setup(data)
-        except ValueError:
-            raise HTTPException(
-                422, "연결 설정과 필요한 권한을 확인하세요."
-            ) from None
+        except ValueError as exc:
+            # Fixed Korean validation messages; they never contain submitted values.
+            raise HTTPException(422, str(exc)) from None
         return setup_call("POST", validated)
 
     @app.get("/admin/api/events/conversations")

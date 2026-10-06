@@ -7,6 +7,7 @@ import secrets
 from pathlib import Path
 
 from ops import cli
+from ops.errors import BridgeError
 
 TUNNEL_ID = r"tunnel_[a-z0-9]{32}"
 
@@ -22,10 +23,10 @@ def add_arguments(parser):
 
 def credentials(identity, key_file):
     if not re.fullmatch(TUNNEL_ID, identity):
-        raise ValueError("Use the tunnel_<32 lowercase letters or digits> ID from OpenAI")
+        raise BridgeError("OpenAI에서 받은 tunnel_로 시작하는 터널 ID(소문자·숫자 32자)를 입력하세요.")
     key = Path(key_file).read_text().strip()
     if not re.fullmatch(r"[A-Za-z0-9_-]{20,512}", key):
-        raise ValueError("The runtime API key file must contain one OpenAI API key")
+        raise BridgeError("실행용 API 키 파일에는 OpenAI API 키 하나만 들어 있어야 합니다.")
     return key
 
 
@@ -77,13 +78,13 @@ def status():
 def configure(identity, key_file):
     key = credentials(identity, key_file)
     if not (cli.ROOT / "secrets/mcp_storage_key").is_file():
-        raise RuntimeError("Install Bridge before configuring a tunnel")
+        raise BridgeError("터널을 설정하기 전에 ./bridge up으로 Bridge를 설치하세요.")
     values = cli.read_env()
     private = cli.ROOT / "secrets/mcp_tunnel_authorization"
     if private.exists() and not re.fullmatch(
         r"Bearer [A-Za-z0-9_-]{43,}", private.read_text().strip()
     ):
-        raise RuntimeError("Restore the existing private tunnel credential")
+        raise BridgeError("기존 개인 터널 인증 정보(secrets/mcp_tunnel_authorization)를 복구하세요.")
     paths = [
         cli.ROOT / name
         for name in (
@@ -159,13 +160,9 @@ def configure(identity, key_file):
                     "up", "-d", "--no-build", "--force-recreate", "dot-tunnel", "openai-tunnel"
                 )
         except (RuntimeError, OSError):
-            raise RuntimeError(
-                "Tunnel setup failed and recovery could not finish. Check configuration and run ./bridge doctor; no credentials were printed."
-            ) from None
+            raise BridgeError("터널 설정에 실패했고 이전 설정 복구도 끝나지 않았습니다. 설정을 확인하고 ./bridge doctor를 실행하세요. 인증 정보는 출력하지 않았습니다.") from None
         # Revoked grants stay revoked; rollback never restores data access.
-        raise RuntimeError(
-            "Tunnel setup failed; previous configuration restored. If changing tunnel IDs, approve the previous tunnel again in admin."
-        ) from None
+        raise BridgeError("터널 설정에 실패해 이전 설정으로 되돌렸습니다. 터널 ID를 바꾸던 중이었다면 관리 화면에서 이전 터널을 다시 승인하세요.") from None
     show_configured(identity)
 
 

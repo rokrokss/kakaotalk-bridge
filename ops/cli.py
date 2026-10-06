@@ -23,7 +23,39 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 if not __package__:
+    # Run as a script inside the VM; make the ops package importable.
     sys.path.insert(0, str(ROOT))
+
+from ops.errors import BridgeError
+
+
+def progress(text):
+    from ops.setup_output import progress as show
+
+    show(text)
+
+
+def notice(text):
+    from ops.setup_output import notice as show
+
+    show(text)
+
+
+def share_code():
+    """Root-run installs keep code readable for the SSH account that runs bridge mcp."""
+    if os.geteuid() == 0:
+        from ops.source import share_code as share
+
+        with contextlib.suppress(OSError):
+            share(ROOT)
+
+
+def diagnostics():
+    """The run log for helper output, or None to leave it on the terminal."""
+    from ops.setup_output import log_target
+
+    return log_target(False, {})
+
 SERVICES = ["redroid", "api", "gateway", "device-agent", "iris-collector", "admin"]
 VOLUMES = [
     "android-data",
@@ -62,7 +94,7 @@ class KoreanArgumentParser(argparse.ArgumentParser):
 
 
 def run(args, *, capture=False, **kwargs):
-    from ops.setup_output import command_streams, provider_command
+    from ops.setup_output import log_failure, log_target, provider_command, stream
 
     if (
         not capture
@@ -71,12 +103,16 @@ def run(args, *, capture=False, **kwargs):
         and ("funnel" in args or "up" in args)
     ):
         return provider_command(args)
-    kwargs = command_streams(capture, kwargs)
+    log = log_target(capture, kwargs)
+    if log is not None:
+        return stream(args, log, **kwargs)
     result = subprocess.run(
         args, cwd=ROOT, text=True, capture_output=capture, check=False, **kwargs
     )
     if result.returncode:
         # Captured output can contain private paths or device data; do not echo it.
+        if capture:
+            log_failure(args, result)
         raise RuntimeError(f"Command failed: {Path(args[0]).name} (exit {result.returncode})")
     return result.stdout.strip() if capture else ""
 
@@ -88,7 +124,7 @@ def read_env():
             if line.strip() and not line.lstrip().startswith("#"):
                 key, sep, value = line.partition("=")
                 if not sep or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
-                    raise RuntimeError("Use KEY=value lines in .env")
+                    raise BridgeError(".env 파일은 KEY=value 형식의 줄만 사용할 수 있습니다.")
                 data[key] = value
     return data
 
@@ -98,7 +134,7 @@ def env_update(values):
         if not re.fullmatch(r"[A-Z][A-Z0-9_]*", key) or not re.fullmatch(
             r"[A-Za-z0-9_:/@.=-]+", value
         ):
-            raise ValueError("Invalid configuration value")
+            raise BridgeError("설정 값이 올바르지 않습니다. 영문자, 숫자와 일부 기호만 사용할 수 있습니다.")
     lines = (ROOT / ".env").read_text().splitlines() if (ROOT / ".env").exists() else []
     lines = [line for line in lines if line.partition("=")[0] not in values]
     atomic(ROOT / ".env", "\n".join([*lines, *(f"{k}={v}" for k, v in values.items())]) + "\n")
@@ -198,9 +234,7 @@ def init_secrets(source):
         not (ROOT / "secrets" / name).is_file() or not (ROOT / "secrets" / name).stat().st_size
         for name in required
     ):
-        raise RuntimeError(
-            "Existing installation has missing or empty keys. Restore secrets/; do not generate a new identity."
-        )
+        raise BridgeError("기존 설치의 인증 키가 없거나 비어 있습니다. 새 키를 만들지 말고 secrets/ 폴더를 백업에서 복구하세요.")
     # This script creates only missing keys and preserves existing TLS/signing material.
     run(
         ["bash", "scripts/init-secrets.sh"],
@@ -219,19 +253,19 @@ def init_secrets(source):
             with os.fdopen(fd, "w") as output:
                 output.write(value + "\n")
         elif not path.stat().st_size:
-            raise RuntimeError(f"Empty credential file: {name}; restore it before continuing")
+            raise BridgeError(f"인증 키 파일 secrets/{name}이(가) 비어 있습니다. 백업에서 복구한 뒤 계속하세요.")
         path.chmod(0o444)
 
 
 def host_check():
     if platform.system() != "Linux":
-        raise RuntimeError("The runtime requires Linux; use Lima on macOS")
+        raise BridgeError("실행 환경에는 Linux가 필요합니다. macOS에서는 ./bridge up으로 Lima VM을 사용하세요.")
     run(["docker", "info"], capture=True)
     if (
         not Path("/sys/module/binder_linux").exists()
         and not Path("/dev/binderfs/binder-control").exists()
     ):
-        raise RuntimeError("Android binder is missing. Follow docs/install.md before installing.")
+        raise BridgeError("Android Binder 커널 모듈이 없습니다. Binder를 지원하는 Linux 커널을 준비한 뒤 다시 실행하세요.")
     if Path("/dev/binderfs/binder").exists():
         lines = ["services:", "  redroid:", "    volumes:"]
         for name in ("binder", "hwbinder", "vndbinder"):
@@ -294,9 +328,7 @@ def image_config(args):
         }
     else:
         if not args.manifest:
-            raise RuntimeError(
-                "Choose --manifest release.json from a GitHub release, or --source to build this checkout."
-            )
+            raise BridgeError("--manifest로 GitHub 릴리스의 release.json을 지정하거나, --source로 이 소스를 빌드하세요.")
         refs = manifest(args.manifest)
     return {
         "COLLECTOR_IMAGE": refs["server"],
@@ -316,7 +348,7 @@ def prepare_android_builder():
         r"^FROM --platform=linux/amd64 (\S+) AS android-build$", dockerfile, re.MULTILINE
     )
     if not image:
-        raise RuntimeError("Cannot identify the Android build image")
+        raise BridgeError("Android 빌드 이미지를 확인할 수 없습니다. 소스 빌드를 다시 시도하세요.")
     probe = [
         "docker",
         "run",
@@ -357,9 +389,11 @@ def prepare_images(args):
     env_update(refs)
     try:
         if args.source:
+            progress("소스에서 이미지 만드는 중… 처음에는 수십 분 걸릴 수 있습니다.")
             prepare_android_builder()
             compose("build", "api", "device-agent", "gateway")
         else:
+            progress("이미지 내려받는 중…")
             compose("pull", *SERVICES, "dot-plugin", "dot-control", "dot-ingress")
     except BaseException:
         atomic(ROOT / ".env", previous)
@@ -381,21 +415,24 @@ def install(args):
                 "DOT_HTTP_PORT": str(args.mcp_port or 18787),
             }
         )
+    progress("실행 환경 확인 중…")
     host_check()
     existing = compose("ps", "--all", "--services", capture=True).splitlines()
     if existing and not (ROOT / "secrets/ingest_token").exists():
-        raise RuntimeError(
-            "Existing containers have no local credentials. Restore the matching secrets first."
-        )
+        raise BridgeError("기존 컨테이너에 맞는 인증 키가 이 폴더에 없습니다. 같은 설치의 secrets/ 폴더를 먼저 복구하세요.")
+    progress("인증 키 준비 중…")
     init_secrets(args.source)
     if (ROOT / ".bridge/installed").exists() or existing:
+        progress("서비스 시작 중…")
         compose("up", "-d", "--no-build", "--no-recreate", *services())
         atomic(ROOT / ".bridge/installed", "1\n")
         print("기존 설치를 유지했습니다. 이미지를 변경하려면 update를 사용하세요.")
         return
     prepare_images(args)
+    progress("서비스 시작 중…")
     compose("up", "-d", "--no-build", *services())
     atomic(ROOT / ".bridge/installed", "1\n")
+    share_code()
     print(
         "컨테이너를 시작했습니다. ./bridge passkey-login으로 패스키를 등록하세요.\n"
         "AI 연결은 선택 사항입니다. 나중에 ./bridge setup-connection으로 설정할 수 있습니다."
@@ -452,19 +489,55 @@ def doctor(report=True):
             for name in ("openai_tunnel_api_key", "mcp_tunnel_authorization")
             if not (ROOT / "secrets" / name).is_file()
         ]
-    if report:
-        print(json.dumps(reports, indent=2))
     expected = set(services())
     healthy = {
         row["Service"]
         for row in reports["services"]
         if row["State"] == "running" and row["Health"] in ("", "healthy")
     }
-    return (
+    ok = (
         all(reports[name]["ok"] for name in ("docker", "compose", "binder"))
         and not reports["missing_secrets"]
         and expected <= healthy
     )
+    if report == "json":
+        print(json.dumps(reports, indent=2))
+    elif report:
+        print(doctor_text(reports, expected, ok))
+    return ok
+
+
+def doctor_text(reports, expected, ok):
+    def line(label, good, detail=""):
+        return f"  {label}: {'정상' if good else '확인 필요'}{f' ({detail})' if detail else ''}"
+
+    states = {"running": "실행 중", "exited": "중지됨", "created": "시작 전", "restarting": "다시 시작 중"}
+    lines = [
+        "KakaoTalk Bridge 상태 점검",
+        line("Docker", reports["docker"]["ok"], reports["docker"].get("version", "")),
+        line("Docker Compose", reports["compose"]["ok"], reports["compose"].get("version", "")),
+        line("Android Binder", reports["binder"]["ok"], "" if reports["binder"]["ok"] else "Binder를 지원하는 커널이 필요합니다"),
+        line(
+            "인증 키",
+            not reports["missing_secrets"],
+            "없음: " + ", ".join(reports["missing_secrets"]) if reports["missing_secrets"] else "",
+        ),
+        "  서비스:",
+    ]
+    running = {row["Service"]: row for row in reports["services"]}
+    for name in sorted(expected | set(running)):
+        row = running.get(name)
+        state = states.get(row["State"], row["State"]) if row else "없음"
+        if row and name not in expected and row["State"] == "exited":
+            state = "1회 실행 완료"
+        health = {"healthy": ", 응답 정상", "unhealthy": ", 응답 없음", "starting": ", 시작 확인 중"}.get(
+            row.get("Health", "") if row else "", ""
+        )
+        lines.append(f"    {name}: {state}{health}")
+    if "tunnel" in reports:
+        lines.append(line("개인 OpenAI 터널", reports["tunnel"]["ready"], "연결됨" if reports["tunnel"]["ready"] else "연결 대기"))
+    lines.append("결과: " + ("모든 항목이 정상입니다." if ok else "확인이 필요한 항목이 있습니다. 위 내용을 확인하세요."))
+    return "\n".join(lines)
 
 
 def admin_code():
@@ -507,7 +580,7 @@ def ensure_passkey_verifier_secret():
         atomic(path, secrets.token_urlsafe(32) + "\n")
         path.chmod(0o444)
     if path.stat().st_size < 32:
-        raise RuntimeError("Invalid mcp_passkey_token; restore it before continuing")
+        raise BridgeError("secrets/mcp_passkey_token이 올바르지 않습니다. 백업에서 복구한 뒤 계속하세요.")
 
 
 def migrate_auth_modes():
@@ -579,7 +652,7 @@ def passkey_setup(args):
         if public:
             validate_public_url(public)
             if public != read_env().get("DOT_PUBLIC_URL"):
-                raise ValueError("Run ./bridge connect --url with the public origin first")
+                raise BridgeError("먼저 ./bridge connect --url <공개 주소>로 공개 HTTPS 주소를 설정하세요.")
         # A localhost passkey cannot authenticate a different public RP. Keep
         # the admin identity and use the existing code-confirmation consent flow.
         passkey_public = (
@@ -624,7 +697,7 @@ def passkey_setup(args):
         if args.enroll or not info["registered"]:
             token = helper("enroll")
             if not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
-                raise RuntimeError("Invalid enrollment response")
+                raise BridgeError("패스키 등록 응답이 올바르지 않습니다. 잠시 후 다시 시도하세요.")
             link += "#passkey-setup=" + token
     if args.link_only:
         print(link)
@@ -652,15 +725,13 @@ def private_url(value):
         or parsed.fragment
         or parsed.path not in ("", "/admin/")
     ):
-        raise ValueError(
-            "Use an HTTPS admin address or http://localhost:<port>, without query parameters"
-        )
+        raise BridgeError("관리 화면 주소는 HTTPS 주소 또는 http://localhost:<포트> 형식으로, ? 뒤 값 없이 입력하세요.")
     return value.rstrip("/").removesuffix("/admin") + "/admin/"
 
 
 def open_admin(code, url):
     if not re.fullmatch(r"[A-Za-z0-9_-]{43}", code):
-        raise RuntimeError("Invalid pairing response")
+        raise BridgeError("관리 화면 연결 응답이 올바르지 않습니다. 잠시 후 다시 시도하세요.")
     link = private_url(url) + "#pair=" + code
     print("일회용 관리 화면 링크 (10분 후 만료):\n" + link)
     webbrowser.open(link)
@@ -678,7 +749,7 @@ def validate_public_url(url):
         or parsed.fragment
         or parsed.hostname.endswith(".invalid")
     ):
-        raise ValueError("Use your public HTTPS origin, with no trailing slash")
+        raise BridgeError("공개 HTTPS 주소를 끝에 /를 붙이지 않고 입력하세요. 예: https://bridge.example.com")
 
 
 def connect(url):
@@ -699,7 +770,7 @@ def tailscale_binary():
 def expose(args):
     tailscale = tailscale_binary()
     if not tailscale:
-        raise RuntimeError("Install Tailscale and sign in first, then rerun ./bridge expose.")
+        raise BridgeError("Tailscale을 설치하고 로그인한 뒤 ./bridge expose를 다시 실행하세요.")
     tailscale = (["sudo"] if platform.system() == "Linux" and os.geteuid() != 0 else []) + [
         tailscale
     ]
@@ -708,16 +779,14 @@ def expose(args):
     if status.get("BackendState") != "Running" or not re.fullmatch(
         r"[a-z0-9.-]+\.ts\.net", hostname
     ):
-        raise RuntimeError("Sign in to Tailscale and enable MagicDNS first.")
+        raise BridgeError("Tailscale에 로그인하고 MagicDNS를 켠 뒤 다시 실행하세요.")
     existing = json.loads(run([*tailscale, "serve", "status", "--json"], capture=True))
     record_path = ROOT / ".bridge/expose.json"
     owned = json.loads(record_path.read_text()) if record_path.exists() else None
     if existing and (
         not owned or owned.get("hostname") != hostname or owned.get("config") != existing
     ):
-        raise RuntimeError(
-            "Tailscale already serves another app. Its routes were preserved; follow the manual ports in docs/onboarding.md."
-        )
+        raise BridgeError("Tailscale이 이미 다른 앱을 공개하고 있습니다. 기존 설정은 그대로 두었습니다. 고급 설치 안내의 수동 포트 설정을 따르세요.")
     if platform.system() == "Darwin" and not args.local:
         config = json.loads((ROOT / ".bridge/mac.json").read_text())
         local = argparse.Namespace(command="connect", url="https://" + hostname)
@@ -796,7 +865,7 @@ def snapshot_command(mode, names, *, key=None, stage=None, work=None, image=None
     key_path = str(key or ROOT / "secrets/backup_key")
     project_path = str(stage or ROOT)
     if any(c in key_path + project_path for c in ",:\r\n"):
-        raise ValueError("Mount paths may not contain commas, colons or newlines")
+        raise BridgeError("설치 경로에 쉼표, 콜론, 줄바꿈이 들어갈 수 없습니다. 다른 위치에 설치하세요.")
     cmd += ["--mount", f"type=bind,src={key_path},dst=/key,readonly"]
     cmd += ["-v", f"{stage or ROOT}:/project" + (":ro" if mode == "create" else "")]
     if work:
@@ -824,23 +893,27 @@ def backup(helper_image=None, name=None):
     )
     names = {name: value for name, value in names.items() if value in existing}
     running = compose("ps", "--status", "running", "--services", capture=True).splitlines()
+    progress("백업을 위해 서비스를 잠시 멈추는 중…")
     compose("stop")
     try:
+        progress("암호화 백업 만드는 중…")
         with destination.open("xb") as output:
             destination.chmod(0o600)
             result = subprocess.run(
                 snapshot_command("create", names, image=helper_image),
                 cwd=ROOT,
                 stdout=output,
+                stderr=diagnostics(),
                 check=False,
             )
         if result.returncode:
             destination.unlink(missing_ok=True)
-            raise RuntimeError("Backup failed; partial archive removed")
+            raise BridgeError("백업을 만들지 못했습니다. 일부만 만들어진 파일은 삭제했습니다.")
     finally:
         if running:
+            progress("서비스 다시 시작 중…")
             compose("start", *running)
-    print(f"암호화된 백업: {destination}\n복구에 필요한 secrets/backup_key는 별도로 보관하세요.")
+    notice(f"암호화된 백업: {destination}\n복구에 필요한 secrets/backup_key는 별도로 보관하세요.")
     return destination
 
 
@@ -867,9 +940,7 @@ def recover_activation():
 def activate_restore(stage, names):
     for item in ("secrets", ".env"):
         if not (stage / item).exists() or not (ROOT / item).exists():
-            raise RuntimeError(
-                "Incomplete snapshot or installation; original configuration retained"
-            )
+            raise BridgeError("백업 또는 설치가 완전하지 않아 기존 설정을 유지했습니다.")
     override = ROOT / ".bridge/volumes.yaml"
     journal = ROOT / ".bridge/restore-activation.json"
     atomic(
@@ -896,11 +967,9 @@ def activate_restore(stage, names):
 def restore(path, key):
     archive, key = Path(path).resolve(), Path(key).resolve()
     if not archive.is_file() or not key.is_file():
-        raise ValueError("Archive and recovery key must exist")
+        raise BridgeError("백업 파일과 복구 키 파일을 모두 지정하세요.")
     if compose("ps", "--status", "running", "--services", capture=True):
-        raise RuntimeError(
-            "Stop the stack with ./bridge stop before restoring. Old volumes will be retained."
-        )
+        raise BridgeError("복구하기 전에 ./bridge stop으로 서비스를 중지하세요. 기존 데이터는 보존됩니다.")
     suffix = "restore-" + secrets.token_hex(6)
     names = {
         name: read_env().get("COMPOSE_PROJECT_NAME", "kakaotalk-bridge")
@@ -916,17 +985,18 @@ def restore(path, key):
     for name in [*names.values(), work]:
         run(["docker", "volume", "create", name], capture=True)
     try:
+        progress("백업을 검증하고 새 저장소로 복구하는 중…")
         with archive.open("rb") as source:
             result = subprocess.run(
                 snapshot_command("restore", names, key=key, stage=stage, work=work),
                 cwd=ROOT,
                 stdin=source,
+                stdout=diagnostics(),
+                stderr=diagnostics(),
                 check=False,
             )
         if result.returncode:
-            raise RuntimeError(
-                "Restore verification failed. Existing volumes and keys were not changed."
-            )
+            raise BridgeError("복구한 데이터 검증에 실패했습니다. 복구 키와 백업 파일을 확인하세요. 기존 데이터와 키는 바꾸지 않았습니다.")
         activate_restore(stage, names)
         restored = read_env()
         if restored.get("OPENAI_TUNNEL_ENABLED") == "1":
@@ -936,7 +1006,7 @@ def restore(path, key):
             )
         else:
             (ROOT / ".bridge/tunnel.json").unlink(missing_ok=True)
-        print(
+        notice(
             "새 볼륨으로 복구했습니다. 이전 볼륨과 설정은 유지됩니다. ./bridge start를 실행하고 두 기기의 로그인을 확인하세요. 외부 이벤트 구독은 다시 만들어야 합니다."
         )
     finally:
@@ -956,14 +1026,18 @@ def update(args):
         backup(helper_image=image_config(args)["COLLECTOR_IMAGE"])
         atomic(ROOT / ".env", new)
         migrate_auth_modes()
+        progress("새 버전으로 서비스 시작 중…")
         compose("up", "-d", "--no-build", *services())
+        progress("서비스 응답 확인 중…")
         for _ in range(30):
             time.sleep(2)
             if doctor(report=False):
+                share_code()
                 print("업데이트를 완료했습니다. 기존 Android 앱 데이터와 기기 등록은 유지됩니다.")
                 return
-        raise RuntimeError("Health check failed after update")
+        raise BridgeError("업데이트 후 서비스가 정상적으로 시작되지 않아 이전 버전으로 되돌렸습니다. ./bridge doctor로 상태를 확인하세요.")
     except BaseException:
+        progress("이전 버전으로 되돌리는 중…")
         atomic(ROOT / ".env", old)
         compose("up", "-d", "--no-build", *services())
         raise
@@ -1024,7 +1098,7 @@ def package_source(destination):
 def available_port(preferred, requested=None, exclude=()):
     port = requested if requested is not None else preferred
     if not 1024 <= port <= 65535:
-        raise ValueError("Choose a port between 1024 and 65535")
+        raise BridgeError("포트는 1024에서 65535 사이로 지정하세요.")
     with socket.socket() as probe:
         try:
             if port in exclude:
@@ -1032,17 +1106,17 @@ def available_port(preferred, requested=None, exclude=()):
             probe.bind(("127.0.0.1", port))
         except OSError:
             if requested is not None:
-                raise RuntimeError(f"Port {port} is already in use. Choose another port.") from None
+                raise BridgeError(f"{port} 포트가 이미 사용 중입니다. 다른 포트를 지정하세요.") from None
             probe.bind(("127.0.0.1", 0))
         return probe.getsockname()[1]
 
 
 def mac(args):
     if not shutil.which("limactl"):
-        raise RuntimeError("Install Lima first: brew install lima. Docker Desktop is not required.")
+        raise BridgeError("Lima를 먼저 설치하세요: brew install lima (Docker Desktop은 필요하지 않습니다).")
     config_path = ROOT / ".bridge/mac.json"
     if not config_path.exists() and args.command != "install":
-        raise RuntimeError("Run ./bridge install first; this checkout has no managed Lima runtime.")
+        raise BridgeError("이 설치에는 관리되는 Lima VM이 없습니다. ./bridge up으로 먼저 설치하세요.")
     existing_config = config_path.exists()
     if existing_config:
         config = json.loads(config_path.read_text())
@@ -1062,29 +1136,28 @@ def mac(args):
         return run(["limactl", "shell", "--workdir=/", vm, "sudo", *command], capture=capture)
 
     def invoke(*command, capture=False):
-        return guest("python3", directory + "/ops/cli.py", "--local", *command, capture=capture)
+        from ops.setup_output import bridge_command
+
+        child = bridge_command(*command, entry=["python3", directory + "/ops/cli.py", "--local"])
+        return guest(*child, capture=capture)
 
     if args.command in ("install", "update"):
         instances = run(["limactl", "list", "--format", "{{.Name}}"], capture=True).splitlines()
         if vm in instances and not existing_config:
-            raise RuntimeError(
-                "A VM with this name already exists outside this installation. Choose another --vm name."
-            )
+            raise BridgeError("같은 이름의 VM이 이미 다른 용도로 있습니다. --vm으로 다른 이름을 지정하세요.")
         if vm not in instances:
             if (
                 not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,48}", vm)
                 or not 1024 <= config["admin_port"] <= 65535
             ):
-                raise ValueError("Invalid VM name or admin port")
+                raise BridgeError("VM 이름 또는 관리 포트가 올바르지 않습니다.")
             for port in (config["admin_port"], config.get("mcp_port", 18787)):
                 with socket.socket() as probe:
                     probe.settimeout(0.2)
                     if probe.connect_ex(("127.0.0.1", port)) == 0:
-                        raise RuntimeError(
-                            f"Local port {port} is already in use; preserve the existing service and choose a free admin port or follow manual setup."
-                        )
+                        raise BridgeError(f"{port} 포트가 이미 사용 중입니다. 기존 서비스는 그대로 두고 비어 있는 포트를 --admin-port로 지정하세요.")
             if args.command != "install":
-                raise RuntimeError("Install first")
+                raise BridgeError("먼저 ./bridge up으로 설치하세요.")
             template = (
                 (ROOT / "deploy/lima.yaml")
                 .read_text()
@@ -1109,10 +1182,13 @@ def mac(args):
                 # Persist port choices before provisioning so a failed first boot
                 # resumes the same VM and forwarding configuration.
                 atomic(config_path, json.dumps(config))
+                progress("가상 머신 만드는 중… 처음 한 번은 몇 분 걸릴 수 있습니다.")
                 run(["limactl", "start", "--tty=false", "--name", vm, str(path)])
         else:
+            progress("가상 머신 시작 중…")
             run(["limactl", "start", "--tty=false", vm])
         atomic(config_path, json.dumps(config))
+        progress("설치 파일을 가상 머신으로 복사하는 중…")
         with tempfile.TemporaryDirectory() as folder:
             archive = Path(folder) / "source.tar.gz"
             package_source(archive)
@@ -1219,7 +1295,7 @@ def mac(args):
         target = "/tmp/kakao-import-" + secrets.token_hex(8)
         files = list(Path(args.folder).glob("*.apk"))
         if not files:
-            raise ValueError("No APK files in this folder")
+            raise BridgeError("이 폴더에 APK 파일이 없습니다.")
         # Use a private staging directory, not a shared mount of the host home.
         run(["limactl", "shell", "--workdir=/", vm, "mkdir", "-m", "700", target])
         try:
@@ -1230,6 +1306,7 @@ def mac(args):
     elif args.command == "backup":
         name = time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(3) + ".kcs"
         invoke("backup", "--name", name)
+        progress("백업을 Mac으로 복사하는 중…")
         destination = ROOT / "backups" / name
         destination.parent.mkdir(mode=0o700, exist_ok=True)
         with destination.open("xb") as output:
@@ -1244,14 +1321,16 @@ def mac(args):
                     directory + "/backups/" + name,
                 ],
                 stdout=output,
+                stderr=diagnostics(),
                 check=False,
             )
         if result.returncode:
             destination.unlink(missing_ok=True)
-            raise RuntimeError("Backup remains in the VM; copying to the Mac failed")
-        print("암호화된 백업을 복사했습니다: " + str(destination))
-        print(
-            "백업과 복구 키는 VM 안에 있습니다. backups/와 secrets/backup_key를 각각 별도의 안전한 저장소에 복사하세요. docs/onboarding.md를 참고하세요."
+            raise BridgeError("백업은 VM 안에 만들어졌지만 Mac으로 복사하지 못했습니다. 다시 실행하세요.")
+        notice(
+            "암호화된 백업을 복사했습니다: "
+            + str(destination)
+            + "\n백업과 복구 키는 VM 안에 있습니다. backups/와 secrets/backup_key를 각각 별도의 안전한 저장소에 복사하세요."
         )
     elif args.command == "restore":
         remote = "/tmp/kakao-restore-" + secrets.token_hex(8)
@@ -1278,10 +1357,8 @@ def mac(args):
         if args.command == "start":
             instances = run(["limactl", "list", "--format", "{{.Name}}"], capture=True).splitlines()
             if vm not in instances:
-                raise RuntimeError(
-                    "The managed Lima VM no longer exists. Run ./bridge up to recreate it "
-                    "from the project template."
-                )
+                raise BridgeError("관리되는 Lima VM이 없습니다. ./bridge up을 실행하면 다시 만듭니다.")
+            progress("가상 머신 시작 중…")
             run(["limactl", "start", "--tty=false", vm])
         options = [args.command]
         if args.command == "connect":
@@ -1295,7 +1372,10 @@ def main():
     os.umask(0o077)
     parser = KoreanArgumentParser(description="KakaoTalk Bridge 설치 및 관리")
     parser.add_argument("--local", action="store_true", help=argparse.SUPPRESS)
-    sub = parser.add_subparsers(dest="command", required=True)
+    # Child commands report progress and errors to the Bridge process that started them.
+    parser.add_argument("--progress", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--raw-output", action="store_true", help=argparse.SUPPRESS)
+    sub = parser.add_subparsers(dest="command", required=True, metavar="명령")
     from ops.onboarding import add_arguments
 
     add_arguments(sub.add_parser("up", help="실행 환경을 준비하고 카카오톡 설정 화면 열기"))
@@ -1307,19 +1387,24 @@ def main():
     connection_arguments(sub.add_parser("setup-connection", help="AI 연결 방식 선택 및 설정"))
     sub.add_parser("mcp", help="로컬 MCP stdio 어댑터 실행")
     agent = sub.add_parser("setup-agent", help="관리 화면의 연결 설정 서비스 관리")
-    agent.add_argument("agent_command", choices=("install", "serve", "job"))
-    for name in ("install", "update"):
-        cmd = sub.add_parser(name)
+    agent.add_argument("agent_command", choices=("install", "serve", "job"), metavar="작업")
+    for name, description in (
+        ("install", "Bridge 설치 (보통 ./bridge up을 사용)"),
+        ("update", "같은 설치에서 이미지 업데이트 (보통 ./bridge upgrade를 사용)"),
+    ):
+        cmd = sub.add_parser(name, help=description)
         mode = cmd.add_mutually_exclusive_group()
-        mode.add_argument("--source", action="store_true")
-        mode.add_argument("--manifest")
-        cmd.add_argument("--vm", default="kakaotalk-bridge")
-        cmd.add_argument("--admin-port", type=int)
-        cmd.add_argument("--mcp-port", type=int)
+        mode.add_argument("--source", action="store_true", help="현재 소스 빌드")
+        mode.add_argument("--manifest", metavar="파일", help="검증된 릴리스 정보(release.json)")
+        cmd.add_argument("--vm", default="kakaotalk-bridge", metavar="이름", help="Mac의 Lima VM 이름")
+        cmd.add_argument("--admin-port", type=int, metavar="포트", help="내부 관리 포트")
+        cmd.add_argument("--mcp-port", type=int, metavar="포트", help="로컬 공용 진입 포트")
     cmd = sub.add_parser("upgrade", help="검증된 릴리스로 설치 파일과 이미지를 함께 업데이트")
-    cmd.add_argument("--version", default="latest", help="릴리스 버전 (기본값: 최신 정식 릴리스)")
-    cmd = sub.add_parser("admin")
-    cmd.add_argument("--url")
+    cmd.add_argument(
+        "--version", default="latest", metavar="버전", help="릴리스 버전 (기본값: 최신 정식 릴리스)"
+    )
+    cmd = sub.add_parser("admin", help="관리 화면 열기")
+    cmd.add_argument("--url", metavar="주소", help="열 관리 화면 주소")
     cmd.add_argument("--recovery", action="store_true", help="일회용 긴급 복구 링크 발급")
     cmd.add_argument("--code-only", action="store_true", help=argparse.SUPPRESS)
     cmd.add_argument("--info", action="store_true", help=argparse.SUPPRESS)
@@ -1327,24 +1412,37 @@ def main():
         "passkey-login",
         help="관리 화면과 MCP의 패스키 설정",
     )
-    cmd.add_argument("--url", help="관리 화면 HTTPS 주소 또는 http://localhost:<port>")
-    cmd.add_argument("--public-url", help="공개 HTTPS MCP 주소")
+    cmd.add_argument(
+        "--url", metavar="주소", help="관리 화면 HTTPS 주소 또는 http://localhost:<포트>"
+    )
+    cmd.add_argument("--public-url", metavar="주소", help="공개 HTTPS MCP 주소")
     cmd.add_argument("--enroll", action="store_true", help="일회용 등록·복구 링크 발급")
     cmd.add_argument("--link-only", action="store_true", help=argparse.SUPPRESS)
-    cmd = sub.add_parser("connect")
-    cmd.add_argument("--url", required=True)
-    cmd = sub.add_parser("import-apks")
-    cmd.add_argument("folder")
-    cmd = sub.add_parser("restore")
-    cmd.add_argument("file")
-    cmd.add_argument("--key", required=True)
-    cmd = sub.add_parser("backup")
+    cmd = sub.add_parser("connect", help="기존 HTTPS 프록시 주소를 MCP 주소로 설정")
+    cmd.add_argument("--url", required=True, metavar="주소", help="공개 HTTPS 주소")
+    cmd = sub.add_parser("import-apks", help="공식 카카오톡 APK 세트 가져오기")
+    cmd.add_argument("folder", metavar="폴더", help="APK 파일이 있는 폴더")
+    cmd = sub.add_parser("restore", help="./bridge backup으로 만든 백업 복구")
+    cmd.add_argument("file", metavar="백업파일", help=".kcs 백업 파일")
+    cmd.add_argument("--key", required=True, metavar="키파일", help="백업할 때의 secrets/backup_key")
+    cmd = sub.add_parser("backup", help="Android·수집 데이터·설정 전체를 암호화해 백업")
     cmd.add_argument("--name", help=argparse.SUPPRESS)
-    for name in ("doctor", "start", "stop", "reset-password", "expose"):
-        sub.add_parser(name)
+    cmd = sub.add_parser("doctor", help="실행 환경과 서비스 상태 점검")
+    cmd.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력")
+    for name, description in (
+        ("start", "서비스 시작"),
+        ("stop", "서비스 중지 (데이터와 로그인은 유지)"),
+        ("reset-password", "로컬 관리자 비밀번호 초기화 (ADMIN_AUTH_MODE=local 전용)"),
+        ("expose", "Tailscale로 공개 HTTPS 주소 만들기"),
+    ):
+        sub.add_parser(name, help=description)
     args = parser.parse_args()
-    from ops.setup_output import operation, report_error
+    from ops.setup_output import CHILD, RAW, operation, report_error
 
+    if args.progress:
+        os.environ[CHILD] = "1"
+    if args.raw_output:
+        os.environ[RAW] = "1"
     try:
         with operation(args):
             execute(args)
@@ -1352,9 +1450,9 @@ def main():
         print("중단되었습니다. 같은 명령을 실행해 이어서 진행하세요.", file=sys.stderr)
         raise SystemExit(130) from None
     except subprocess.TimeoutExpired:
-        print("설정 명령의 제한 시간이 지났습니다. 같은 명령으로 다시 시도하세요.", file=sys.stderr)
+        report_error(BridgeError("명령의 제한 시간이 지났습니다. 같은 명령으로 다시 시도하세요."))
         raise SystemExit(1) from None
-    except (RuntimeError, ValueError, OSError) as exc:
+    except Exception as exc:  # noqa: BLE001 — never show a traceback; keep it in the log
         report_error(exc)
         raise SystemExit(1) from None
 
@@ -1392,7 +1490,7 @@ def execute(args):
         and args.name
         and not re.fullmatch(r"[a-zA-Z0-9_-]+\.kcs", args.name)
     ):
-        raise ValueError("Invalid snapshot filename")
+        raise BridgeError("백업 파일 이름이 올바르지 않습니다.")
     if args.local or platform.system() == "Linux":
         recover_activation()
     if args.command == "passkey-login":
@@ -1418,7 +1516,7 @@ def execute(args):
             info = admin_info()
             open_admin_page(args.url or info.get("origin") or admin_url())
     elif args.command == "doctor":
-        if not doctor():
+        if not doctor(report="json" if args.json else True):
             raise SystemExit(1)
     elif args.command == "mcp":
         compose("run", "--rm", "--no-deps", "-T", "mcp")
@@ -1435,7 +1533,7 @@ def execute(args):
     elif args.command == "import-apks":
         files = sorted(Path(args.folder).glob("*.apk"))
         if not files:
-            raise ValueError("No APK files in this folder")
+            raise BridgeError("이 폴더에 APK 파일이 없습니다.")
         destination = ROOT / "inputs/kakao"
         destination.mkdir(parents=True, exist_ok=True)
         existing = sorted(destination.glob("*.apk"))
@@ -1451,9 +1549,7 @@ def execute(args):
             if hashes(existing) == hashes(files):
                 print("이미 가져온 APK 세트입니다. 기존 파일을 유지합니다.")
                 return
-            raise RuntimeError(
-                "inputs/kakao already contains APKs. Move the old set aside first; do not mix versions."
-            )
+            raise BridgeError("inputs/kakao에 이미 다른 APK 세트가 있습니다. 버전이 섞이지 않도록 기존 파일을 다른 곳으로 옮긴 뒤 다시 실행하세요.")
         for index, file in enumerate(files):
             shutil.copyfile(file, destination / f"{index}.apk")
         print("APK 세트를 복사했습니다. 관리 화면의 ‘수집 구성 요소 설치’에서 검증하고 설치하세요.")

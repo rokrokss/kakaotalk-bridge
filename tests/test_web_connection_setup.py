@@ -216,7 +216,7 @@ def test_tunnel_uses_private_temporary_file_then_explicit_approval(root, monkeyp
     cli.atomic(root / "secrets/openai_tunnel_api_key", KEY)
     cli.env_update({"OPENAI_TUNNEL_ID": TUNNEL})
     assert setup_agent.execute(tunnel_request(api_key=""))["state"] == "ready"
-    with pytest.raises(ValueError, match="new tunnel"):
+    with pytest.raises(ValueError, match="새 터널 ID"):
         setup_agent.execute(tunnel_request(api_key="", tunnel_id="tunnel_" + "b" * 32))
     assert KEY not in json.dumps(setup_agent.context())
 

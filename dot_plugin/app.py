@@ -15,7 +15,10 @@ from dot_plugin.collector import Collector, QueryError
 from dot_plugin.config import EVENT, PROTOCOL, SCOPES, Config
 from dot_plugin.events import Events, RpcError
 from dot_plugin.network import DeliveryError
-from dot_plugin.pages import browser_page, page
+from dot_plugin.pages import browser_page, error_page, page
+
+# Pages a person opens in a browser; protocol endpoints keep JSON errors.
+BROWSER_ROUTES = {"/authorize", "/authorize/passkey/consent"}
 from dot_plugin.storage import State
 from server.app import BodyLimit
 from server.query_models import ContextPage, ConversationPage, MessagePage
@@ -322,6 +325,8 @@ def create_app(
                 ),
                 status_code=503,
             )
+        if request.url.path in BROWSER_ROUTES:
+            return error_page(error.reason, status_code=error.status)
         headers = (
             {"WWW-Authenticate": auth.challenge()}
             if error.status == 401 and auth.transport == "oauth"
@@ -331,6 +336,8 @@ def create_app(
 
     @app.exception_handler(DeliveryError)
     async def network_error(request, error):
+        if request.url.path in BROWSER_ROUTES:
+            return error_page("metadata_fetch_failed", status_code=502)
         return JSONResponse({"error": "metadata_fetch_failed"}, status_code=502)
 
     @app.get("/health/live")

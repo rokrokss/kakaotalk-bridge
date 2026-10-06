@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 from ops import cli, onboarding, tunnel
+from ops.errors import BridgeError
 
 METHODS = ("none", "stdio", "https", "tailscale", "openai-tunnel")
 
@@ -23,7 +24,7 @@ def add_arguments(parser):
 
 def ask(prompt):
     if not sys.stdin.isatty():
-        raise ValueError("Use --method and its required options when running non-interactively")
+        raise BridgeError("입력할 수 없는 환경에서는 --method와 필요한 옵션을 함께 지정하세요.")
     return input(prompt).strip()
 
 
@@ -40,12 +41,12 @@ def setup(args):
         )
         choice = ask("선택 [1]: ") or "1"
         if choice not in {"1", "2", "3", "4", "5"}:
-            raise ValueError("Choose a number from 1 to 5")
+            raise BridgeError("1부터 5 사이의 번호를 선택하세요.")
         method = METHODS[int(choice) - 1]
     if args.url and method != "https":
-        raise ValueError("--url requires --method https")
+        raise BridgeError("--url은 --method https와 함께 사용하세요.")
     if (args.tunnel_id or args.api_key_file) and method != "openai-tunnel":
-        raise ValueError("Tunnel credentials require --method openai-tunnel")
+        raise BridgeError("터널 정보는 --method openai-tunnel과 함께 사용하세요.")
     if method == "none":
         print("연결을 변경하지 않았습니다. AI 연결 없이도 수집과 관리 화면을 사용할 수 있습니다.")
         return
@@ -81,7 +82,7 @@ def setup(args):
             args.tunnel_id = args.tunnel_id or ask("터널 ID: ")
             if not args.api_key_file:
                 if not sys.stdin.isatty():
-                    raise ValueError("Supply --api-key-file when running non-interactively")
+                    raise BridgeError("입력할 수 없는 환경에서는 --api-key-file을 지정하세요.")
                 path = Path(folder) / "runtime-key"
                 cli.atomic(path, getpass.getpass("실행용 API 키 (입력 내용 숨김): ").strip() + "\n")
                 args.api_key_file = str(path)
@@ -98,7 +99,7 @@ def setup(args):
         with onboarding.installation_lock():
             runtime = onboarding.Runtime()
             if not runtime.installed():
-                raise RuntimeError("Run ./bridge up before adding an AI connection")
+                raise BridgeError("AI 연결을 추가하기 전에 ./bridge up으로 Bridge를 먼저 설치하세요.")
             runtime.call("start")
             if method == "tailscale":
                 prepare = (

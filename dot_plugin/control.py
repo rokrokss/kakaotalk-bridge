@@ -59,7 +59,7 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
             passkeys = authority()
         info = passkeys.call("admin", "info", {})
         if not info.get("registered"):
-            raise HTTPException(409, "Register an admin passkey first")
+            raise HTTPException(409, "먼저 관리자 패스키를 등록하세요.")
         return info["policy"]
 
     def tunnel_status():
@@ -87,7 +87,7 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
     @app.post("/tunnel/decision")
     def tunnel_decide(body: TunnelDecision):
         if not config.tunnel_id or body.tunnel_id != config.tunnel_id:
-            raise HTTPException(409, "Tunnel configuration changed. Refresh Connections.")
+            raise HTTPException(409, "터널 설정이 바뀌었습니다. ‘연결 새로고침’을 누른 뒤 다시 승인하세요.")
         policy = owner_policy() if body.approve else None
         with state.transaction() as db:
             db.execute("BEGIN IMMEDIATE")

@@ -15,6 +15,8 @@ from pathlib import Path, PurePosixPath
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
+from ops.errors import BridgeError
+
 MAGIC = b"KCS1\n"
 CHUNK = 1024 * 1024
 VOLUMES = {
@@ -75,7 +77,7 @@ def create(output, key, snapshot, project):
                 archive.add(snapshot / name, arcname="snapshot/" + name, filter=attributes)
         for name in (".env", "secrets"):
             if not (project / name).exists():
-                raise ValueError("Incomplete installation; cannot snapshot")
+                raise BridgeError("설치가 완전하지 않아 백업할 수 없습니다.")
             archive.add(project / name, arcname="project/" + name, filter=attributes)
     encrypted.finish()
 
@@ -83,7 +85,7 @@ def create(output, key, snapshot, project):
 def decrypt(source, destination, key):
     header = source.read(len(MAGIC) + 12)
     if len(header) != len(MAGIC) + 12 or not header.startswith(MAGIC):
-        raise ValueError("Unsupported snapshot")
+        raise BridgeError("지원하지 않는 백업 파일입니다.")
     decryptor = Cipher(algorithms.AES(key), modes.GCM(header[len(MAGIC) :])).decryptor()
     decryptor.authenticate_additional_data(header)
     tail = b""
@@ -95,7 +97,7 @@ def decrypt(source, destination, key):
                 output.write(decryptor.update(data[:-16]))
             tail = data[-16:]
         if len(tail) != 16:
-            raise ValueError("Truncated snapshot")
+            raise BridgeError("백업 파일이 잘려 있습니다.")
         output.write(decryptor.finalize_with_tag(tail))
 
 
@@ -117,9 +119,9 @@ def extract_verified(plain, snapshot, project):
     for root in (snapshot, project):
         if root == snapshot:
             if any(any(p.iterdir()) for p in root.iterdir() if p.is_dir()):
-                raise ValueError("Restore volumes must be empty")
+                raise BridgeError("복구할 대상 저장소가 비어 있지 않습니다.")
         elif any(root.iterdir()):
-            raise ValueError("Restore configuration directory must be empty")
+            raise BridgeError("복구할 설정 폴더가 비어 있지 않습니다.")
     with tarfile.open(plain, "r:") as archive:
         members = archive.getmembers()
         targets = {m.name: member_target(m, snapshot, project) for m in members}
@@ -135,7 +137,7 @@ def extract_verified(plain, snapshot, project):
             }
             <= targets.keys()
         ):
-            raise ValueError("Incomplete snapshot")
+            raise BridgeError("백업 파일이 완전하지 않습니다.")
         links = {m.name for m in members if m.issym() or m.islnk()}
         for member in members:
             if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
@@ -183,7 +185,7 @@ def reset_external_state(snapshot, project):
     database = snapshot / "collector-data/collector.db"
     with sqlite3.connect(database) as db:
         if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-            raise ValueError("Invalid collector database")
+            raise BridgeError("백업의 수집 DB가 올바르지 않습니다.")
         db.execute(
             "INSERT INTO metadata VALUES('cursor_epoch',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (str(uuid.uuid4()),),
@@ -221,7 +223,7 @@ def main():
     os.umask(0o077)
     key = bytes.fromhex(Path("/key").read_text().strip())
     if len(key) != 32:
-        raise ValueError("Invalid recovery key")
+        raise BridgeError("복구 키가 올바르지 않습니다.")
     if sys.argv[1] == "create":
         create(sys.stdout.buffer, key, Path("/snapshot"), Path("/project"))
     elif sys.argv[1] == "restore":
@@ -235,7 +237,7 @@ if __name__ == "__main__":
         main()
     except Exception:  # noqa: BLE001 — do not print decrypted paths or data
         print(
-            "Snapshot operation failed. Check the recovery key, disk space and archive integrity.",
+            "백업 작업에 실패했습니다. 복구 키, 남은 디스크 공간, 백업 파일이 손상되지 않았는지 확인하세요.",
             file=sys.stderr,
         )
         raise SystemExit(1) from None

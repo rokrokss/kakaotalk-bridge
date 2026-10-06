@@ -270,7 +270,7 @@ def test_approval_requires_exact_origin_even_with_valid_ticket_cookie_and_key(pl
         headers["Origin"] = origin
     denied = client.post("/authorize", data=data, headers=headers, follow_redirects=False)
     assert denied.status_code == 403
-    assert denied.json() == {"error": "invalid_origin"}
+    assert "다른 주소에서 보낸 요청" in denied.text and "invalid_origin" not in denied.text
     assert denied.headers["referrer-policy"] == "no-referrer"
     # Rejection must not consume the valid browser-bound approval.
     approved = client.post(

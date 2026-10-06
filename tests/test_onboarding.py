@@ -83,7 +83,7 @@ def test_returning_user_starts_without_reinstall_or_new_registration(home, monke
 
 def test_missing_release_does_not_silently_build_source(home, monkeypatch):
     runtime = fake_runtime(monkeypatch)
-    with pytest.raises(RuntimeError, match="explicit --source"):
+    with pytest.raises(RuntimeError, match="--source를 지정"):
         onboarding.up(options())
     runtime.call.assert_not_called()
 
@@ -137,7 +137,7 @@ def test_failure_is_resumable_without_persisting_auth_links(home, monkeypatch, c
     runtime.wait_ready.side_effect = RuntimeError("not ready")
     opened = Mock()
     monkeypatch.setattr(onboarding.webbrowser, "open", opened)
-    with pytest.raises(RuntimeError, match="not ready"):
+    with pytest.raises(RuntimeError, match="not ready") as raised:
         onboarding.up(options("--source"))
     assert json.loads((home / ".bridge/onboarding.json").read_text()) == {
         "step": "runtime",
@@ -147,7 +147,8 @@ def test_failure_is_resumable_without_persisting_auth_links(home, monkeypatch, c
     output = capsys.readouterr()
     assert output.out.count("완료") == 1
     assert "개인 Bridge 시작 단계에서 중단" in output.err
-    assert str(next((home / ".bridge/logs").iterdir())) in output.err
+    # The command's error report prints the log path once.
+    assert raised.value.setup_log_path == next((home / ".bridge/logs").iterdir())
     runtime.installed.return_value = True
     runtime.wait_ready.side_effect = None
     runtime.call.reset_mock()
@@ -158,7 +159,7 @@ def test_failure_is_resumable_without_persisting_auth_links(home, monkeypatch, c
 def test_installation_lock_prevents_two_mutating_runs(home):
     with (
         onboarding.installation_lock(),
-        pytest.raises(RuntimeError, match="already running"),
+        pytest.raises(RuntimeError, match="이미 진행 중"),
         onboarding.installation_lock(),
     ):
         pytest.fail("second lock acquired")
@@ -218,7 +219,7 @@ def test_shared_proxy_uses_one_origin_for_setup_and_mcp(home, monkeypatch):
         "--public-url",
         "https://bridge.test",
     )
-    with pytest.raises(ValueError, match="alone"):
+    with pytest.raises(ValueError, match="--url만 지정"):
         onboarding.validate(
             options("--url", "https://bridge.test", "--admin-url", "https://bridge.test")
         )
@@ -238,7 +239,7 @@ def test_missing_wsl_binder_stops_before_installing_anything(home, monkeypatch):
     monkeypatch.setattr(onboarding, "binder_ready", lambda: False)
     execute = Mock(side_effect=AssertionError("no changes"))
     monkeypatch.setattr(cli, "run", execute)
-    with pytest.raises(RuntimeError, match="No changes were made"):
+    with pytest.raises(RuntimeError, match="아무것도 변경하지 않았습니다"):
         onboarding.prepare_linux(options())
 
 
@@ -261,7 +262,7 @@ def test_docker_remote_context_is_rejected_even_with_local_host_override(home, m
         "run",
         Mock(return_value=json.dumps([{"Endpoints": {"docker": {"Host": "ssh://remote"}}}])),
     )
-    with pytest.raises(RuntimeError, match="context points elsewhere"):
+    with pytest.raises(RuntimeError, match="Docker 컨텍스트가 다른 곳"):
         onboarding.Runtime()
 
 
@@ -307,7 +308,7 @@ def test_mac_start_never_creates_a_missing_vm_by_name(home, monkeypatch):
     execute = Mock(return_value="unrelated-vm\n")
     monkeypatch.setattr(cli, "run", execute)
 
-    with pytest.raises(RuntimeError, match="no longer exists"):
+    with pytest.raises(RuntimeError, match="Lima VM이 없습니다"):
         cli.mac(argparse.Namespace(command="start"))
 
     execute.assert_called_once_with(["limactl", "list", "--format", "{{.Name}}"], capture=True)
@@ -533,7 +534,7 @@ def test_occupied_default_port_is_automatic_but_explicit_port_is_not():
         occupied.bind(("127.0.0.1", 0))
         port = occupied.getsockname()[1]
         assert cli.available_port(port) != port
-        with pytest.raises(RuntimeError, match="already in use"):
+        with pytest.raises(RuntimeError, match="이미 사용 중"):
             cli.available_port(port, port)
 
 

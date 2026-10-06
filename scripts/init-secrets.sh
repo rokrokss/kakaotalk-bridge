@@ -14,7 +14,7 @@ else
     openssl req -x509 -newkey rsa:3072 -nodes -days 365 -sha256 \
         -keyout secrets/tls_key.pem -out secrets/tls_cert.pem \
         -subj '/CN=KakaoTalk Bridge Private Gateway' \
-        -addext "subjectAltName=IP:${GATEWAY_IP:-172.29.87.3},IP:127.0.0.1,DNS:localhost" >/dev/null 2>&1
+        -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" >/dev/null 2>&1
 fi
 chmod 444 secrets/tls_cert.pem secrets/tls_key.pem
 if [[ ! -s secrets/bridge.jks && "${BRIDGE_PREBUILT:-0}" != 1 ]]; then

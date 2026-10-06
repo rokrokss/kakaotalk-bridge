@@ -140,7 +140,7 @@ class OAuth:
         client = {
             "redirect_uris": redirects,
             "token_endpoint_auth_method": method,
-            "client_name": str(meta.get("client_name", "MCP client"))[:100],
+            "client_name": str(meta.get("client_name", "MCP 클라이언트"))[:100],
             "grant_types": ["authorization_code", "refresh_token"],
             "response_types": ["code"],
             "scope": SCOPES,

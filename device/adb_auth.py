@@ -57,4 +57,4 @@ def provision(device="/device-state", iris="/iris-state", android="/android-data
 if __name__ == "__main__":
     os.umask(0o077)
     count = provision()
-    print(f"ADB authorization ready for {count} collector identities; private keys preserved.")
+    print(f"ADB 인증 준비 완료: 수집기 키 {count}개, 개인 키는 유지했습니다.")

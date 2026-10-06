@@ -64,7 +64,7 @@ def test_expose_uses_shared_https_and_migrates_only_owned_routes(
     # An unrelated route added later must prevent all mutations.
     config["Web"][host + ":10000"] = {"Handlers": {"/": {"Proxy": "http://localhost:9999"}}}
     calls.clear()
-    with pytest.raises(RuntimeError, match="preserved"):
+    with pytest.raises(RuntimeError, match="그대로 두었습니다"):
         cli.expose(args)
     assert all(command[-1] == "--json" for command in calls)
 
@@ -151,7 +151,7 @@ def test_existing_keys_are_not_regenerated_when_incomplete(tmp_path, monkeypatch
     (tmp_path / "secrets/ingest_token").write_text("existing")
     run = Mock()
     monkeypatch.setattr(cli, "run", run)
-    with pytest.raises(RuntimeError, match="missing or empty keys"):
+    with pytest.raises(RuntimeError, match="인증 키가 없거나 비어"):
         cli.init_secrets(False)
     run.assert_not_called()
 
@@ -274,7 +274,7 @@ def test_restore_never_runs_against_running_stack(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "compose", Mock(return_value="api\nadmin"))
     run = Mock()
     monkeypatch.setattr(cli, "run", run)
-    with pytest.raises(RuntimeError, match="Stop the stack"):
+    with pytest.raises(RuntimeError, match="서비스를 중지하세요"):
         cli.restore(archive, key)
     run.assert_not_called()
 
@@ -409,3 +409,40 @@ def test_project_name_already_set_is_never_changed(tmp_path, monkeypatch):
     finally:
         cli.pin_project_name.cache_clear()
     assert cli.read_env()["COMPOSE_PROJECT_NAME"] == "custom"
+
+
+def test_doctor_prints_a_korean_summary_and_json_on_request(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    (tmp_path / ".env").write_text("COMPOSE_PROJECT_NAME=kakaotalk-bridge\n")
+    monkeypatch.setattr(cli, "run", lambda args, **kwargs: "linux/aarch64")
+    rows = [{"Service": name, "State": "running", "Health": ""} for name in cli.SERVICES]
+    rows[1] = {"Service": "api", "State": "exited", "Health": ""}
+    monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: json.dumps(rows))
+    monkeypatch.setattr(cli.Path, "exists", lambda self: True)
+    assert cli.doctor() is False
+    text = capsys.readouterr().out
+    assert "KakaoTalk Bridge 상태 점검" in text and "api: 중지됨" in text
+    assert "확인이 필요한 항목" in text and "{" not in text
+    cli.doctor(report="json")
+    assert json.loads(capsys.readouterr().out)["services"][1]["State"] == "exited"
+
+
+def test_shared_code_is_readable_but_private_state_is_untouched(tmp_path):
+    from ops.source import share_code
+
+    (tmp_path / "ops").mkdir(mode=0o700)
+    (tmp_path / "ops/cli.py").write_text("code")
+    (tmp_path / "bridge").write_text("#!/usr/bin/env python3")
+    (tmp_path / "secrets").mkdir(mode=0o700)
+    (tmp_path / "secrets/admin_token").write_text("secret")
+    for path, mode in (("ops/cli.py", 0o600), ("bridge", 0o700), ("secrets/admin_token", 0o600)):
+        (tmp_path / path).chmod(mode)
+    (tmp_path / ".env").write_text("HTTPS_PORT=8443\n")
+    (tmp_path / ".env").chmod(0o600)
+    (tmp_path / ".env.local").write_text("private")
+    (tmp_path / ".env.local").chmod(0o600)
+    share_code(tmp_path)
+    mode = lambda path: oct((tmp_path / path).stat().st_mode & 0o777)
+    assert mode("ops") == "0o755" and mode("ops/cli.py") == "0o644" and mode("bridge") == "0o755"
+    assert mode(".env") == "0o644" and mode(".env.local") == "0o600"
+    assert mode("secrets") == "0o700" and mode("secrets/admin_token") == "0o600"

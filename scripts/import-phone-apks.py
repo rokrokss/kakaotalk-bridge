@@ -9,15 +9,16 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ops.errors import BridgeError
+
 
 def adb(*args):
     result = subprocess.run(
         ["adb", "-d", *args], capture_output=True, text=True, timeout=180, check=False
     )
     if result.returncode:
-        raise RuntimeError(
-            "USB phone unavailable or not authorized; unlock and allow USB debugging"
-        )
+        raise BridgeError("USB로 연결된 휴대폰을 찾을 수 없거나 허용되지 않았습니다. 휴대폰 잠금을 풀고 USB 디버깅을 허용하세요.")
     return result.stdout.strip()
 
 
@@ -25,24 +26,22 @@ def main():
     target = Path(__file__).resolve().parents[1] / "inputs" / "kakao"
     target.mkdir(parents=True, exist_ok=True)
     if list(target.glob("*.apk")):
-        raise RuntimeError(
-            "inputs/kakao already contains APKs; preserve them before importing a new set"
-        )
+        raise BridgeError("inputs/kakao에 이미 APK가 있습니다. 새 세트를 가져오기 전에 기존 파일을 다른 곳에 보관하세요.")
     paths = adb("shell", "pm", "path", "com.kakao.talk").splitlines()
     if not paths or any(not line.startswith("package:") for line in paths):
-        raise RuntimeError("KakaoTalk is not installed or its APKs are inaccessible")
+        raise BridgeError("휴대폰에 카카오톡이 설치되어 있지 않거나 APK에 접근할 수 없습니다.")
     paths = [line.removeprefix("package:") for line in paths]
     if any(not re.fullmatch(r"/data/app/[A-Za-z0-9_./=+~\-]+\.apk", p) or ".." in p for p in paths):
-        raise RuntimeError("Unexpected APK path; no files were copied")
+        raise BridgeError("APK 경로가 예상과 달라 아무 파일도 복사하지 않았습니다.")
     names = [Path(p).name for p in paths]
     if len(set(names)) != len(names) or "base.apk" not in names:
-        raise RuntimeError("Unexpected split APK layout; no files were copied")
+        raise BridgeError("분할 APK 구성이 예상과 달라 아무 파일도 복사하지 않았습니다.")
     with tempfile.TemporaryDirectory(prefix="kakao-apks-", dir=target.parent) as temporary:
         for remote, name in zip(paths, names, strict=True):
             local = Path(temporary) / name
             adb("pull", remote, str(local))
             if not local.is_file() or local.stat().st_size == 0:
-                raise RuntimeError("APK copy incomplete; target directory was not changed")
+                raise BridgeError("APK 복사가 끝나지 않아 대상 폴더를 바꾸지 않았습니다.")
             local.chmod(0o600)
         for name in names:
             local = Path(temporary) / name
@@ -57,7 +56,6 @@ if __name__ == "__main__":
     try:
         main()
     except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from ops.setup_output import report_error
 
         report_error(exc)

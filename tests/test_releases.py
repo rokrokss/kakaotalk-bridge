@@ -79,7 +79,7 @@ def test_release_download_validates_and_installs_matching_bundle(tmp_path, monke
 def test_release_checksum_failure_never_installs_or_falls_back(tmp_path, monkeypatch):
     data, calls = fake_download(monkeypatch)
     data["assets"][0]["digest"] = "sha256:" + "f" * 64
-    with pytest.raises(ValueError, match="checksum mismatch"):
+    with pytest.raises(ValueError, match="체크섬이 일치하지 않아"):
         releases.download(tmp_path / "bridge")
     assert not list(tmp_path.iterdir())
     assert len(calls) == 2
@@ -123,7 +123,7 @@ def test_invalid_release_is_rejected_before_download(tmp_path, monkeypatch, chan
 def test_unsafe_archive_is_rejected_before_extraction(tmp_path, name):
     archive = tmp_path / "bad.tar.gz"
     archive.write_bytes(bundle({name: "private"}))
-    with pytest.raises(ValueError, match="Unsafe"):
+    with pytest.raises(ValueError, match="허용되지 않는 경로"):
         releases.extract(archive, tmp_path / "incoming")
     assert not (tmp_path / "incoming").exists()
 
@@ -140,7 +140,7 @@ def test_bundle_manifest_must_match_release_tag(tmp_path, monkeypatch):
             }
         ),
     )
-    with pytest.raises(ValueError, match="versions differ"):
+    with pytest.raises(ValueError, match="버전이 서로 다릅니다"):
         releases.download(tmp_path / "bridge")
     assert not list(tmp_path.iterdir())
 
@@ -149,7 +149,7 @@ def test_existing_installation_is_preserved_without_network(tmp_path, monkeypatc
     network = Mock(side_effect=AssertionError("must not download"))
     monkeypatch.setattr(releases, "request", network)
     (tmp_path / "identity").write_text("keep")
-    with pytest.raises(RuntimeError, match="preserved"):
+    with pytest.raises(RuntimeError, match="그대로 두었습니다"):
         releases.download(tmp_path)
     assert (tmp_path / "identity").read_text() == "keep"
     network.assert_not_called()
