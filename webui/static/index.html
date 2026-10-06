@@ -327,7 +327,7 @@
             <div class="section-body">
               <button id="test-collection" class="wide">수집 테스트 시작</button>
               <p id="test-result" role="status">테스트를 시작한 뒤 휴대폰에서 나에게 메시지를 보내세요.</p>
-              <p>서버 명령어:</p><code>./bridge doctor<br>./bridge backup<br>./bridge update --manifest release.json</code>
+              <p>서버 명령어:</p><code>./bridge doctor<br>./bridge backup<br>./bridge upgrade</code>
               <p class="hint">백업에는 Android 로그인 정보와 키가 포함됩니다. 안전하게 보관하세요. 진단 결과에는 메시지와 인증 정보가 포함되지 않습니다.</p>
             </div>
           </details>
@@ -341,7 +341,7 @@
   <dialog id="install-dialog" aria-labelledby="install-title" aria-describedby="install-description">
     <form method="dialog">
       <h2 id="install-title">수집 구성 요소를 설치할까요?</h2>
-      <p id="install-description">카카오톡 설치 후 등록 앱, 키보드와 Iris를 설치합니다. 이미 등록된 태블릿은 변경하지 않습니다.</p>
+      <p id="install-description">카카오톡 설치를 확인한 뒤 키보드 앱을 설치하고 태블릿을 등록합니다. Iris는 수집을 시작할 때 자동으로 설치됩니다. 이미 등록된 태블릿은 변경하지 않습니다.</p>
       <div class="dialog-actions">
         <button value="cancel" autofocus>취소</button>
         <button value="install" class="primary">설치</button>
