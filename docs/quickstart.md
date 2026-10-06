@@ -1,6 +1,6 @@
 # KakaoTalk Bridge 설치와 실행
 
-설치 명령을 실행하면 필요한 도구와 서비스를 준비하고 브라우저에서 관리 화면을 엽니다. 기존 설치에서는 저장된 설정과 카카오톡 로그인을 그대로 사용합니다.
+설치 명령을 실행하면 필요한 도구와 서비스를 준비하고 브라우저에서 관리 화면을 엽니다. 기존 릴리스 설치는 최신 버전으로 업데이트하며, 저장된 설정과 카카오톡 로그인을 유지합니다.
 
 <a id="download-and-start"></a>
 ## 다운로드와 시작
@@ -23,7 +23,9 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 ./bridge up --verbose
 ```
 
-기본 설치 위치는 Mac의 `~/Library/Application Support/KakaoTalk Bridge`, Linux의 `${XDG_DATA_HOME:-~/.local/share}/kakaotalk-bridge`입니다. `BRIDGE_HOME`으로 바꿀 수 있습니다. `BRIDGE_VERSION=v0.1.0`처럼 새 설치의 릴리스 버전을 지정할 수 있습니다. 기존 사본은 같은 설치 명령으로 업데이트되지 않습니다. 소스 폴더에서 `bash install.sh`를 실행하면 `BRIDGE_HOME`을 지정하지 않는 한 그 폴더를 사용합니다.
+기본 설치 위치는 Mac의 `~/Library/Application Support/KakaoTalk Bridge`, Linux의 `${XDG_DATA_HOME:-~/.local/share}/kakaotalk-bridge`입니다. `BRIDGE_HOME`으로 바꿀 수 있습니다. `BRIDGE_VERSION=v0.1.0`처럼 설치·업데이트할 릴리스 버전을 지정할 수 있습니다. 소스 폴더에서 `bash install.sh`를 실행하면 `BRIDGE_HOME`을 지정하지 않는 한 그 폴더를 사용합니다.
+
+같은 설치 명령을 다시 실행하면 릴리스 업데이트를 확인하고 설치 파일과 이미지를 함께 갱신합니다. 이미 같은 버전이면 재설치 없이 관리 화면을 엽니다. 업데이트에 실패하면 중단하며, 초기 설치가 끝나지 않은 경우에는 먼저 그 설치를 이어서 진행합니다. Git 작업 폴더·소스 설치와 `--source`, `--manifest`, `--plan` 실행에는 자동 업데이트를 적용하지 않습니다. 업데이트 없이 다시 열려면 설치 폴더에서 `./bridge up`을 실행하세요.
 
 [GitHub Releases](https://github.com/rokrokss/kakaotalk-bridge/releases)에서 `bridge-install.tar.gz`를 직접 내려받아 압축을 풀고 `bash install.sh`를 실행해도 됩니다. 자동 설치는 GitHub API가 제공하는 자산 해시와 비교하며, 공급망 출처 증명을 별도로 확인하려면 [고급 설치](onboarding.md)를 참고하세요.
 

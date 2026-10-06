@@ -234,3 +234,25 @@ def test_upgrade_switches_source_and_restores_it_on_update_failure(tmp_path, mon
         assert (tmp_path / ".bridge/previous-source/ops/cli.py").read_text() == "old code"
     assert (tmp_path / "secrets/identity").read_text() == "keep me"
     assert not (tmp_path / ".bridge/source-journal.json").exists()
+
+
+def test_upgrade_current_release_preserves_code_and_never_redeploys(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    monkeypatch.setattr(releases.os, "geteuid", lambda: 0)
+    (tmp_path / ".bridge").mkdir()
+    (tmp_path / ".bridge/installed").write_text("1")
+    (tmp_path / ".bridge/mac.json").write_text("{}")
+    (tmp_path / "release.json").write_text(json.dumps(manifest()))
+    (tmp_path / "bridge").write_text("existing launcher")
+    (tmp_path / ".env").write_text("existing settings")
+    fake_download(monkeypatch)
+    run = Mock(side_effect=AssertionError("same release must not back up or redeploy"))
+    monkeypatch.setattr(setup_output, "run", run)
+
+    releases.upgrade(argparse.Namespace(version="latest"))
+
+    run.assert_not_called()
+    assert (tmp_path / "bridge").read_text() == "existing launcher"
+    assert (tmp_path / ".env").read_text() == "existing settings"
+    assert "이미 v0.1.0 릴리스를 사용하고 있습니다." in capsys.readouterr().out
+    assert not (tmp_path / ".bridge/previous-source").exists()

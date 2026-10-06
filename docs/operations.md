@@ -1,6 +1,6 @@
 # 운영과 복구
 
-릴리스 설치 폴더에서 `./bridge upgrade`로 설치 파일과 이미지를 함께 업데이트하세요. `./bridge doctor`로 상태를 확인하고, `./bridge backup`과 `./bridge restore --help`로 백업·복구를 관리합니다. 기존 설치 명령을 다시 실행하는 것만으로 버전이 바뀌지는 않습니다.
+같은 설치 명령을 다시 실행하면 기존 릴리스의 설치 파일과 이미지를 함께 업데이트하고 관리 화면을 엽니다. 설치 폴더에서 `./bridge upgrade`로 업데이트만 하거나 `./bridge up`으로 업데이트 없이 실행할 수도 있습니다. `./bridge doctor`로 상태를 확인하고, `./bridge backup`과 `./bridge restore --help`로 백업·복구를 관리합니다.
 
 새 설치 프로그램, 패스키, Aurora 설정, 전체 암호화 백업은 [개인 Bridge 설정](onboarding.md)을 참고하세요. 아래는 기존 수동 배포 절차입니다.
 

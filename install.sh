@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Download once, reuse on every launch. No Git, Python or Docker knowledge needed.
+# Install or upgrade a release, then open setup. Source checkouts keep their own code.
 set -euo pipefail
 umask 077
 
@@ -46,13 +46,60 @@ bridge_run() {
   fi
 }
 
-# Redirect only when replacing this shell. Changing fd 0 while bash is still
-# reading a curl pipe can discard the rest of the installer itself.
+# This launcher lives in the downloaded installer so already-published releases
+# can upgrade too. Exec the new CLI after upgrade instead of reusing old imports.
 bridge_launch() {
+  local bridge_entry='
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1]).resolve()
+version, arguments = sys.argv[2], sys.argv[3:]
+command = [sys.executable, str(root / "bridge")]
+marker = ".bridge/mac.json" if sys.platform == "darwin" else ".bridge/installed"
+installed = (root / marker).is_file()
+progress = root / ".bridge/onboarding.json"
+if progress.is_file():
+    try:
+        record = json.loads(progress.read_text())
+        installed = installed and isinstance(record, dict) and record.get("state") == "ready"
+    except (ValueError, OSError):
+        installed = False
+elif sys.platform == "darwin":
+    # mac.json is written before the VM finishes its first installation.
+    installed = False
+
+if installed and (root / "release.json").is_file() and not (root / ".git").exists():
+    sys.path.insert(0, str(root))
+    from ops.cli import KoreanArgumentParser
+    from ops.onboarding import add_arguments
+
+    parser = KoreanArgumentParser(prog="bridge up")
+    add_arguments(parser)
+    options = parser.parse_args(arguments)
+    if not (options.plan or options.source or options.manifest):
+        try:
+            # Validate all setup options before changing the installed version.
+            subprocess.run([*command, "up", "--plan", *arguments],
+                           stdout=subprocess.DEVNULL, check=True)
+            print("릴리스 업데이트 확인 중…", flush=True)
+            subprocess.run([*command, "upgrade", "--version", version], check=True)
+        except subprocess.CalledProcessError as error:
+            sys.exit(error.returncode)
+
+os.execv(sys.executable, [*command, "up", *arguments])
+'
+  # Never let a child consume the rest of a curl-piped installer. Use the terminal
+  # for sudo/interactive prompts when available, otherwise provide EOF.
   if [[ ! -t 0 && -r /dev/tty ]] && ( : </dev/tty ) 2>/dev/null; then
-    exec "$bridge_python" "$1/bridge" up "${@:2}" </dev/tty
+    exec "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}" </dev/tty
+  elif [[ -t 0 ]]; then
+    exec "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}"
   else
-    exec "$bridge_python" "$1/bridge" up "${@:2}"
+    exec "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}" </dev/null
   fi
 }
 

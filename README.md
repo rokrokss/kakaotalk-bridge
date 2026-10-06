@@ -33,7 +33,7 @@ Apple Silicon Mac 또는 호환되는 Linux 서버에서 실행하세요.
 curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/install.sh | bash
 ```
 
-검증된 릴리스 이미지를 내려받고 브라우저에서 설정 화면을 엽니다. 같은 명령으로 다시 열 수 있습니다. Linux 헤드리스 서버는 [SSH 설치 안내](docs/quickstart.md#local-and-ssh-admin-access)를 따르세요.
+검증된 릴리스 이미지를 내려받고 브라우저에서 설정 화면을 엽니다. 이미 설치했다면 최신 릴리스로 업데이트한 뒤 설정 화면을 엽니다. Linux 헤드리스 서버는 [SSH 설치 안내](docs/quickstart.md#local-and-ssh-admin-access)를 따르세요.
 
 <p align="center">
   <picture>
