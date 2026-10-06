@@ -38,24 +38,23 @@
 <a id="deploy-on-linux"></a>
 ## Linux 배포
 
-API와 Iris가 실행 중인 서버에서 `.env`의 `DOT_PUBLIC_URL`을 실제 HTTPS 출처로 설정하세요. 끝에 `/`나 `/mcp`를 붙이지 않습니다.
+설치된 서버에서 공개 HTTPS 출처를 지정하세요. 끝에 `/`나 `/mcp`를 붙이지 않습니다.
 
 ```bash
-./bridge install --source
-sudo chown 10001:10001 secrets/mcp_link_key secrets/mcp_storage_key
-sudo chmod 400 secrets/mcp_link_key secrets/mcp_storage_key
-sudo chmod 444 secrets/mcp_approval_token secrets/mcp_passkey_token
-docker compose --profile dot build dot-plugin dot-ingress
-docker compose --profile dot up -d --no-deps dot-plugin dot-control dot-ingress
-# Update the device/admin image too, then run ./bridge passkey-login.
+./bridge connect --url https://bridge.example.com
+./bridge passkey-login
 ```
+
+`connect`는 `.env`의 `DOT_PUBLIC_URL`을 저장하고 `dot-plugin`, `dot-control`, `dot-ingress`를 시작합니다. 필요한 키는 `./bridge install`이 이미 만들었습니다. `passkey-login`은 이 주소의 OAuth 승인 방식을 설정합니다. 관리 화면의 **기존 HTTPS 주소 사용**이나 `./bridge setup-connection --method https --url https://bridge.example.com`도 같은 설정을 합니다.
 
 공개 프록시는 기본 `127.0.0.1:18787`의 `dot-ingress`로 전달합니다. **이 포트만 공개하세요.** API·관리 게이트웨이나 dot-plugin을 직접 공개하지 마세요. 진입점이 내부 경로를 차단하고 MCP 경로의 관리자 쿠키를 제거합니다. 기기·API·제어망이 아닌 전용 관리 진입망에 연결됩니다. 관리 화면을 비공개로 유지하려면 공개 프록시에서 `/admin`, `/admin/*`를 거부하세요. 그렇지 않으면 해당 호스트에 인증된 관리 화면을 제공합니다. dot-plugin은 API 읽기 토큰만 사용하며 Android 볼륨이나 관리자 토큰을 받지 않습니다.
 
 <a id="deploy-in-lima-on-a-mac"></a>
 ## Mac의 Lima 배포
 
-Mac의 Docker Desktop이 아닌 Lima에서 실행하세요. 키를 VM으로 복사하고 UID 10001이 읽을 수 있도록 VM 안에서 소유권을 설정하세요. 이미지 이동은 [Mac 설치](local-redroid.md)를 따르세요.
+Mac의 `./bridge`가 만든 VM은 MCP 진입점을 Mac의 `127.0.0.1:18787`(첫 설치 때 사용 중이면 다른 빈 포트)로 전달합니다. Mac에서 실행한 `./bridge expose`는 Mac의 Tailscale Funnel을 이 포트에 연결하고, 관리 화면의 **Tailscale로 HTTPS 주소 만들기**는 VM 안의 Tailscale을 사용합니다. 어느 쪽도 별도 터널이 필요하지 않습니다.
+
+[직접 만든 Lima VM](onboarding.md#manual-deployment)은 이 포트를 전달하지 않으므로 SSH 터널을 사용합니다.
 
 ```text
 Tailscale Funnel HTTPS :443
@@ -63,7 +62,7 @@ Tailscale Funnel HTTPS :443
   → SSH 터널 → Lima 127.0.0.1:18787 → dot-ingress:8786 → dot-plugin:8787
 ```
 
-`scripts/dot-tunnel.sh`를 실행하거나 `deploy/dev.kakaotalkbridge.dot-tunnel.plist.example`의 절대 경로를 수정해 사용자 LaunchAgent로 설치하세요. 장비별 파일은 Git에서 제외된 `deploy/*.local.plist`에 보관하세요. Mac의 Funnel을 `127.0.0.1:18788`로 연결하고 기존 목적지와 충돌하지 않는지 확인하세요.
+`scripts/dot-tunnel.sh`를 실행하거나(VM 이름은 `LIMA_INSTANCE`) `deploy/dev.kakaotalkbridge.dot-tunnel.plist.example`의 절대 경로를 수정해 사용자 LaunchAgent로 설치하세요. 장비별 파일은 Git에서 제외된 `deploy/*.local.plist`에 보관하세요. Mac의 Funnel을 `127.0.0.1:18788`로 연결하고 기존 목적지와 충돌하지 않는지 확인하세요.
 
 Mac 잠자기·종료, Lima·Tailscale 중지는 공개 연결을 끊습니다. Funnel 주소가 공개되어도 `/mcp`는 OAuth 인증을 요구합니다.
 
@@ -71,19 +70,22 @@ Mac 잠자기·종료, Lima·Tailscale 중지는 공개 연결을 끊습니다. 
 ## 검증과 문제 해결
 
 ```bash
-./scripts/lima-compose.sh --profile dot ps
-./scripts/lima-compose.sh logs --tail 30 dot-plugin
+./bridge doctor
+docker compose --profile dot ps
+docker compose logs --tail 30 dot-plugin
 tailscale funnel status
 uv run python scripts/smoke-dot.py https://your-host.example
 ```
 
-Linux에서는 `scripts/lima-compose.sh` 대신 `docker compose`를 사용하세요. 이전 스모크 스크립트는 명시적 `DOT_APPROVAL_MODE=key`가 필요하며 패스키를 검증하지 않습니다. 일반 설치는 패스키와 명시적 동의를 사용합니다. 키 모드 테스트는 임시 OAuth 권한으로 TLS·인증·도구 목록·실제 최근 메시지 조회를 검증한 뒤 권한을 취소합니다. 본문·키를 출력하거나 이벤트를 구독하지 않습니다.
+`docker compose`는 Linux 설치 폴더에서 실행하고, 직접 만든 Lima VM에서는 `./scripts/lima-compose.sh`를 사용하세요. 스모크 스크립트는 명시적 `DOT_APPROVAL_MODE=key`가 필요하며 패스키를 검증하지 않습니다. 일반 설치는 패스키와 명시적 동의를 사용합니다. 키 모드 테스트는 임시 OAuth 권한으로 TLS·인증·도구 목록·실제 최근 메시지 조회를 검증한 뒤 권한을 취소합니다. 본문·키를 출력하거나 이벤트를 구독하지 않습니다.
+
+`/authorize`와 패스키 동의 화면은 오류 코드 대신 한국어 오류 페이지를 표시합니다. OAuth·MCP 프로토콜 응답은 JSON 오류 코드를 유지합니다.
 
 | 오류·상황 | 확인할 내용 |
 | --- | --- |
-| `invalid_origin` | `DOT_PUBLIC_URL`의 스킴·호스트·포트가 브라우저와 일치하고 승인 HTML의 Referrer-Policy가 `same-origin`인지 확인 |
-| `invalid_approval` | 10분이 지났거나 쿠키가 없으면 ChatGPT에서 다시 연결 |
-| `approval_required` | 비공개 관리 화면의 **AI 연결**에서 일치하는 코드 승인 |
+| 다른 주소에서 보낸 요청(`invalid_origin`) | `DOT_PUBLIC_URL`의 스킴·호스트·포트가 브라우저와 일치하고 승인 HTML의 Referrer-Policy가 `same-origin`인지 확인 |
+| 승인 요청 만료·처리됨(`invalid_approval`) | 10분이 지났거나 쿠키가 없으면 ChatGPT에서 다시 연결 |
+| 서버 소유자 승인 필요(`approval_required`) | 비공개 관리 화면의 **AI 연결**에서 일치하는 코드 승인 |
 | 패스키 설정 필요 | 서버에서 `./bridge passkey-login` 실행 후 비공개 관리 호스트에서 등록 |
 | 패스키를 찾을 수 없음 | 저장한 기기·비밀번호 관리자와 호스트를 확인하고 시스템 브라우저에서 다시 시작 |
 | 코드 불일치·만료 | 연결을 시작한 브라우저 확인. 10분 이상 지났으면 새 요청 시작 |
