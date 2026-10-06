@@ -6,18 +6,28 @@
 
 **내 대화에서 찾는 답, 내가 쓰는 AI로.**
 
-카카오톡 메시지를 수집해 ChatGPT나 MCP 지원 AI에서 검색하고 요약합니다.
+휴대폰은 그대로 사용하고, 서버의 가상 Android 태블릿에서 카카오톡 메시지를 수집합니다.<br>
+수집한 대화를 ChatGPT나 MCP 지원 AI에서 검색하고 요약합니다.
 
 직접 호스팅 · 브라우저에서 설정 · 메시지 읽기 전용
 
-[시작하기](#getting-started) · [첫 질문 해보기](#try-your-first-question) · [AI 연결하기](#connect-your-ai) · [사용 안내](#documentation)
+[가상 태블릿을 쓰는 이유](#why-a-virtual-tablet) · [시작하기](#getting-started) · [첫 질문 해보기](#try-your-first-question) · [AI 연결하기](#connect-your-ai) · [사용 안내](#documentation)
 
 </div>
+
+<a id="why-a-virtual-tablet"></a>
+## 왜 가상 태블릿인가요?
+
+**카카오톡은 개인 대화방의 메시지를 조회·수신하는 공개 API를 제공하지 않습니다.** 공식 메시지 API는 발송용이며, 기존 대화를 가져오는 용도가 아닙니다. [카카오의 API 안내](https://devtalk.kakao.com/t/api/139501)
+
+또한 같은 계정으로 동시에 사용할 수 있는 기기 종류와 수에 제약이 있어, 수집용 Android를 주 기기로 로그인하면 기존 휴대폰의 로그인이 해제될 수 있습니다. 휴대폰을 계속 사용하려면 **보조 태블릿의 ‘다른 기기와 함께 사용’ 로그인**이 필요합니다.
+
+그래서 Bridge는 **redroid로 가상 Android 태블릿을 실행하고, 그 안에서 실제 카카오톡 앱과 Iris 수집 프로세스를 구동**합니다. Iris가 태블릿의 로컬 메시지 DB를 읽어 서버에 저장하면, AI가 MCP로 검색·조회합니다. 별도 실물 태블릿은 필요하지 않습니다. [수집 구조와 로그인 조건](docs/iris.md#components-and-assumptions)
 
 <a id="getting-started"></a>
 ## 시작하기
 
-Apple Silicon Mac 또는 호환되는 Linux 서버에서 실행하세요. 휴대폰을 그대로 사용하면서 가상 Android 태블릿으로 메시지를 수집합니다. 실제 태블릿은 필요하지 않습니다.
+Apple Silicon Mac 또는 호환되는 Linux 서버에서 실행하세요.
 [실행 환경](#requirements-and-validation)
 
 실행할 컴퓨터의 터미널에서 아래 명령을 입력하세요.
