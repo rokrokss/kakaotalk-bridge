@@ -3,6 +3,7 @@
 import argparse
 import base64
 import contextlib
+import functools
 import hashlib
 import json
 import os
@@ -115,7 +116,24 @@ def atomic(path, data):
         Path(scratch).unlink(missing_ok=True)
 
 
+# Default Compose project before 0.2. Its volumes keep this prefix on existing installs.
+LEGACY_PROJECT = "kakaotalk-collector"
+
+
+@functools.cache
+def pin_project_name():
+    """Keep an install whose .env predates the project name on its existing volumes."""
+    if not (ROOT / ".env").exists() or "COMPOSE_PROJECT_NAME" in read_env():
+        return
+    existing = run(
+        ["docker", "volume", "ls", "-q", "--filter", f"name=^{LEGACY_PROJECT}_android-data$"],
+        capture=True,
+    )
+    env_update({"COMPOSE_PROJECT_NAME": LEGACY_PROJECT if existing.strip() else "kakaotalk-bridge"})
+
+
 def compose(*args, capture=False, **kwargs):
+    pin_project_name()
     files = ["-f", str(ROOT / "compose.yaml")]
     for file in ("host.yaml", "volumes.yaml"):
         if (ROOT / ".bridge" / file).exists():
@@ -273,7 +291,7 @@ def image_config(args):
                 )
         tag = "local-" + fingerprint.hexdigest()[:16]
         refs = {
-            kind: f"kakaotalk-collector/{kind}:{tag}" for kind in ("server", "device", "gateway")
+            kind: f"kakaotalk-bridge/{kind}:{tag}" for kind in ("server", "device", "gateway")
         }
     else:
         if not args.manifest:
@@ -355,7 +373,7 @@ def install(args):
         # Keep image selection architecture-aware; do not copy the amd64 example pin.
         env_update(
             {
-                "COMPOSE_PROJECT_NAME": "kakaotalk-collector",
+                "COMPOSE_PROJECT_NAME": "kakaotalk-bridge",
                 "HTTPS_BIND": "127.0.0.1",
                 "DOT_PUBLIC_URL": "https://kakao.example.invalid",
                 "DOT_APPROVAL_MODE": "passkey",
@@ -747,7 +765,7 @@ def snapshot_command(mode, names, *, key=None, stage=None, work=None, image=None
     image = (
         image
         or env.get("DOT_IMAGE")
-        or env.get("COLLECTOR_IMAGE", "kakaotalk-collector/server:0.1.0")
+        or env.get("COLLECTOR_IMAGE", "kakaotalk-bridge/server:local")
     )
     cmd = [
         "docker",
@@ -886,7 +904,7 @@ def restore(path, key):
         )
     suffix = "restore-" + secrets.token_hex(6)
     names = {
-        name: read_env().get("COMPOSE_PROJECT_NAME", "kakaotalk-collector")
+        name: read_env().get("COMPOSE_PROJECT_NAME", "kakaotalk-bridge")
         + "_"
         + suffix
         + "_"

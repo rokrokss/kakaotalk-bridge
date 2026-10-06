@@ -28,13 +28,13 @@ provision:
       apt-get update
       apt-get install -y docker.io docker-compose-v2 openssl qemu-user-static binfmt-support "linux-modules-extra-$(uname -r)"
       modprobe binder_linux devices=binder,hwbinder,vndbinder
-      printf '%s\n' binder_linux > /etc/modules-load.d/kakaocollector.conf
-      printf '%s\n' 'options binder_linux devices=binder,hwbinder,vndbinder' > /etc/modprobe.d/kakaocollector.conf
+      printf '%s\n' binder_linux > /etc/modules-load.d/kakaotalk-bridge.conf
+      printf '%s\n' 'options binder_linux devices=binder,hwbinder,vndbinder' > /etc/modprobe.d/kakaotalk-bridge.conf
       mkdir -p /dev/binderfs
       if ! mountpoint -q /dev/binderfs; then mount -t binder binder /dev/binderfs; fi
       chmod 666 /dev/binderfs/binder /dev/binderfs/hwbinder /dev/binderfs/vndbinder
       # binderfs is recreated on every boot, before Docker recreates its devices.
-      cat > /etc/systemd/system/kakaocollector-binder.service <<'UNIT'
+      cat > /etc/systemd/system/kakaotalk-bridge-binder.service <<'UNIT'
       [Unit]
       Description=Binder devices for local redroid tests
       After=systemd-modules-load.service
@@ -49,7 +49,7 @@ provision:
       WantedBy=multi-user.target
       UNIT
       systemctl daemon-reload
-      systemctl enable kakaocollector-binder.service
+      systemctl enable kakaotalk-bridge-binder.service
       systemctl enable --now docker
 probes:
   - script: |

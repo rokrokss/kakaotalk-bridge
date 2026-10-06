@@ -80,7 +80,7 @@ docker compose up -d --no-build
 
 `adb-init`은 Android 생성 전에 수집기 공개 키 두 개만 준비합니다. 승인된 수집기는 root ADB를 사용할 수 있습니다. Android·device-state·iris-state를 함께 백업·복구하고 실행 중 키를 교체하지 마세요. Iris 인증 파일은 자동 관리하며 등록과 함께 교체됩니다.
 
-반복 실패를 피하기 위해 redroid 자동 재시작은 꺼져 있습니다. 필요하면 `docker compose start redroid`를 사용하세요. 다른 장기 실행 서비스는 `unless-stopped`입니다. Linux 자동 복구는 `deploy/kakaocollector-supervisor.service.example`의 경로를 수정해 설치하세요. 감독 서비스는 30분 내 redroid 재시작을 3회로 제한합니다.
+반복 실패를 피하기 위해 redroid 자동 재시작은 꺼져 있습니다. 필요하면 `docker compose start redroid`를 사용하세요. 다른 장기 실행 서비스는 `unless-stopped`입니다. Linux 자동 복구는 `deploy/kakaotalk-bridge-supervisor.service.example`의 경로를 수정해 설치하세요. 감독 서비스는 30분 내 redroid 재시작을 3회로 제한합니다.
 
 <a id="storage-locations"></a>
 ## 저장 위치

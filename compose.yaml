@@ -1,4 +1,4 @@
-name: ${COMPOSE_PROJECT_NAME:-kakaotalk-collector}
+name: ${COMPOSE_PROJECT_NAME:-kakaotalk-bridge}
 
 x-logging: &logging
   driver: local
@@ -7,7 +7,7 @@ x-logging: &logging
     max-file: "3"
 
 x-server: &server
-  image: ${COLLECTOR_IMAGE:-kakaotalk-collector/server:0.1.0}
+  image: ${COLLECTOR_IMAGE:-kakaotalk-bridge/server:local}
   build:
     context: .
     dockerfile: docker/server.Dockerfile
@@ -20,7 +20,7 @@ x-server: &server
   logging: *logging
 
 x-device: &device
-  image: ${DEVICE_IMAGE:-kakaotalk-collector/device:0.1.0}
+  image: ${DEVICE_IMAGE:-kakaotalk-bridge/device:local}
   build:
     context: .
     dockerfile: docker/device.Dockerfile
@@ -86,7 +86,7 @@ services:
       start_period: 15s
 
   gateway:
-    image: ${GATEWAY_IMAGE:-kakaotalk-collector/gateway:2.11.7}
+    image: ${GATEWAY_IMAGE:-kakaotalk-bridge/gateway:local}
     build:
       context: .
       dockerfile: docker/gateway.Dockerfile
@@ -188,7 +188,7 @@ services:
 
   # Browser-only loopback entry point, also usable through SSH forwarding.
   admin-local:
-    image: ${GATEWAY_IMAGE:-kakaotalk-collector/gateway:2.11.7}
+    image: ${GATEWAY_IMAGE:-kakaotalk-bridge/gateway:local}
     profiles: [local-admin]
     restart: unless-stopped
     user: "10001:10001"
@@ -225,7 +225,7 @@ services:
 
   dot-plugin:
     <<: *server
-    image: ${DOT_IMAGE:-kakaotalk-collector/dot:0.1.0}
+    image: ${DOT_IMAGE:-kakaotalk-bridge/server:local}
     profiles: [dot]
     restart: unless-stopped
     command: [uvicorn, dot_plugin.app:create_app, --factory, --host, 0.0.0.0, --port, "8787", --no-access-log]
@@ -249,7 +249,7 @@ services:
       retries: 3
 
   dot-ingress:
-    image: ${GATEWAY_IMAGE:-kakaotalk-collector/gateway:2.11.7}
+    image: ${GATEWAY_IMAGE:-kakaotalk-bridge/gateway:local}
     build:
       context: .
       dockerfile: docker/gateway.Dockerfile
@@ -281,7 +281,7 @@ services:
 
   dot-control:
     <<: *server
-    image: ${DOT_IMAGE:-kakaotalk-collector/dot:0.1.0}
+    image: ${DOT_IMAGE:-kakaotalk-bridge/server:local}
     profiles: [dot]
     restart: unless-stopped
     command: [uvicorn, dot_plugin.control:create_app, --factory, --host, 0.0.0.0, --port, "8788", --no-access-log]
@@ -298,7 +298,7 @@ services:
   # No published ports and no connection to the public ingress or Android.
   dot-tunnel:
     <<: *server
-    image: ${DOT_IMAGE:-kakaotalk-collector/dot:0.1.0}
+    image: ${DOT_IMAGE:-kakaotalk-bridge/server:local}
     profiles: [tunnel]
     restart: unless-stopped
     command: [uvicorn, dot_plugin.tunnel:create_app, --factory, --host, 0.0.0.0, --port, "8789", --no-access-log]

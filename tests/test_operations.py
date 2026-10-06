@@ -99,7 +99,7 @@ def test_release_manifest_requires_immutable_official_refs(tmp_path):
     assert cli.manifest(path)["server"].endswith("a" * 64)
     for bad in (
         "evil.example/server@sha256:" + "a" * 64,
-        "ghcr.io/rokrokss/kakaotalk-mcp-events-server@sha256:" + "a" * 64,
+        "ghcr.io/example/another-project-server@sha256:" + "a" * 64,
         cli.REGISTRY + "server:latest",
     ):
         data["images"]["server"] = bad
@@ -377,3 +377,35 @@ def test_android_builder_preserves_working_emulation_and_skips_intel(monkeypatch
     monkeypatch.setattr(cli.platform, "machine", lambda: "x86_64")
     cli.prepare_android_builder()
     assert execute.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "volume, expected",
+    [("kakaotalk-collector_android-data\n", "kakaotalk-collector"), ("", "kakaotalk-bridge")],
+)
+def test_install_without_project_name_keeps_existing_volumes(
+    tmp_path, monkeypatch, volume, expected
+):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    (tmp_path / ".env").write_text("HTTPS_PORT=8443\n")
+    calls = []
+    monkeypatch.setattr(cli, "run", lambda args, **kwargs: calls.append(args) or volume)
+    cli.pin_project_name.cache_clear()
+    try:
+        cli.pin_project_name()
+    finally:
+        cli.pin_project_name.cache_clear()
+    assert cli.read_env()["COMPOSE_PROJECT_NAME"] == expected
+    assert calls[0][:3] == ["docker", "volume", "ls"]
+
+
+def test_project_name_already_set_is_never_changed(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "ROOT", tmp_path)
+    (tmp_path / ".env").write_text("COMPOSE_PROJECT_NAME=custom\n")
+    monkeypatch.setattr(cli, "run", lambda *a, **k: pytest.fail("no Docker call expected"))
+    cli.pin_project_name.cache_clear()
+    try:
+        cli.pin_project_name()
+    finally:
+        cli.pin_project_name.cache_clear()
+    assert cli.read_env()["COMPOSE_PROJECT_NAME"] == "custom"

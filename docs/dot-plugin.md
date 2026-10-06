@@ -63,7 +63,7 @@ Tailscale Funnel HTTPS :443
   → SSH 터널 → Lima 127.0.0.1:18787 → dot-ingress:8786 → dot-plugin:8787
 ```
 
-`scripts/dot-tunnel.sh`를 실행하거나 `deploy/dev.kakaocollector.dot-tunnel.plist.example`의 절대 경로를 수정해 사용자 LaunchAgent로 설치하세요. 장비별 파일은 Git에서 제외된 `deploy/*.local.plist`에 보관하세요. Mac의 Funnel을 `127.0.0.1:18788`로 연결하고 기존 목적지와 충돌하지 않는지 확인하세요.
+`scripts/dot-tunnel.sh`를 실행하거나 `deploy/dev.kakaotalkbridge.dot-tunnel.plist.example`의 절대 경로를 수정해 사용자 LaunchAgent로 설치하세요. 장비별 파일은 Git에서 제외된 `deploy/*.local.plist`에 보관하세요. Mac의 Funnel을 `127.0.0.1:18788`로 연결하고 기존 목적지와 충돌하지 않는지 확인하세요.
 
 Mac 잠자기·종료, Lima·Tailscale 중지는 공개 연결을 끊습니다. Funnel 주소가 공개되어도 `/mcp`는 OAuth 인증을 요구합니다.
 
