@@ -1,6 +1,5 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 from uuid import uuid4
 
 import pytest
@@ -10,7 +9,7 @@ from server.maintenance import backup, restore
 from server.outgoing import Claim, Outgoing, SendMessage
 from server.store import Store
 from tests.test_api import DEVICE, INGEST, READ, auth
-from tests.test_iris import CONFIG
+from tests.test_iris import CONFIG, snapshot
 from tests.test_iris import pipeline as iris_pipeline
 
 pipeline = iris_pipeline
@@ -83,7 +82,11 @@ def test_concurrent_retries_and_claims_are_single_attempt(sending):
         results = list(pool.map(lambda _: outgoing.enqueue(SendMessage(**body)), range(16)))
     assert all(result["status"] == "queued" for result in results)
     assert enqueue(client, {**body, "text": "different"}).status_code == 409
-    claim = Claim(enrollment_epoch=collector.epoch, database_id=collector.database_id)
+    claim = Claim(
+        enrollment_epoch=collector.epoch,
+        database_id=collector.database_id,
+        account_ref=collector.account_ref,
+    )
     with ThreadPoolExecutor(max_workers=8) as pool:
         claimed = list(pool.map(lambda _: outgoing.claim(claim), range(16)))
     assert sum(row["item"] is not None for row in claimed) == 1
@@ -102,6 +105,7 @@ def test_concurrent_retries_and_claims_are_single_attempt(sending):
         {"listener_connected": False},
         {"secondary_login_confirmed": False},
         {"supports_message_send": False},
+        {"account_ref": None},
         {"enrollment_epoch": str(uuid4())},
         {"database_id": "1:999"},
     ],
@@ -136,6 +140,7 @@ def test_worker_passes_exact_unicode_text_and_checks_response_identity(sending, 
         assert payload["text"] == body["text"]
         assert payload["chat_id"] == "9007199254740993"
         assert payload["enrollment_epoch"] == CONFIG["enrollment_epoch"]
+        assert payload["approved_user_id"] == CONFIG["approved_user_id"]
         return {**payload, "status": "submitted", "build": iris.BUILD}
 
     monkeypatch.setattr(iris, "request", send)
@@ -189,8 +194,8 @@ def test_ambiguous_dispatch_and_ack_never_resend(sending, monkeypatch, outcome):
 def test_worker_rechecks_enrollment_after_claim(sending, monkeypatch):
     collector, client, _, body = sending
     enqueue(client, body)
-    checks = iter([deepcopy(CONFIG), {**CONFIG, "secondary_login_version": 0}])
-    monkeypatch.setattr(iris, "check_enrollment", lambda: next(checks))
+    checks = iter([snapshot(), snapshot({**CONFIG, "approved_user_id": "456"})])
+    monkeypatch.setattr(iris.enrollment, "require_approved", lambda: next(checks))
     monkeypatch.setattr(iris, "request", lambda *a, **k: pytest.fail("must not send"))
     collector.send_pending(CONFIG)
     assert status(client, body)["status"] == "failed"
@@ -228,6 +233,7 @@ def test_claim_rejects_old_identity_and_cancels_old_queue(sending):
             headers=auth(READ),
             json={
                 "enrollment_epoch": collector.epoch,
+                "account_ref": collector.account_ref,
                 "database_id": collector.database_id,
             },
         ).status_code
@@ -238,6 +244,7 @@ def test_claim_rejects_old_identity_and_cancels_old_queue(sending):
         headers=auth(INGEST),
         json={
             "enrollment_epoch": collector.epoch,
+            "account_ref": collector.account_ref,
             "database_id": "other",
         },
     )
@@ -253,6 +260,7 @@ def test_claim_rejects_old_identity_and_cancels_old_queue(sending):
         headers=auth(INGEST),
         json={
             "enrollment_epoch": collector.epoch,
+            "account_ref": collector.account_ref,
             "database_id": "other",
         },
     )
@@ -311,3 +319,48 @@ def test_transport_authentication_and_sanitized_errors(monkeypatch):
     assert calls[0].headers["Authorization"] == "Bearer " + SEND
     assert calls[0].get_method() == "POST"
     assert json.loads(calls[0].data) == {"text": "한글"}
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_account_change_with_same_epoch_and_database_cancels_old_requests(sending, legacy):
+    collector, client, _, body = sending
+    enqueue(client, body)
+    old_account = collector.account_ref
+    new_account = iris.account_identity({**CONFIG, "approved_user_id": "456"})
+    outgoing = client.app.state.outgoing
+    with outgoing.store.connect() as db:
+        if legacy:
+            # A persisted queue created before account-bound approval was integrated.
+            db.execute("ALTER TABLE outgoing DROP COLUMN account_ref")
+        data = json.loads(db.execute("SELECT body FROM statuses WHERE kind='bridge'").fetchone()[0])
+        db.execute(
+            "UPDATE statuses SET body=? WHERE kind='bridge'",
+            (json.dumps(data | {"account_ref": new_account}),),
+        )
+    outgoing = Outgoing(outgoing.store, outgoing.config)
+    claim = {"enrollment_epoch": collector.epoch, "database_id": collector.database_id}
+    from server.outgoing import SendError
+
+    with pytest.raises(SendError, match="send_enrollment_mismatch"):
+        outgoing.claim(Claim(**claim, account_ref=old_account))
+    assert outgoing.claim(Claim(**claim, account_ref=new_account)) == {"item": None}
+    assert status(client, body)["reason"] == "enrollment_changed"
+    assert enqueue(client, body).json()["status"] == "failed"
+    with outgoing.store.connect() as db:
+        assert db.execute("SELECT text FROM outgoing").fetchone()[0] is None
+
+
+def test_same_approved_account_can_send_after_kakao_update(sending, monkeypatch):
+    from dataclasses import replace
+
+    collector, client, _, body = sending
+    enqueue(client, body)
+    upgraded = replace(snapshot(), kakao_version=29260900)
+    monkeypatch.setattr(iris.enrollment, "require_approved", lambda: upgraded)
+    monkeypatch.setattr(
+        iris,
+        "request",
+        lambda url, payload, token: {**payload, "status": "submitted", "build": iris.BUILD},
+    )
+    collector.send_pending(CONFIG)
+    assert status(client, body)["status"] == "submitted"

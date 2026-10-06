@@ -82,6 +82,5 @@ class Collector:
         except (OSError, ValueError):
             raise RuntimeError("send_result_unavailable_reuse_request_id") from None
 
-    def messages(self, after, limit=50, conversation_ref=None):
-        filters = {"conversation_ref": conversation_ref} if conversation_ref else {}
-        return self.get("/v1/messages", after=after, limit=limit, **filters)
+    def messages(self, after, limit=50):
+        return self.get("/v1/messages", after=after, limit=limit)

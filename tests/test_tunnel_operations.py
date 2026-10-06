@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from ops import cli, onboarding, tunnel
+from ops import cli, expose, onboarding, tunnel
 from tests.test_onboarding import options
 
 TUNNEL = "tunnel_" + "a" * 32
@@ -73,7 +73,7 @@ def test_failed_start_restores_previous_files_and_restarts_services(home, monkey
         return ""
 
     monkeypatch.setattr(cli, "compose", execute)
-    with pytest.raises(RuntimeError, match="previous configuration restored"):
+    with pytest.raises(RuntimeError, match="이전 설정으로 되돌렸습니다"):
         tunnel.configure(TUNNEL, key)
     assert (home / ".env").read_bytes() == before
     assert not (home / "secrets/openai_tunnel_api_key").exists()
@@ -88,7 +88,7 @@ def test_invalid_existing_private_credential_stops_before_mutation(home, monkeyp
     (home / "secrets/mcp_tunnel_authorization").write_text("invalid")
     execute = Mock()
     monkeypatch.setattr(cli, "compose", execute)
-    with pytest.raises(RuntimeError, match="Restore the existing"):
+    with pytest.raises(RuntimeError, match="인증 정보.*복구하세요"):
         tunnel.configure(TUNNEL, key)
     execute.assert_not_called()
 
@@ -112,7 +112,7 @@ def test_failed_key_rotation_restores_old_key_and_recreates_its_mount(home, monk
         return ""
 
     monkeypatch.setattr(cli, "compose", execute)
-    with pytest.raises(RuntimeError, match="previous configuration restored"):
+    with pytest.raises(RuntimeError, match="이전 설정으로 되돌렸습니다"):
         tunnel.configure(TUNNEL, key)
     assert recreated == [key.read_text(), old]
     assert cli.read_env()["OPENAI_TUNNEL_ENABLED"] == "1"
@@ -152,7 +152,7 @@ def test_tunnel_onboarding_skips_public_network_and_opens_only_admin(home, monke
         str(key),
         "--no-browser",
     )
-    monkeypatch.setattr(cli, "tailscale_binary", Mock(side_effect=AssertionError("no Tailscale")))
+    monkeypatch.setattr(expose, "tailscale_binary", Mock(side_effect=AssertionError("no Tailscale")))
     onboarding.validate(args)
     runtime = Mock()
     runtime.call.return_value = "https://admin.test/admin/"

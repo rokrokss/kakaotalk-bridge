@@ -9,7 +9,7 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from dot_plugin.storage import State
-from ops import cli
+from ops import access, cli
 from server.origins import validate_admin_origin, validate_origin
 from server.passkeys import Passkeys
 from tests.test_passkeys import Authenticator
@@ -140,7 +140,7 @@ def test_setup_keeps_local_passkey_and_automates_public_consent(
 
     execute = Mock(side_effect=compose)
     monkeypatch.setattr(cli, "compose", execute)
-    cli.passkey_setup(
+    access.passkey_setup(
         argparse.Namespace(local=True, url=None, public_url=None, enroll=False, link_only=True)
     )
     assert cli.read_env()["ADMIN_LOCAL_ORIGIN"] == LOCAL

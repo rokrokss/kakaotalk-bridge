@@ -16,4 +16,14 @@ function nextPreparation(state, attempted) {
   return action && !attempted.has(action) ? action : null;
 }
 
-if (typeof module !== 'undefined') module.exports = { nextPreparation };
+// While waiting for the tablet login, re-inspect the screen so the login is detected
+// without a button. Pause while the user is operating the tablet.
+function loginCheckDue(state, now, lastInteraction) {
+  const session = state?.sessions;
+  if (!state?.setup?.enrolled || session?.collection_approval === 'approved'
+      || state.job?.state === 'running') return false;
+  const age = session ? now / 1000 - session.checked_at : Infinity;
+  return age > 15 && now - lastInteraction > 20000;
+}
+
+if (typeof module !== 'undefined') module.exports = { nextPreparation, loginCheckDue };

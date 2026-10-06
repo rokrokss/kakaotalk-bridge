@@ -14,7 +14,7 @@ else
     openssl req -x509 -newkey rsa:3072 -nodes -days 365 -sha256 \
         -keyout secrets/tls_key.pem -out secrets/tls_cert.pem \
         -subj '/CN=KakaoTalk Bridge Private Gateway' \
-        -addext "subjectAltName=IP:${GATEWAY_IP:-172.29.87.3},IP:127.0.0.1,DNS:localhost" >/dev/null 2>&1
+        -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" >/dev/null 2>&1
 fi
 chmod 444 secrets/tls_cert.pem secrets/tls_key.pem
 if [[ ! -s secrets/bridge.jks && "${BRIDGE_PREBUILT:-0}" != 1 ]]; then
@@ -22,7 +22,7 @@ if [[ ! -s secrets/bridge.jks && "${BRIDGE_PREBUILT:-0}" != 1 ]]; then
         -v "$PWD/secrets:/signing" \
         gradle:8.11.1-jdk17@sha256:91d559b8d55f522de5bc6882f73bcedc4e2cc7b0a58e839a9fa0ed95811a988d \
         -genkeypair -alias bridge -keyalg RSA -keysize 3072 -validity 3650 \
-        -dname 'CN=Personal Notification Bridge' -keystore /signing/bridge.jks \
+        -dname 'CN=KakaoTalk Bridge' -keystore /signing/bridge.jks \
         -storepass:file /signing/bridge_key_password -keypass:file /signing/bridge_key_password
 fi
 echo '인증 키를 준비했습니다. 기존 키는 유지됩니다. secrets/를 안전하게 백업하세요.'

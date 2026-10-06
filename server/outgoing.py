@@ -41,6 +41,7 @@ class SendStatus(BaseModel):
 class Claim(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enrollment_epoch: UUID
+    account_ref: UUID
     database_id: str = Field(min_length=1, max_length=128)
 
 
@@ -64,11 +65,15 @@ class Outgoing:
                     conversation_ref TEXT NOT NULL, device_id TEXT NOT NULL,
                     epoch TEXT NOT NULL, database_id TEXT NOT NULL, chat_id TEXT NOT NULL,
                     text TEXT, status TEXT NOT NULL, reason TEXT,
-                    created_at REAL NOT NULL, updated_at REAL NOT NULL
+                    created_at REAL NOT NULL, updated_at REAL NOT NULL, account_ref TEXT
                 );
                 CREATE INDEX IF NOT EXISTS outgoing_pending ON outgoing(status, created_at);
                 CREATE INDEX IF NOT EXISTS outgoing_created ON outgoing(created_at);
             """)
+            if "account_ref" not in {
+                row["name"] for row in db.execute("PRAGMA table_info(outgoing)")
+            }:
+                db.execute("ALTER TABLE outgoing ADD COLUMN account_ref TEXT")
 
     @staticmethod
     def expire(db):
@@ -96,6 +101,7 @@ class Outgoing:
             or not bridge.get("listener_connected")
             or not bridge.get("secondary_login_confirmed")
             or not bridge.get("supports_message_send")
+            or not bridge.get("account_ref")
         ):
             raise SendError("sending_unavailable_confirm_login_and_upgrade_iris", 423)
         return bridge
@@ -153,7 +159,9 @@ class Outgoing:
                 raise SendError("send_rate_limited", 429)
             instant = time.time()
             db.execute(
-                "INSERT INTO outgoing VALUES(?,?,?,?,?,?,?,?,'queued',NULL,?,?)",
+                "INSERT INTO outgoing(request_id,digest,conversation_ref,device_id,epoch,"
+                "database_id,chat_id,text,status,reason,created_at,updated_at,account_ref) "
+                "VALUES(?,?,?,?,?,?,?,?,'queued',NULL,?,?,?)",
                 (
                     body.request_id,
                     digest,
@@ -165,6 +173,7 @@ class Outgoing:
                     body.text,
                     instant,
                     instant,
+                    bridge["account_ref"],
                 ),
             )
             return self.view(
@@ -190,12 +199,19 @@ class Outgoing:
             if (
                 str(body.enrollment_epoch) != bridge["enrollment_epoch"]
                 or body.database_id != bridge["database_id"]
+                or str(body.account_ref) != bridge["account_ref"]
             ):
                 raise SendError("send_enrollment_mismatch", 423)
             db.execute(
                 "UPDATE outgoing SET status='failed',reason='enrollment_changed',text=NULL "
-                "WHERE status='queued' AND (device_id!=? OR epoch!=? OR database_id!=?)",
-                (self.config.device_id, str(body.enrollment_epoch), body.database_id),
+                "WHERE status='queued' AND (device_id!=? OR epoch!=? OR database_id!=? "
+                "OR account_ref IS NULL OR account_ref!=?)",
+                (
+                    self.config.device_id,
+                    str(body.enrollment_epoch),
+                    body.database_id,
+                    str(body.account_ref),
+                ),
             )
             row = db.execute(
                 "SELECT * FROM outgoing WHERE status='queued' ORDER BY created_at LIMIT 1"
@@ -210,7 +226,14 @@ class Outgoing:
             return {
                 "item": {
                     key: row[key]
-                    for key in ("request_id", "chat_id", "text", "epoch", "database_id")
+                    for key in (
+                        "request_id",
+                        "chat_id",
+                        "text",
+                        "epoch",
+                        "database_id",
+                        "account_ref",
+                    )
                 }
             }
 

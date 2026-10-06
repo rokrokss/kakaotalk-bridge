@@ -19,7 +19,8 @@ import time
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-from ops import cli, onboarding, tunnel
+from ops import access, cli, expose, onboarding, tunnel
+from ops.errors import BridgeError
 from server.connection_setup import validate
 
 MAX_BODY = 4096
@@ -131,9 +132,9 @@ def quiet_run(args, *, capture=False, **kwargs):
 
 
 def configure_oauth(url):
-    cli.connect(url)
+    access.connect(url)
     if cli.read_env().get("ADMIN_AUTH_MODE", "passkey") == "passkey":
-        cli.passkey_setup(
+        access.passkey_setup(
             argparse.Namespace(local=True, url=None, public_url=url, enroll=False, link_only=True)
         )
     else:
@@ -167,7 +168,7 @@ def execute(data):
                 capture=True,
             )
         if result["configured"] and not result["ready"]:
-            raise RuntimeError("Tunnel is not ready")
+            raise BridgeError("터널이 아직 준비되지 않았습니다.")
         if not public and not result["configured"]:
             return {
                 "state": "ready",
@@ -184,10 +185,10 @@ def execute(data):
             key = data.get("api_key", "")
             if not key:
                 if cli.read_env().get("OPENAI_TUNNEL_ID") != data["tunnel_id"]:
-                    raise ValueError("Enter a runtime key for the new tunnel ID.")
+                    raise BridgeError("새 터널 ID에 맞는 실행용 API 키를 입력하세요.")
                 saved = cli.ROOT / "secrets/openai_tunnel_api_key"
                 if not saved.is_file():
-                    raise ValueError("Enter the runtime API key from OpenAI.")
+                    raise BridgeError("OpenAI에서 발급한 실행용 API 키를 입력하세요.")
                 key = saved.read_text().strip()
             with tempfile.TemporaryDirectory(prefix="bridge-web-key-") as folder:
                 path = Path(folder) / "key"
@@ -199,7 +200,7 @@ def execute(data):
             )
             progress(data, "verify")
             if not tunnel.status()["ready"]:
-                raise RuntimeError("Tunnel is not ready")
+                raise BridgeError("터널이 아직 준비되지 않았습니다.")
             return {
                 "state": "ready",
                 "message": "터널이 준비되고 승인되었습니다. ChatGPT에 추가해 마무리하세요.",
@@ -210,16 +211,16 @@ def execute(data):
             configure_oauth(data["url"])
         elif method == "tailscale":
             progress(data, "tailscale")
-            if not cli.tailscale_binary():
+            if not expose.tailscale_binary():
                 onboarding.install_script("https://tailscale.com/install.sh")
             cli.run(["systemctl", "start", "tailscaled"])
-            binary = cli.tailscale_binary()
+            binary = expose.tailscale_binary()
             if not binary:
-                raise RuntimeError("Tailscale installation did not finish")
+                raise BridgeError("Tailscale 설치가 끝나지 않았습니다.")
             status = onboarding.network_status([binary, "status", "--json"])
             if status["BackendState"] != "Running":
                 cli.run([binary, "up", "--timeout=15s"], timeout=30)
-            cli.expose(argparse.Namespace(local=True))
+            expose.expose(argparse.Namespace(local=True))
             progress(data, "oauth")
             configure_oauth(cli.read_env()["DOT_PUBLIC_URL"])
         return {

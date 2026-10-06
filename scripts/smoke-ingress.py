@@ -19,8 +19,8 @@ def main():
     upstream = f"{network}-echo"
     admin = f"{network}-admin"
     ingress = f"{network}-proxy"
-    server = os.getenv("SMOKE_SERVER_IMAGE", "kakaotalk-collector/server:0.1.0")
-    gateway = os.getenv("SMOKE_GATEWAY_IMAGE", "kakaotalk-collector/gateway:2.11.7")
+    server = os.getenv("SMOKE_SERVER_IMAGE", "kakaotalk-bridge/server:local")
+    gateway = os.getenv("SMOKE_GATEWAY_IMAGE", "kakaotalk-bridge/gateway:local")
     config = Path(__file__).resolve().parents[1] / "docker/Caddyfile.public"
 
     def run(*args):

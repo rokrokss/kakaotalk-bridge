@@ -10,9 +10,9 @@ import time
 import uuid
 from pathlib import Path
 
-from device import cli, login_guard, session_status
+from device import cli, enrollment, session_status
 
-IME = f"{cli.PKG}/.WebInputMethod"
+IME = cli.IME
 KEYS = {"back": "4", "home": "3", "enter": "66", "delete": "67", "tab": "61", "wake": "224"}
 
 
@@ -79,7 +79,7 @@ class Android:
         uid = cli.bridge_uid()
         nonce = uuid.uuid4().hex
         directory = f"/data/user/0/{cli.PKG}/files"
-        remote = f"/data/local/tmp/collector-web-{nonce}"
+        remote = f"/data/local/tmp/kakaotalk-bridge-input-{nonce}"
         pending, receipt = f"{directory}/web-input.json", f"{directory}/web-input-result.json"
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "input.json"
@@ -101,7 +101,7 @@ class Android:
                     "broadcast",
                     "--receiver-foreground",
                     "-a",
-                    "dev.kakaocollector.bridge.WEB_TEXT",
+                    "dev.kakaotalkbridge.android.WEB_TEXT",
                     "-p",
                     cli.PKG,
                 )
@@ -146,18 +146,16 @@ class Android:
         cli.bootstrap()
         self.enable_keyboard()
 
-    def login_check(self):
-        return cli.login_check()
-
-    def confirm(self, phone, tablet):
-        cli.confirm_secondary(phone, tablet)
+    def approve(self, phone_active):
+        cli.connect()
+        enrollment.approve(phone_active)
 
     def session_status(self):
         result = {
             "checked_at": time.time(),
             "device": "offline",
             "screen": {"state": "unknown", "secondary_option": "unknown"},
-            **session_status.enrollment_evidence({}, {}, None),
+            **session_status.evidence(None),
         }
         try:
             state = cli.sample()
@@ -168,11 +166,7 @@ class Android:
                 result["screen"]["state"] = "not_installed"
                 return result
             try:
-                config = json.loads(cli.adb("shell", "cat", cli.REMOTE_CONFIG))
-                signature = login_guard.device_signature(cli.adb)
-                proof_path = Path("/state/prelogin.json")
-                proof = json.loads(proof_path.read_text()) if proof_path.exists() else {}
-                result.update(session_status.enrollment_evidence(config, proof, signature))
+                result.update(session_status.evidence(enrollment.current()))
             except (
                 OSError,
                 ValueError,
@@ -184,7 +178,7 @@ class Android:
                 pass
             # The UI tree can contain private text. Use a private directory and delete it
             # in finally; only classifications leave this function, never the raw tree.
-            directory = "/data/local/tmp/collector-session-" + uuid.uuid4().hex
+            directory = "/data/local/tmp/kakaotalk-bridge-session-" + uuid.uuid4().hex
             path = directory + "/window.xml"
             try:
                 cli.adb("shell", "mkdir", "-m", "700", directory)
@@ -200,26 +194,10 @@ class Android:
 
     def record_phone(self, active):
         cli.connect()
-        config = json.loads(cli.adb("shell", "cat", cli.REMOTE_CONFIG))
-        if active:
-            evidence = session_status.enrollment_evidence(
-                config, {}, login_guard.device_signature(cli.adb)
-            )
-            if (
-                evidence["collection_approval"] != "approved"
-                or not evidence["phone"]["confirmed_at"]
-            ):
-                raise RuntimeError("secondary_confirmation_required")
-            config["phone_session_confirmed_at"] = time.time()
-        else:
-            config["secondary_login_version"] = 0
-        config["phone_session_report"] = "active" if active else "lost"
-        config["phone_session_reported_at"] = time.time()
-        cli.provision_file(config)
+        enrollment.record_phone(active)
         if not active:
-            Path("/state/prelogin.json").unlink(missing_ok=True)
             # The enrollment gate is already revoked. The collector also checks it
-            # before each upload; stopping our process accelerates the shutdown.
+            # before each page; stopping our process accelerates the shutdown.
             from device import iris
 
             iris.stop()

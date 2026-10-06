@@ -61,9 +61,6 @@ class OAuth:
 
     def __init__(self, config, state, passkeys=None):
         self.config, self.state = config, state
-        from server.auth_migration import retire_social_login
-
-        retire_social_login(state)
         from server.passkey_client import PasskeyClient
 
         self.passkeys = passkeys or PasskeyClient("public")
@@ -143,7 +140,7 @@ class OAuth:
         client = {
             "redirect_uris": redirects,
             "token_endpoint_auth_method": method,
-            "client_name": str(meta.get("client_name", "MCP client"))[:100],
+            "client_name": str(meta.get("client_name", "MCP 클라이언트"))[:100],
             "grant_types": ["authorization_code", "refresh_token"],
             "response_types": ["code"],
             "scope": SCOPES,

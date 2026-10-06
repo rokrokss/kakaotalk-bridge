@@ -193,7 +193,7 @@
             <summary>대화 이벤트</summary>
             <div class="section-body">
               <p>연결된 AI에 새 메시지 이벤트를 보낼 대화를 선택하세요. 기본값은 모든 대화에서 꺼짐입니다. 메시지 수집과 검색에는 영향을 주지 않습니다.</p>
-              <p class="hint">켜면 그 시점부터 새로 수집된 메시지의 이벤트를 허용합니다. AI 클라이언트에서도 MCP Events를 구독해야 합니다. 끄면 대기 중인 이벤트가 취소되지만 이미 전송 중인 이벤트는 전달될 수 있습니다.</p>
+              <p class="hint">켜면 그 시점부터 새로 수집된 메시지의 이벤트를 허용합니다. AI 클라이언트에서도 MCP 이벤트를 구독해야 합니다. 끄면 대기 중인 이벤트가 취소되지만 이미 전송 중인 이벤트는 전달될 수 있습니다.</p>
               <form id="event-search-form">
                 <label for="event-search">대화 찾기</label>
                 <div class="input-row">
@@ -273,20 +273,16 @@
               <ol class="login-steps">
                 <li>
                   <h3>보조 기기로 로그인</h3>
-                  <p>한국어 카카오톡 화면에서 <strong>다른 기기와 함께 사용</strong>을 선택한 뒤 확인을 실행하세요. 이 옵션이 없으면 로그인하지 마세요.</p>
-                  <button id="login-check" data-action="login-check" class="wide" aria-describedby="login-check-help">로그인 옵션 확인</button>
-                  <p id="login-check-help" class="hint">로그인하기 전에만 사용하세요. 확인에 성공한 뒤 30분 이내에 태블릿에 로그인하세요.</p>
-                  <p id="login-check-result" class="job" role="status" hidden></p>
+                  <p>태블릿 카카오톡 로그인 화면에서 <strong>다른 기기와 함께 사용</strong>을 선택한 뒤 로그인하세요. 이 옵션 없이 로그인하면 휴대폰의 카카오톡이 로그아웃될 수 있습니다.</p>
+                  <p id="login-option-status" class="hint" role="status"></p>
+                  <button data-action="session-check" class="quiet">태블릿 화면 다시 확인</button>
                 </li>
                 <li>
-                  <h3>태블릿 로그인 완료</h3>
-                  <p>확인에 성공하면 휴대폰 인증 등 필요한 절차를 거쳐 태블릿에서 카카오톡 로그인을 완료하세요. 휴대폰의 카카오톡을 열어 기존 로그인이 유지되는지 확인하세요.</p>
-                </li>
-                <li>
-                  <h3>두 기기의 로그인 확인</h3>
-                  <label class="check"><input id="phone-active" type="checkbox">휴대폰의 기존 로그인이 유지되고 있습니다.</label>
-                  <label class="check"><input id="tablet-active" type="checkbox">태블릿에 로그인했습니다.</label>
+                  <h3>휴대폰 확인 후 수집 시작</h3>
+                  <p id="tablet-login-status" class="hint" role="status"></p>
+                  <label class="check"><input id="phone-active" type="checkbox">휴대폰의 카카오톡 로그인이 유지되고 있습니다.</label>
                   <button id="confirm" class="primary wide" disabled>메시지 수집 시작</button>
+                  <p id="login-result" class="job" role="status" hidden></p>
                 </li>
               </ol>
             </div>
@@ -331,7 +327,7 @@
             <div class="section-body">
               <button id="test-collection" class="wide">수집 테스트 시작</button>
               <p id="test-result" role="status">테스트를 시작한 뒤 휴대폰에서 나에게 메시지를 보내세요.</p>
-              <p>서버 명령어:</p><code>./bridge doctor<br>./bridge backup<br>./bridge update --manifest release.json</code>
+              <p>서버 명령어:</p><code>./bridge doctor<br>./bridge backup<br>./bridge upgrade</code>
               <p class="hint">백업에는 Android 로그인 정보와 키가 포함됩니다. 안전하게 보관하세요. 진단 결과에는 메시지와 인증 정보가 포함되지 않습니다.</p>
             </div>
           </details>
@@ -345,7 +341,7 @@
   <dialog id="install-dialog" aria-labelledby="install-title" aria-describedby="install-description">
     <form method="dialog">
       <h2 id="install-title">수집 구성 요소를 설치할까요?</h2>
-      <p id="install-description">카카오톡 설치 후 등록 앱, 키보드와 Iris를 설치합니다. 이미 등록된 태블릿은 변경하지 않습니다.</p>
+      <p id="install-description">카카오톡 설치를 확인한 뒤 키보드 앱을 설치하고 태블릿을 등록합니다. Iris는 수집을 시작할 때 자동으로 설치됩니다. 이미 등록된 태블릿은 변경하지 않습니다.</p>
       <div class="dialog-actions">
         <button value="cancel" autofocus>취소</button>
         <button value="install" class="primary">설치</button>

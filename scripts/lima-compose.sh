@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# This targets the dedicated Ubuntu test VM, without switching Docker Desktop's context.
-exec limactl shell --workdir=/ kakaotalk-test sudo docker compose \
-    --project-directory /srv/kakaotalk-collector \
-    -f /srv/kakaotalk-collector/compose.yaml \
-    -f /srv/kakaotalk-collector/deploy/compose.lima.yaml "$@"
+# For a Lima VM built by hand from deploy/lima.yaml. Installer-managed VMs use ./bridge.
+instance="${LIMA_INSTANCE:-kakaotalk-bridge}"
+directory="${BRIDGE_DIR:-/srv/kakaotalk-bridge}"
+# Targets the VM's Docker without switching Docker Desktop's context.
+exec limactl shell --workdir=/ "$instance" sudo docker compose \
+    --project-directory "$directory" \
+    -f "$directory/compose.yaml" \
+    -f "$directory/deploy/compose.lima.yaml" "$@"

@@ -7,20 +7,34 @@ import pytest
 from fastapi.testclient import TestClient
 
 from device import iris
+from device.enrollment import Snapshot
 from server.app import create_app
 from server.config import Settings
 from server.maintenance import backup, restore
 from server.models import Observation
-from server.store import Store
+from server.store import Store, digest
 from tests.test_api import DEVICE, INGEST, READ, auth, event
 
 CONFIG = {
     "device_id": "personal-tablet",
-    "collector_mode": "iris",
     "enrollment_epoch": "d0ca9a35-a86f-4f7f-b0b2-c2c1a0b1c36b",
-    "secondary_login_version": 123,
+    "approved_user_id": "123",
     "device_fingerprint": "test-build",
 }
+
+
+def snapshot(config=CONFIG):
+    return Snapshot(
+        config=deepcopy(config),
+        legacy=False,
+        characteristics="tablet",
+        fingerprint="test-build",
+        width=1200,
+        height=1920,
+        dpi=240,
+        kakao_version=29260820,
+        account_ids=(123,),
+    )
 
 
 def row(log_id=10, **changes):
@@ -36,6 +50,13 @@ def row(log_id=10, **changes):
         "truncated": False,
         **changes,
     }
+
+
+@pytest.fixture(autouse=True)
+def fresh_apk_hash():
+    iris.local_apk_sha.cache_clear()
+    yield
+    iris.local_apk_sha.cache_clear()
 
 
 @pytest.fixture
@@ -54,13 +75,15 @@ def pipeline(tmp_path, monkeypatch):
 
         collector = iris.Collector(api)
         monkeypatch.setattr(iris.cli, "connect", Mock())
-        monkeypatch.setattr(iris, "check_enrollment", lambda: deepcopy(CONFIG))
+        monkeypatch.setattr(iris.enrollment, "require_approved", lambda: snapshot())
         monkeypatch.setattr(iris, "ensure_started", Mock(return_value="a" * 43))
+        monkeypatch.setattr(iris, "healthy", Mock())
         page = {
             "build": iris.BUILD,
             "enrollment_epoch": CONFIG["enrollment_epoch"],
             "database_id": "1:100",
             "high_water": "11",
+            "has_more": False,
             "rows": [row(), row(11)],
         }
 
@@ -71,41 +94,61 @@ def pipeline(tmp_path, monkeypatch):
             assert url == "http://127.0.0.1:3000/collector/metadata"
             assert 1 <= len(payload["targets"]) <= 50
             return {
-                key: value for key, value in page.items() if key not in ("rows", "high_water")
-            } | {"items": []}
+                key: value
+                for key, value in page.items()
+                if key not in ("rows", "high_water", "has_more")
+            } | {"items": [], "self_identity_source": "local_account"}
 
         monkeypatch.setattr(iris, "request", response)
         yield collector, client, page
 
 
+def messages(client):
+    return client.get("/v1/messages", headers=auth()).json()["items"]
+
+
 def test_iris_end_to_end_ids_history_and_repeat_text(pipeline):
     collector, client, page = pipeline
     assert collector.tick() == 2
-    items = client.get("/v1/messages", headers=auth()).json()["items"]
+    items = messages(client)
     assert len(items) == 2 and items[0]["body"] == items[1]["body"]
     assert all(i["source"] == "iris_db" and not i["ambiguity"] for i in items)
     assert items[0]["conversation_ref"].endswith(":9007199254740993")
     assert items[0]["database_ref"]["origin"] == "SYNCMSG"  # History not filtered out.
     assert items[0]["database_ref"]["is_mine"] is False
     assert client.get("/v1/checkpoint", headers=auth()).json()["cursor"] == 2
-    filtered = client.get(
-        "/v1/messages", params={"conversation_ref": items[0]["conversation_ref"]}, headers=auth()
-    ).json()
-    assert len(filtered["items"]) == 2
-    assert (
-        client.get("/v1/conversations", headers=auth()).json()["items"][0]["identity_confidence"]
-        == "database_id"
-    )
     status = client.get("/v1/status", headers=auth()).json()
     assert status["state"] == "collecting_partial"
+    assert status["bridge"]["kakao_version"] == 29260820
     assert status["coverage"]["scope"] == "redroid_local_database_rows"
     assert not status["coverage"]["complete"]
     assert not status["coverage"]["phone_session_monitoring"]
+    assert status["identity_metadata"]["self_identity_source"] == "local_account"
     page["rows"] = []
     assert collector.tick() == 0
 
 
-def test_lost_ack_restarts_from_server_commit(pipeline, monkeypatch):
+def test_page_commits_in_one_request(pipeline):
+    collector, _client, page = pipeline
+    batches = []
+    real_api = collector.api
+
+    def counting(path, payload=None):
+        if path.endswith("observations:batch"):
+            batches.append(len(payload["events"]))
+        return real_api(path, payload)
+
+    collector.api = counting
+    collector.tick()
+    assert batches == [2]
+    page["rows"] = [row(seq, message="가" * 16000) for seq in range(12, 112)]
+    page["high_water"] = "111"
+    collector.tick()
+    # Large pages are split under the API body limit, still in order.
+    assert sum(batches[1:]) == 100 and len(batches) > 2
+
+
+def test_lost_ack_restarts_from_server_commit(pipeline):
     collector, client, page = pipeline
     real_api = collector.api
 
@@ -118,26 +161,60 @@ def test_lost_ack_restarts_from_server_commit(pipeline, monkeypatch):
     collector.api = lost_ack
     with pytest.raises(OSError):
         collector.tick()
-    assert (
-        client.app.state.store.iris_progress("personal-tablet", iris.identity(CONFIG))["after"]
-        == 10
-    )
-    page["rows"] = [row(11)]
+    store = client.app.state.store
+    assert store.iris_progress("personal-tablet", iris.identity(CONFIG))["after"] == 11
+    page["rows"] = [row(12)]
+    page["high_water"] = "12"
     # New process has no local cursor or persistent outbox dependency.
     restarted = iris.Collector(real_api)
     assert restarted.tick() == 1
-    assert len(client.get("/v1/messages", headers=auth()).json()["items"]) == 2
+    assert len(messages(client)) == 3
 
 
-def test_poison_row_blocks_later_cursor(pipeline):
+def test_unstorable_row_is_recorded_and_later_rows_continue(pipeline):
     collector, client, page = pipeline
     page["rows"][0]["message"] = "x" * 16385
+    assert collector.tick() == 2
+    store = client.app.state.store
+    assert store.iris_progress("personal-tablet", iris.identity(CONFIG))["after"] == 11
+    assert [i["body"] for i in messages(client)] == ["알림을 끈 방의 메시지"]
+    assert client.get("/v1/status", headers=auth()).json()["coverage"]["skipped_rows"] == 1
+
+
+def test_rows_iris_could_not_decode_advance_without_messages(pipeline):
+    collector, client, page = pipeline
+    page["rows"][0] = {
+        "log_id": "10",
+        "chat_id": "9007199254740993",
+        "sender_id": "123",
+        "message_type": "1",
+        "created_at": 1791072000,
+        "skipped": "decrypt_failed",
+    }
+    assert collector.tick() == 2
+    assert len(messages(client)) == 1
+    with client.app.state.store.connect() as db:
+        stored = json.loads(
+            db.execute("SELECT body FROM observations WHERE source_seq=10").fetchone()[0]
+        )
+    assert stored["kind"] == "db_row_skipped"
+    assert stored["database_ref"]["skip_reason"] == "decrypt_failed"
+    assert stored["payload"]["messages"] == []
+
+
+def test_rejected_skip_marker_still_stops_collection(pipeline):
+    collector, _client, _page = pipeline
+    collector.api = Mock(
+        side_effect=lambda path, payload=None: (
+            {"after": 0, "database_id": None}
+            if "cursor" in path
+            else {"results": [{"index": 0, "status": "rejected", "reason": "invalid_event"}] * 2}
+            if path.endswith("observations:batch")
+            else {}
+        )
+    )
     with pytest.raises(RuntimeError, match="iris_row_rejected"):
         collector.tick()
-    assert (
-        client.app.state.store.iris_progress("personal-tablet", iris.identity(CONFIG))["after"] == 0
-    )
-    assert client.get("/v1/messages", headers=auth()).json()["items"] == []
 
 
 def test_replay_uses_row_identity_not_poll_timestamp(pipeline):
@@ -155,6 +232,17 @@ def test_replay_uses_row_identity_not_poll_timestamp(pipeline):
     assert result["results"][0]["reason"] == "event_id_conflict"
 
 
+def test_digest_matches_rows_committed_by_the_previous_release():
+    # Digests computed by v0.1.0, which serialized the retired notification fields.
+    expected = {
+        "10": "14bdd2600896cf3492e1e560489c5abe6ce08d6e5485838ce47439414f61d6da",
+        "11": "2304942c55cc20addc15fb3a865bf8f8915d40021a61b7d20ead77b5d98da268",
+    }
+    for record in (row(), row(11, is_mine=True, truncated=True, origin="", message="")):
+        event = Observation.model_validate(iris.make_event(CONFIG, "1:100", record))
+        assert digest(event) == expected[record["log_id"]]
+
+
 @pytest.mark.parametrize("change", [{"database_id": "1:200"}, {"high_water": "9"}])
 def test_database_replacement_or_rollback_is_blocked(pipeline, change):
     collector, _client, page = pipeline
@@ -166,30 +254,35 @@ def test_database_replacement_or_rollback_is_blocked(pipeline, change):
 
 def test_revocation_after_fetch_blocks_ingestion(pipeline, monkeypatch):
     collector, client, _page = pipeline
-    check = Mock(side_effect=[deepcopy(CONFIG), RuntimeError("revoked")])
-    monkeypatch.setattr(iris, "check_enrollment", check)
+    check = Mock(side_effect=[snapshot(), RuntimeError("revoked")])
+    monkeypatch.setattr(iris.enrollment, "require_approved", check)
     with pytest.raises(RuntimeError, match="revoked"):
         collector.tick()
-    assert client.get("/v1/messages", headers=auth()).json()["items"] == []
+    assert messages(client) == []
 
 
-def test_unconfirmed_never_starts_or_reads_iris(pipeline, monkeypatch):
+def test_unapproved_never_starts_or_reads_iris(pipeline, monkeypatch):
     collector, _client, _page = pipeline
-    monkeypatch.setattr(iris, "check_enrollment", Mock(side_effect=RuntimeError("locked")))
-    with pytest.raises(RuntimeError, match="locked"):
+    monkeypatch.setattr(
+        iris.enrollment, "require_approved", Mock(side_effect=RuntimeError("approval_required"))
+    )
+    with pytest.raises(RuntimeError, match="approval_required"):
         collector.tick()
     iris.ensure_started.assert_not_called()
 
 
-def test_api_rejects_wrong_source_or_unconfirmed_iris(pipeline):
+def test_api_rejects_rows_from_another_enrollment_or_unapproved_collector(pipeline):
     collector, client, _page = pipeline
     collector.tick()
-    wrong_source = client.post(
+    other = client.post(
         "/internal/v1/observations:batch",
         headers=auth(INGEST),
-        json={"schema_version": 1, "events": [event()]},
+        json={
+            "schema_version": 1,
+            "events": [event(enrollment_epoch="0e7d6f4c-6a90-4a8e-8e4f-7d0f7b8b7c1a")],
+        },
     )
-    assert wrong_source.status_code == 423
+    assert other.status_code == 423
     collector.heartbeat(False, False)
     response = client.post(
         "/internal/v1/observations:batch",
@@ -220,98 +313,88 @@ def test_iris_cursor_survives_retention_and_encrypted_restore(pipeline, tmp_path
     }
 
 
-def test_legacy_notification_digest_survives_model_extension(tmp_path):
-    store = Store(str(tmp_path / "legacy.db"))
-    record = Observation.model_validate(event())
-    store.ingest(record)
-    old_body = record.model_dump(mode="json", exclude={"database_ref"})
-    digest = hashlib.sha256(
-        json.dumps(old_body, sort_keys=True, ensure_ascii=False).encode()
-    ).hexdigest()
-    with store.connect() as db:
-        db.execute("UPDATE observations SET digest=?", (digest,))
-    assert store.ingest(record) == "duplicate"
-
-
-@pytest.mark.parametrize(
-    "change",
-    [
-        {"collector_mode": "notification"},
-        {"secondary_login_version": 0},
-        {"secondary_login_version": 124},
-        {"device_fingerprint": "other-build"},
-        {"device_id": "other-account-device"},
-    ],
-)
-def test_runtime_gate_rejects_changed_registration(monkeypatch, change):
-    config = {**CONFIG, **change}
-    monkeypatch.setattr(iris.cli, "adb", lambda *args: json.dumps(config))
-    monkeypatch.setattr(
-        iris.login_guard,
-        "device_signature",
-        lambda adb: {"kakao_version": 123, "fingerprint": "test-build"},
-    )
-    with pytest.raises(RuntimeError):
-        iris.check_enrollment()
-
-
-def test_runtime_gate_accepts_matching_iris_registration(monkeypatch):
-    monkeypatch.setattr(iris.cli, "adb", lambda *args: json.dumps(CONFIG))
-    monkeypatch.setattr(
-        iris.login_guard,
-        "device_signature",
-        lambda adb: {"kakao_version": 123, "fingerprint": "test-build"},
-    )
-    assert iris.check_enrollment() == CONFIG
-
-
-def test_explicit_iris_upgrade_verifies_previous_and_staged_apk(monkeypatch):
+def apk_device(monkeypatch, remote_sha, health):
+    """Fake ADB device for start-up tests. Returns the recorded calls."""
     calls = []
-    old = "1" * 64
-    new = hashlib.sha256(b"candidate apk").hexdigest()
 
     def adb(*args, **kwargs):
         calls.append(args)
         if args[:2] == ("shell", "sha256sum"):
-            return (new if args[-1].endswith(".next") else old) + " file"
+            return (
+                hashlib.sha256(b"current apk").hexdigest()
+                if args[2].endswith(".next")
+                else remote_sha
+            ) + " file"
+        if args == ("shell", "cat", iris.AUTH_FILE):
+            return json.dumps({"enrollment_epoch": CONFIG["enrollment_epoch"], "token": "a" * 43})
         return ""
 
     monkeypatch.setattr(iris.cli, "adb", adb)
-    monkeypatch.setattr(iris.cli, "connect", lambda: None)
-    monkeypatch.setattr(iris, "check_enrollment", lambda: CONFIG)
-    monkeypatch.setattr(iris.Path, "read_bytes", lambda self: b"candidate apk")
-    monkeypatch.setattr(iris, "stop", lambda: calls.append(("stop-iris-only",)))
-    monkeypatch.setattr(iris, "ensure_started", lambda: calls.append(("start-iris-only",)))
-    with pytest.raises(RuntimeError, match="previous_binary_mismatch"):
-        iris.upgrade_binary("2" * 64)
-    assert not any(c[0] == "stop-iris-only" for c in calls)
-    assert iris.upgrade_binary(old)["sha256"] == new
-    assert ("shell", "mv", iris.REMOTE_APK + ".next", iris.REMOTE_APK) in calls
-    assert not any("am" in c or "pm" in c for c in calls)
+    monkeypatch.setattr(iris.Path, "read_bytes", lambda self: b"current apk")
+    monkeypatch.setattr(iris, "healthy", health)
+    monkeypatch.setattr(iris.time, "sleep", lambda seconds: None)
+    return calls
 
 
-def test_explicit_iris_upgrade_restores_previous_apk_on_start_failure(monkeypatch):
-    calls = []
-    old = "1" * 64
-    new = hashlib.sha256(b"candidate").hexdigest()
-    monkeypatch.setattr(iris.cli, "connect", lambda: None)
-    monkeypatch.setattr(iris, "check_enrollment", lambda: CONFIG)
-    monkeypatch.setattr(iris.Path, "read_bytes", lambda self: b"candidate")
+def test_running_current_build_is_reused_without_reinstalling(monkeypatch):
+    calls = apk_device(monkeypatch, "0" * 64, Mock())
+    assert iris.ensure_started(CONFIG["enrollment_epoch"]) == "a" * 43
+    assert calls == [("shell", "cat", iris.AUTH_FILE)]
 
-    def adb(*args, **kwargs):
-        calls.append(args)
-        return (
-            ((new if args[-1].endswith(".next") else old) + " file")
-            if args[:2] == ("shell", "sha256sum")
-            else ""
+
+def test_older_or_stopped_iris_is_replaced_with_this_images_build(monkeypatch):
+    health = Mock(side_effect=[RuntimeError("unexpected_iris_server"), OSError("starting"), None])
+    calls = apk_device(monkeypatch, "0" * 64, health)
+    assert iris.ensure_started(CONFIG["enrollment_epoch"]) == "a" * 43
+    pushed = [c for c in calls if c[0] == "push"]
+    assert pushed == [("push", iris.LOCAL_APK, iris.REMOTE_APK + ".next")]
+    assert any(
+        c[:2]
+        == (
+            "shell",
+            f"chmod 0444 {iris.REMOTE_APK}.next && mv {iris.REMOTE_APK}.next {iris.REMOTE_APK}",
         )
+        for c in calls
+    )
+    started = [c for c in calls if "app_process" in " ".join(c)]
+    assert len(started) == 1 and iris.REMOTE_APK in started[0][1]
+    stop = next(c for c in calls if "kill" in " ".join(c))
+    assert iris.PID_FILE in stop[1] and iris.LEGACY_PID_FILE in stop[1]
+    # A rollback to the previous release still needs its files.
+    assert not any("rm -rf" in " ".join(c) for c in calls)
 
-    monkeypatch.setattr(iris.cli, "adb", adb)
-    monkeypatch.setattr(iris, "stop", lambda: None)
-    monkeypatch.setattr(iris, "ensure_started", Mock(side_effect=RuntimeError("start_failed")))
-    with pytest.raises(RuntimeError, match="start_failed"):
-        iris.upgrade_binary(old)
-    assert ("shell", "cp", iris.REMOTE_APK + ".backup-" + old, iris.REMOTE_APK) in calls
+
+def test_previous_release_files_outlive_the_update_rollback_window(monkeypatch):
+    calls = []
+    monkeypatch.setattr(iris.cli, "adb", lambda *args, **kwargs: calls.append(args) or "")
+    clock = [1000.0]
+    monkeypatch.setattr(iris.time, "monotonic", lambda: clock[0])
+    collector = iris.Collector(api=Mock())
+    clock[0] += iris.LEGACY_GRACE_SECONDS - 1
+    collector.remove_legacy()
+    assert calls == []
+    clock[0] += 1
+    collector.remove_legacy()
+    collector.remove_legacy()
+    assert len(calls) == 1
+    assert calls[0][1].startswith("rm -rf /data/local/tmp/kakaocollector-iris.apk*")
+    assert iris.enrollment.LEGACY_ENROLLMENT in calls[0][1]
+
+
+def test_same_build_already_on_device_is_not_uploaded_again(monkeypatch):
+    current = hashlib.sha256(b"current apk").hexdigest()
+    health = Mock(side_effect=[OSError("stopped"), None])
+    calls = apk_device(monkeypatch, current, health)
+    iris.ensure_started(CONFIG["enrollment_epoch"])
+    assert not any(c[0] == "push" for c in calls)
+
+
+def test_upload_checksum_mismatch_never_replaces_the_installed_build(monkeypatch):
+    calls = apk_device(monkeypatch, "0" * 64, Mock(side_effect=OSError("stopped")))
+    monkeypatch.setattr(iris.Path, "read_bytes", lambda self: b"different apk")
+    with pytest.raises(RuntimeError, match="checksum_mismatch"):
+        iris.ensure_started(CONFIG["enrollment_epoch"])
+    assert not any("mv" in " ".join(c) and iris.REMOTE_APK in " ".join(c) for c in calls[:-1])
 
 
 def test_iris_credentials_are_private_and_rotate_with_enrollment(monkeypatch):
@@ -329,21 +412,26 @@ def test_iris_credentials_are_private_and_rotate_with_enrollment(monkeypatch):
         return ""
 
     monkeypatch.setattr(iris.cli, "adb", adb)
-    monkeypatch.setattr(iris, "check_enrollment", lambda: CONFIG)
-    token = iris.ensure_auth(CONFIG)
+    token = iris.ensure_auth(CONFIG["enrollment_epoch"])
     assert token != remote["token"] and len(token) == 43
     assert pushed == [{"enrollment_epoch": CONFIG["enrollment_epoch"], "token": token}]
-    assert ("shell", "chmod", "0700", iris.AUTH_DIR) in calls
-    assert ("shell", "chmod", "0600", iris.AUTH_FILE + ".next") in calls
+    assert (
+        "shell",
+        f"mkdir -p {iris.HOME} && chown 0:0 {iris.HOME} && chmod 700 {iris.HOME}",
+    ) in calls
+    staged = iris.AUTH_FILE + ".next"
+    assert (
+        "shell",
+        f"chown 0:0 {staged} && chmod 600 {staged} && mv {staged} {iris.AUTH_FILE}",
+    ) in calls
     assert all(token not in " ".join(args) for args in calls)
     remote.update(pushed[0])
-    assert iris.ensure_auth(CONFIG) == token
+    assert iris.ensure_auth(CONFIG["enrollment_epoch"]) == token
     assert len(pushed) == 1
 
 
 def test_iris_never_sends_bearer_to_an_impostor_listener(monkeypatch):
-    token = "a" * 43
-    monkeypatch.setattr(iris, "ensure_auth", lambda config: token)
+    monkeypatch.setattr(iris, "ensure_auth", lambda epoch: "a" * 43)
     monkeypatch.setattr(iris.Path, "read_bytes", lambda path: b"apk")
     monkeypatch.setattr(iris.cli, "adb", lambda *a, **k: hashlib.sha256(b"apk").hexdigest())
 
@@ -354,4 +442,4 @@ def test_iris_never_sends_bearer_to_an_impostor_listener(monkeypatch):
 
     monkeypatch.setattr(iris, "request", impostor)
     with pytest.raises(RuntimeError, match="unexpected_iris_server"):
-        iris.ensure_started(CONFIG)
+        iris.ensure_started(CONFIG["enrollment_epoch"])

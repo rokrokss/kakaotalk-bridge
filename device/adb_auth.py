@@ -35,7 +35,7 @@ def client_key(root):
         subprocess.run(["adb", "keygen", str(private)], check=True, capture_output=True)
     private.chmod(0o600)
     public = public_key(private.read_bytes())
-    (directory / "adbkey.pub").write_text(public + " bridge@collector\n")
+    (directory / "adbkey.pub").write_text(public + " kakaotalk-bridge\n")
     return public
 
 
@@ -47,7 +47,7 @@ def provision(device="/device-state", iris="/iris-state", android="/android-data
     target.chmod(0o2750)
     staged = target / "adb_keys.bridge-next"
     with staged.open("w") as output:
-        output.write("".join(key + " bridge@collector\n" for key in keys))
+        output.write("".join(key + " kakaotalk-bridge\n" for key in keys))
     os.chown(staged, 1000, 2000)
     staged.chmod(0o640)
     staged.replace(target / "adb_keys")
@@ -57,4 +57,4 @@ def provision(device="/device-state", iris="/iris-state", android="/android-data
 if __name__ == "__main__":
     os.umask(0o077)
     count = provision()
-    print(f"ADB authorization ready for {count} collector identities; private keys preserved.")
+    print(f"ADB 인증 준비 완료: 수집기 키 {count}개, 개인 키는 유지했습니다.")

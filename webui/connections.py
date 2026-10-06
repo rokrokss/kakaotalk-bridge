@@ -28,5 +28,9 @@ class Connections:
                 return json.load(response)
         except HTTPError as exc:
             if exc.code == 409:
-                raise RequestChanged from None
+                try:
+                    detail = json.load(exc).get("detail", "")
+                except ValueError:
+                    detail = ""
+                raise RequestChanged(detail if isinstance(detail, str) else "") from None
             raise

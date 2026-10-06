@@ -24,5 +24,5 @@ def test_bridge_uid_uses_exact_owner_user_package(monkeypatch):
 )
 def test_bridge_uid_rejects_missing_ambiguous_or_wrong_user(monkeypatch, listing):
     monkeypatch.setattr(cli, "adb", lambda *args: listing)
-    with pytest.raises(RuntimeError, match="Cannot resolve Bridge app UID"):
+    with pytest.raises(RuntimeError, match="keyboard_app_unavailable"):
         cli.bridge_uid()

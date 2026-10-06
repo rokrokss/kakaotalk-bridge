@@ -3,14 +3,15 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 android {
-    namespace = "dev.kakaocollector.bridge"
+    namespace = "dev.kakaotalkbridge.android"
     compileSdk = 35
     defaultConfig {
+        // Kept from the first release: Android stores the enabled keyboard by application ID.
         applicationId = "dev.kakaocollector.bridge"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
     signingConfigs {
         create("release") {
@@ -33,5 +34,4 @@ android {
 }
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.work:work-runtime-ktx:2.10.0")
 }

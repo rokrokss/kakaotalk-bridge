@@ -43,10 +43,10 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 </p>
 
 1. **카카오톡 설치:** 패스키를 저장하면 가상 태블릿이 준비됩니다. 화면의 스토어에서 **Kakao Corp.의 카카오톡**을 설치하세요.
-2. **로그인과 수집:** 카카오톡에서 **다른 기기와 함께 사용**을 선택하고 관리 화면의 **로그인 옵션 확인**을 누르세요. 태블릿 로그인을 마친 뒤 휴대폰의 기존 로그인도 유지되는지 확인하고 **메시지 수집 시작**을 누르세요.
+2. **로그인과 수집:** 카카오톡 로그인 화면에서 **다른 기기와 함께 사용**을 선택하고 로그인하세요. 관리 화면이 태블릿 로그인을 자동으로 확인합니다. 휴대폰의 기존 로그인이 유지되는지 확인하고 **메시지 수집 시작**을 누르세요. 카카오톡이 업데이트되어도 같은 계정이면 계속 수집합니다.
 3. **[AI 연결](#connect-your-ai):** 연결 방식을 선택하세요. **나중에 결정**을 선택하면 수집만 계속할 수 있습니다.
 
-로그인 점검은 현재 한국어 카카오톡 화면을 인식합니다. 보조 기기 옵션이 없거나 주 계정 이전을 요구하면 진행을 멈추세요.
+로그인 화면 안내는 한국어 카카오톡 화면을 인식합니다. 보조 기기 옵션이 없거나 주 계정 이전을 요구하면 진행을 멈추세요.
 [로그인 단계별 안내 →](docs/web-ui.md#first-login)
 
 <a id="try-your-first-question"></a>
@@ -117,9 +117,11 @@ AI 앱이 내 컴퓨터 또는 SSH를 통해 Bridge 어댑터를 실행합니다
 
 | 실행 환경 | 지원 조건과 검증 상태 |
 | --- | --- |
-| Apple Silicon Mac | 전용 Lima Linux VM을 사용하며 Docker Desktop은 필요하지 않습니다. 보조 기기 로그인, 수집, AI 접근을 확인했습니다. |
+| Apple Silicon Mac | 전용 Lima Linux VM을 사용하며 Docker Desktop은 필요하지 않습니다. 0.1.0 수집기로 실제 계정의 보조 기기 로그인, 수집, AI 접근을 확인했습니다. |
 | Linux amd64 / arm64 | 전용 호스트 또는 VM에 Docker Engine, Compose v2, Android Binder가 필요합니다. 검증된 Mac/Lima 환경 밖의 카카오톡·redroid 호환성은 아직 확인하지 않았습니다. |
 | Windows | 기존 Linux 서버 또는 Binder를 지원하는 WSL2가 필요합니다. Windows에서의 실행은 아직 검증하지 않았습니다. |
+
+이번 버전의 계정 기반 승인과 새 Iris 수집 등 일부 동작은 아직 실제 계정으로 확인하지 않았습니다. [미검증 범위](docs/implementation.md#not-yet-verified)
 
 Mac VM에는 CPU 6개와 메모리 8 GiB가 설정됩니다. 측정된 최소 사양은 아닙니다.
 [환경별 설치 안내](docs/quickstart.md#platforms) · [검증 내역](docs/implementation.md)
@@ -147,7 +149,7 @@ Mac VM에는 CPU 6개와 메모리 8 GiB가 설정됩니다. 측정된 최소 �
 | 접근 관리·업데이트·복구 | [패스키](docs/passkeys.md) · [운영](docs/operations.md) |
 | 배포 또는 내부 기능 개발 | [고급 설치](docs/onboarding.md) · [구조](docs/design.md) · [개발](docs/development.md) |
 
-기존 설치를 사용 중이라면 [보안 업데이트 안내](docs/operations.md#upgrading-to-the-security-update)를 읽으세요.
+기존 설치는 설치 명령을 다시 실행해 업데이트합니다. [기존 설치 업데이트](docs/operations.md#update)
 [기여하기](CONTRIBUTING.md)
 
 <a id="license-and-attribution"></a>

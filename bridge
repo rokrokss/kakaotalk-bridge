@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
 """Host entry point; no Python packages are required outside Docker."""
-from ops.cli import main
+import os
+import sys
+
+# Linux installs are managed as root. Elevate once here instead of per command; the
+# stdio MCP adapter keeps the caller's account because AI clients cannot answer sudo.
+if sys.platform == "linux" and os.geteuid() != 0 and "mcp" not in sys.argv[1:2]:
+    try:
+        os.execvp("sudo", ["sudo", sys.executable, os.path.abspath(__file__), *sys.argv[1:]])
+    except OSError:
+        sys.exit("KakaoTalk Bridge 관리에는 root 권한이 필요합니다. root 계정으로 다시 실행하세요.")
+
+from ops.cli import main  # noqa: E402
 
 if __name__ == "__main__":
     main()

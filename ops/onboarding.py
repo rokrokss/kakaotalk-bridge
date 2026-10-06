@@ -14,8 +14,9 @@ import webbrowser
 from pathlib import Path
 from urllib.request import urlopen
 
-from ops import cli
-from ops.setup_output import SetupOutput, provider_line, run
+from ops import access, cli, expose
+from ops.errors import BridgeError
+from ops.setup_output import SetupOutput, progress, provider_line, run
 
 STEPS = (
     ("environment", "실행 환경 준비"),
@@ -95,58 +96,52 @@ def validate(args):
     tunnel = args.connection == "openai-tunnel"
     if tunnel:
         if args.url or args.public_url:
-            raise ValueError(
-                "Use --admin-url for private tunnel setup; configure public HTTPS separately"
-            )
+            raise BridgeError("개인 터널 설정에는 --admin-url을 사용하세요. 공개 HTTPS는 따로 설정합니다.")
         saved = cli.ROOT / ".bridge/admin-url"
         if not args.admin_url and saved.exists() and os.access(saved, os.R_OK):
             args.admin_url = saved.read_text().strip().removesuffix("/admin/")
         if args.admin_url:
-            cli.private_url(args.admin_url)
+            access.private_url(args.admin_url)
         if bool(args.tunnel_id) != bool(args.api_key_file):
-            raise ValueError("Supply both --tunnel-id and --api-key-file")
+            raise BridgeError("--tunnel-id와 --api-key-file을 함께 지정하세요.")
         if args.tunnel_id:
             from ops.tunnel import credentials
 
             credentials(args.tunnel_id, args.api_key_file)
         elif not saved_tunnel and not args.plan:
-            raise ValueError("First tunnel setup needs --tunnel-id and --api-key-file")
+            raise BridgeError("처음 터널을 설정할 때는 --tunnel-id와 --api-key-file이 필요합니다.")
     elif args.tunnel_id or args.api_key_file:
-        raise ValueError("Tunnel credentials require --connection openai-tunnel")
+        raise BridgeError("터널 정보는 --connection openai-tunnel과 함께 사용하세요.")
     if args.connection == "https" and not (args.url or args.public_url):
-        raise ValueError("Supply --url or --public-url for an existing HTTPS proxy")
+        raise BridgeError("기존 HTTPS 프록시를 쓰려면 --url 또는 --public-url을 지정하세요.")
     if args.connection == "tailscale" and (args.url or args.admin_url or args.public_url):
-        raise ValueError("Use either Tailscale or existing HTTPS proxy options")
+        raise BridgeError("Tailscale과 기존 HTTPS 프록시 옵션은 함께 쓸 수 없습니다. 하나만 선택하세요.")
     if platform.system() not in {"Darwin", "Linux"}:
-        raise RuntimeError(
-            "Local execution needs macOS or a Linux kernel with Android Binder. "
-            "On Windows use install.ps1 with -Remote user@linux-host, or a Binder-enabled WSL2 "
-            "distribution. Stock WSL2 and Docker Desktop are not verified Android hosts."
-        )
+        raise BridgeError("이 컴퓨터에서는 실행할 수 없습니다. macOS 또는 Android Binder를 지원하는 Linux가 필요합니다. Windows에서는 install.ps1 -Remote user@linux-host로 Linux 서버에 설치하거나 Binder를 지원하는 WSL2를 사용하세요. 기본 WSL2와 Docker Desktop은 검증하지 않았습니다.")
     if platform.machine().lower() not in {"aarch64", "arm64", "x86_64", "amd64"}:
-        raise RuntimeError("This release needs an arm64 or x86_64 machine.")
+        raise BridgeError("arm64 또는 x86_64 컴퓨터가 필요합니다.")
     if args.url:
         if args.admin_url or args.public_url:
-            raise ValueError("Use --url alone, or the --admin-url/--public-url pair.")
-        cli.validate_public_url(args.url)
+            raise BridgeError("--url만 지정하거나, --admin-url과 --public-url을 함께 지정하세요.")
+        access.validate_public_url(args.url)
         args.admin_url = args.public_url = args.url
     if args.connection == "none" and (args.url or args.public_url):
-        raise ValueError("--connection none cannot configure a public MCP address")
+        raise BridgeError("--connection none과 공개 MCP 주소는 함께 지정할 수 없습니다.")
     if args.admin_url:
-        cli.private_url(args.admin_url)
+        access.private_url(args.admin_url)
     if args.public_url:
-        cli.validate_public_url(args.public_url)
+        access.validate_public_url(args.public_url)
     for port in (args.admin_port, args.mcp_port):
         if port is not None and not 1024 <= port <= 65535:
-            raise ValueError("Choose ports between 1024 and 65535.")
+            raise BridgeError("포트는 1024에서 65535 사이로 지정하세요.")
     if args.admin_port is not None and args.admin_port == args.mcp_port:
-        raise ValueError("The internal maintenance and shared ingress ports must differ.")
+        raise BridgeError("--admin-port와 --mcp-port는 서로 다른 포트여야 합니다.")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,48}", args.vm):
-        raise ValueError("Invalid VM name")
+        raise BridgeError("VM 이름은 영문자, 숫자, -, _로 49자 이내여야 합니다.")
     if args.manifest:
         cli.manifest(args.manifest)
     if args.apk_folder and not list(Path(args.apk_folder).glob("*.apk")):
-        raise ValueError("The APK folder must contain your official KakaoTalk APK set.")
+        raise BridgeError("--apk-folder에는 공식 카카오톡 APK 세트가 있어야 합니다.")
 
 
 @contextlib.contextmanager
@@ -160,7 +155,7 @@ def installation_lock():
         try:
             fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise RuntimeError("Setup is already running for this installation.") from None
+            raise BridgeError("이 설치에서 다른 설정 작업이 이미 진행 중입니다. 끝난 뒤 다시 실행하세요.") from None
         yield
 
 
@@ -176,7 +171,7 @@ def install_script(url, *, interactive=False):
     with urlopen(url, timeout=60) as response:
         content = response.read(2 * 1024 * 1024 + 1)
     if len(content) > 2 * 1024 * 1024:
-        raise RuntimeError("Dependency installer was unexpectedly large.")
+        raise BridgeError("내려받은 의존성 설치 프로그램의 크기가 예상과 다릅니다. 잠시 후 다시 시도하세요.")
     with tempfile.TemporaryDirectory() as folder:
         script = Path(folder) / "install.sh"
         script.write_bytes(content)
@@ -184,21 +179,21 @@ def install_script(url, *, interactive=False):
 
 
 def require_install(args, description):
-    if args.no_install:
-        raise RuntimeError(f"Missing {description}. Install it or rerun without --no-install.")
     label = {
-        "the Mac execution environment": "Mac 실행 환경",
+        "the Mac execution environment": "Mac 실행 환경(Lima)",
         "the Intel Mac virtual machine driver": "Intel Mac 가상 머신 드라이버",
         "Tailscale for your secure browser connection": "보안 연결용 Tailscale",
         "Docker Engine and Compose": "Docker Engine 및 Compose",
         "Linux runtime packages": "Linux 실행 패키지",
     }.get(description, "필수 구성 요소")
-    print(f"{label} 설치 중… 운영체제에서 관리자 승인을 요청할 수 있습니다.", flush=True)
+    if args.no_install:
+        raise BridgeError(f"{label}이(가) 없습니다. 직접 설치하거나 --no-install 없이 다시 실행하세요.")
+    progress(f"{label} 설치 중… 운영체제에서 관리자 승인을 요청할 수 있습니다.")
 
 
 def prepare_mac(args):
     if os.geteuid() == 0:
-        raise RuntimeError("Run Bridge as your normal Mac user, without sudo.")
+        raise BridgeError("Mac에서는 sudo 없이 일반 사용자로 실행하세요.")
     # GUI shells and fresh Homebrew installs may not include these paths yet.
     os.environ["PATH"] = os.pathsep.join(
         [os.environ.get("PATH", ""), "/opt/homebrew/bin", "/usr/local/bin"]
@@ -219,7 +214,7 @@ def prepare_mac(args):
                 interactive=True,
             )
         run(["brew", "install", "qemu"])
-    if args.connection == "tailscale" and not cli.tailscale_binary():
+    if args.connection == "tailscale" and not expose.tailscale_binary():
         require_install(args, "Tailscale for your secure browser connection")
         if not shutil.which("brew"):
             install_script(
@@ -240,11 +235,7 @@ def prepare_linux(args):
     # A Docker context pointing at Desktop or another machine cannot use this host's Binder.
     is_wsl = "microsoft" in platform.release().lower()
     if is_wsl and not binder_ready():
-        raise RuntimeError(
-            "This WSL kernel has no Android Binder support. No changes were made. "
-            "Use install.ps1 -Remote user@linux-host, or configure a Binder-enabled WSL2 kernel. "
-            "Bridge does not replace the shared WSL kernel automatically."
-        )
+        raise BridgeError("이 WSL 커널은 Android Binder를 지원하지 않아 아무것도 변경하지 않았습니다. install.ps1 -Remote user@linux-host로 Linux 서버에 설치하거나 Binder를 지원하는 WSL2 커널을 구성하세요.")
     packages = []
     if not shutil.which("docker"):
         require_install(args, "Docker Engine and Compose")
@@ -261,9 +252,7 @@ def prepare_linux(args):
                 except (OSError, RuntimeError):
                     continue
             else:
-                raise RuntimeError(
-                    "Install the Compose v2 plugin for your existing Docker Engine, then rerun. Existing Docker was preserved."
-                ) from None
+                raise BridgeError("기존 Docker Engine에 Compose v2 플러그인을 설치한 뒤 다시 실행하세요. 기존 Docker 설정은 그대로 두었습니다.") from None
     if not shutil.which("openssl"):
         packages.append("openssl")
     if not binder_ready():
@@ -276,20 +265,14 @@ def prepare_linux(args):
     if packages:
         require_install(args, "Linux runtime packages")
         if not shutil.which("apt-get"):
-            raise RuntimeError(
-                "Automatic package installation supports Ubuntu/Debian. On this distribution, "
-                "install Docker Engine, Compose v2, OpenSSL and Android Binder, then rerun."
-            )
+            raise BridgeError("자동 패키지 설치는 Ubuntu/Debian만 지원합니다. Docker Engine, Compose v2, OpenSSL, Android Binder를 직접 설치한 뒤 다시 실행하세요.")
         privileged(["apt-get", "update"])
         privileged(["apt-get", "install", "-y", *packages])
     if not binder_ready():
         try:
             privileged(["modprobe", "binder_linux", "devices=binder,hwbinder,vndbinder"])
         except (OSError, RuntimeError):
-            raise RuntimeError(
-                "Your kernel does not provide Android Binder. Use an Ubuntu VM with "
-                "linux-modules-extra installed, or a compatible dedicated Linux host."
-            ) from None
+            raise BridgeError("이 커널은 Android Binder를 제공하지 않습니다. linux-modules-extra가 설치된 Ubuntu VM이나 호환되는 전용 Linux 서버를 사용하세요.") from None
     if shutil.which("systemctl"):
         # Load Binder before Docker on later boots. Do not overwrite host settings.
         privileged(
@@ -306,7 +289,7 @@ def prepare_linux(args):
             ]
         )
         privileged(["systemctl", "enable", "--now", "docker"])
-    if args.connection == "tailscale" and not cli.tailscale_binary():
+    if args.connection == "tailscale" and not expose.tailscale_binary():
         require_install(args, "Tailscale for your secure browser connection")
         install_script("https://tailscale.com/install.sh")
 
@@ -329,17 +312,16 @@ class Runtime:
                 else os.environ.get("DOCKER_HOST", endpoint)
             )
             if host not in {"unix:///var/run/docker.sock", "unix:///run/docker.sock"}:
-                raise RuntimeError(
-                    "Use the local system Docker Engine for Android. Your Docker context points "
-                    "elsewhere; Bridge has not changed it. Rerun with DOCKER_HOST=unix:///var/run/docker.sock."
-                )
+                raise BridgeError("Android 실행에는 이 서버의 Docker Engine이 필요합니다. 현재 Docker 컨텍스트가 다른 곳을 가리키며 Bridge는 이를 바꾸지 않았습니다. DOCKER_HOST=unix:///var/run/docker.sock으로 다시 실행하세요.")
 
     def call(self, *arguments, capture=False, interactive=False):
-        return run(
-            [*self.prefix, sys.executable, str(cli.ROOT / "bridge"), *arguments],
-            capture=capture,
-            interactive=interactive,
-        )
+        from ops.setup_output import bridge_command
+
+        # Interactive children keep the terminal; quiet ones report through this process.
+        command = bridge_command(*arguments) if not (capture or interactive) else [
+            sys.executable, str(cli.ROOT / "bridge"), *arguments
+        ]
+        return run([*self.prefix, *command], capture=capture, interactive=interactive)
 
     def installed(self):
         if platform.system() != "Darwin":
@@ -351,6 +333,7 @@ class Runtime:
         instances = run(["limactl", "list", "--format", "{{.Name}}"], capture=True).splitlines()
         if config["vm"] not in instances:
             return False
+        progress("가상 머신 시작 중…")
         run(["limactl", "start", "--tty=false", config["vm"]])
         try:
             run(
@@ -371,6 +354,7 @@ class Runtime:
             return False
 
     def wait_ready(self, timeout=240):
+        progress("서비스 응답 확인 중…")
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
@@ -378,9 +362,10 @@ class Runtime:
                 return
             except RuntimeError:
                 time.sleep(3)
-        raise RuntimeError(
-            "Startup is taking longer than expected. Rerun bridge up to retry, or bridge doctor for details."
-        )
+        # Keep the failing checks in the run log for diagnosis.
+        with contextlib.suppress(RuntimeError, OSError):
+            self.call("doctor")
+        raise BridgeError("서비스 시작이 예상보다 오래 걸립니다. ./bridge up을 다시 실행하거나 ./bridge doctor로 상태를 확인하세요.")
 
 
 def network_status(command):
@@ -393,7 +378,7 @@ def network_status(command):
             raise ValueError("missing network state")
         return status
     except ValueError:
-        raise RuntimeError("The secure connection service is not responding.") from None
+        raise BridgeError("보안 연결 서비스(Tailscale)가 응답하지 않습니다.") from None
 
 
 def connect_network(args, runtime):
@@ -413,20 +398,16 @@ def connect_network(args, runtime):
         return
     if args.connection != "tailscale":
         return
-    tailscale = cli.tailscale_binary()
+    tailscale = expose.tailscale_binary()
     if not tailscale:
-        raise RuntimeError(
-            "The secure connection tool was not installed. Rerun bridge up to retry."
-        )
+        raise BridgeError("보안 연결 도구(Tailscale)가 설치되지 않았습니다. ./bridge up을 다시 실행하세요.")
     prefix = ["sudo"] if platform.system() == "Linux" and os.geteuid() != 0 else []
     try:
         status = network_status([*prefix, tailscale, "status", "--json"])
     except (RuntimeError, subprocess.TimeoutExpired):
         if platform.system() == "Darwin" and "/Applications/" in tailscale:
             run(["open", "-a", "Tailscale"])
-            raise RuntimeError(
-                "Finish enabling Tailscale in macOS, then run bridge up again."
-            ) from None
+            raise BridgeError("macOS에서 Tailscale 활성화를 마친 뒤 ./bridge up을 다시 실행하세요.") from None
         if platform.system() == "Darwin":
             privileged(["brew", "services", "start", "tailscale"])
         else:
@@ -448,9 +429,7 @@ def connect_network(args, runtime):
                         if not args.no_browser:
                             webbrowser.open(link)
                 if proc.wait():
-                    raise RuntimeError(
-                        "Secure connection sign-in did not finish. Rerun bridge up to continue."
-                    )
+                    raise BridgeError("Tailscale 로그인이 끝나지 않았습니다. ./bridge up을 다시 실행해 이어서 진행하세요.")
             except BaseException:
                 proc.terminate()
                 proc.wait()
@@ -467,9 +446,9 @@ def open_setup(args, runtime):
         command += ["--public-url", args.public_url]
     link = runtime.call(*command, capture=True).strip()
     base, _, fragment = link.partition("#")
-    cli.private_url(base)
+    access.private_url(base)
     if fragment and not re.fullmatch(r"passkey-setup=[A-Za-z0-9_-]{43}", fragment):
-        raise RuntimeError("Unexpected registration response; run bridge passkey-login.")
+        raise BridgeError("패스키 등록 링크를 받지 못했습니다. ./bridge passkey-login을 실행하세요.")
     if base.startswith("http://localhost:") and (
         args.no_browser or os.environ.get("SSH_CONNECTION")
     ):
@@ -516,7 +495,7 @@ def up(args):
         current = "environment"
 
         @contextlib.contextmanager
-        def progress(key):
+        def stage(key):
             nonlocal current
             current = key
             index, label = next(
@@ -529,10 +508,10 @@ def up(args):
                 yield
 
         try:
-            with progress("environment"):
+            with stage("environment"):
                 (prepare_mac if platform.system() == "Darwin" else prepare_linux)(args)
                 runtime = Runtime()
-            with progress("runtime"):
+            with stage("runtime"):
                 if runtime.installed():
                     runtime.call("start")
                 else:
@@ -543,13 +522,7 @@ def up(args):
                         cli.manifest(release)
                         selection = ["--manifest", str(release.resolve())]
                     else:
-                        print(
-                            "릴리스 설치 파일이 없습니다. 공식 설치 명령 또는 --source를 사용하세요.",
-                            file=sys.stderr,
-                        )
-                        raise RuntimeError(
-                            "No release manifest; source builds require explicit --source"
-                        )
+                        raise BridgeError("릴리스 정보(release.json)가 없습니다. 공식 설치 명령을 사용하거나, 소스 빌드라면 --source를 지정하세요.")
                     ports = []
                     for name in ("admin_port", "mcp_port"):
                         if getattr(args, name) is not None:
@@ -557,13 +530,15 @@ def up(args):
                     runtime.call("install", *selection, "--vm", args.vm, *ports)
                 if args.apk_folder:
                     # Identical imports are resumable; different sets are never mixed.
+                    progress("카카오톡 APK 세트 가져오는 중…")
                     runtime.call("import-apks", str(Path(args.apk_folder).resolve()))
                 runtime.wait_ready()
-            with progress("network"):
+            with stage("network"):
                 connect_network(args, runtime)
                 runtime.wait_ready()
+                progress("웹 설정 서비스 준비 중…")
                 runtime.call("setup-agent", "install")
-            with progress("browser"):
+            with stage("browser"):
                 open_setup(args, runtime)
         except BaseException:
             cli.atomic(
@@ -571,11 +546,9 @@ def up(args):
                 json.dumps({"step": current, "state": "interrupted"}),
             )
             print(
-                f"\n{dict(STEPS)[current]} 단계에서 중단되었습니다. 같은 명령으로 이어서 진행하세요. 데이터는 유지됩니다.",
+                f"\n{dict(STEPS)[current]} 단계에서 중단되었습니다. 문제를 해결한 뒤 같은 명령으로 이어서 진행하세요. 데이터는 유지됩니다.",
                 file=sys.stderr,
             )
-            if output.path:
-                print(f"진단 로그: {output.path}", file=sys.stderr)
             raise
         cli.atomic(
             cli.ROOT / ".bridge/onboarding.json", json.dumps({"step": "browser", "state": "ready"})

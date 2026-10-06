@@ -3,6 +3,7 @@
 import hmac
 import json
 import os
+import re
 import secrets
 import subprocess
 import tempfile
@@ -22,6 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from webauthn.helpers.exceptions import WebAuthnException
 
+from device.messages import message as device_message
 from dot_plugin.collector import QueryError
 from dot_plugin.event_policy import ConversationDecision
 from dot_plugin.event_policy import enabled as events_enabled
@@ -35,7 +37,6 @@ from webui.event_settings import EventSource
 from webui.setup import SetupBusy, SetupClient
 
 COOKIE = "__Secure-kakao-admin-v2"
-LEGACY_COOKIE = "__Host-kakao-admin"
 COOKIE_PATH = "/admin"
 STATIC = Path(__file__).with_name("static")
 
@@ -89,14 +90,12 @@ class Action(Strict):
         "setup-poll",
         "open-kakao",
         "keyboard",
-        "login-check",
-        "confirm-secondary",
+        "approve",
         "session-check",
         "phone-active",
         "phone-lost",
     ]
     phone_active: bool = Field(default=False, strict=True)
-    tablet_active: bool = Field(default=False, strict=True)
 
 
 def collector_status():
@@ -112,18 +111,6 @@ def collector_status():
         return {
             k: data[k] for k in ("state", "warnings", "coverage", "last_observation_received_at")
         }
-
-
-ERRORS = {
-    "kakao_signature_unverified": "카카오톡 배포자 서명을 확인할 수 없습니다. 공식 앱을 사용하고 설치 안내에서 지원하는 서명을 확인하세요.",
-    "aurora_artifact_unverified": "다운로드한 Aurora가 지정된 릴리스와 일치하지 않습니다. 다시 시도하거나 APK 가져오기를 사용하세요.",
-    "android_not_ready": "Android가 시작 중입니다. 잠시 기다린 뒤 설정을 새로고침하세요.",
-    "screen_unavailable": "화면을 가져올 수 없습니다. redroid가 시작되었는지 확인하세요.",
-    "keyboard_unavailable": "‘키보드 연결’을 누른 뒤 카카오톡 입력란을 선택하세요. 필요하면 먼저 ‘설치’에서 구성 요소를 설치하세요.",
-    "focus_kakao_input": "먼저 카카오톡의 입력란을 누르세요.",
-    "input_result_unknown": "입력 결과를 확인할 수 없습니다. 다시 입력하기 전에 화면을 확인하세요.",
-    "kakao_not_installed": "먼저 카카오톡 설치를 완료하세요.",
-}
 
 
 def create_app(
@@ -223,10 +210,6 @@ def create_app(
             if request.headers.get("origin") != expected:
                 return JSONResponse({"detail": "invalid_origin"}, status_code=403)
         response = await call_next(request)
-        if LEGACY_COOKIE in request.cookies:
-            response.delete_cookie(
-                LEGACY_COOKIE, secure=True, httponly=True, samesite="strict", path="/"
-            )
         response.headers.update(
             {
                 "Cache-Control": "no-store",
@@ -273,13 +256,7 @@ def create_app(
         try:
             return fn()
         except (OSError, RuntimeError, ValueError, IndexError, subprocess.TimeoutExpired) as exc:
-            raise HTTPException(
-                503,
-                ERRORS.get(
-                    str(exc),
-                    "기기 작업에 실패했습니다. 연결과 설치 상태를 확인하세요.",
-                ),
-            ) from None
+            raise HTTPException(503, device_message(exc)) from None
         finally:
             lock.release()
 
@@ -524,13 +501,18 @@ def create_app(
     def connection_call(method, path, data=None):
         try:
             return connections.call(method, path, data)
-        except RequestChanged:
+        except RequestChanged as exc:
+            # The approval service sends fixed Korean guidance for known conflicts.
+            detail = str(exc)
             raise HTTPException(
-                409, "코드가 올바르지 않거나 요청이 만료되었습니다. ‘AI 연결’을 새로고침하세요."
+                409,
+                detail
+                if re.search("[가-힣]", detail)
+                else "코드가 올바르지 않거나 요청이 만료되었습니다. ‘AI 연결’을 새로고침하세요.",
             ) from None
         except (OSError, ValueError):
             raise HTTPException(
-                503, "연결 서비스를 사용할 수 없습니다. dot 프로필을 시작하세요."
+                503, "연결 서비스를 사용할 수 없습니다. ./bridge start로 서비스를 다시 시작하세요."
             ) from None
 
     @app.get("/admin/api/connections")
@@ -563,10 +545,9 @@ def create_app(
     def setup_connection(data: dict, current: Annotated[dict, Depends(authenticated)]):
         try:
             validated = validate_connection_setup(data)
-        except ValueError:
-            raise HTTPException(
-                422, "연결 설정과 필요한 권한을 확인하세요."
-            ) from None
+        except ValueError as exc:
+            # Fixed Korean validation messages; they never contain submitted values.
+            raise HTTPException(422, str(exc)) from None
         return setup_call("POST", validated)
 
     @app.get("/admin/api/events/conversations")
@@ -735,7 +716,6 @@ def create_app(
     def run_action(body):
         nonlocal session_snapshot, snapshot_invalidated, setup_snapshot
         try:
-            already_approved = False
             changed = True
             with lock:
                 if body.name == "prepare":
@@ -750,10 +730,8 @@ def create_app(
                     device.open_kakao()
                 elif body.name == "keyboard":
                     device.enable_keyboard()
-                elif body.name == "login-check":
-                    already_approved = device.login_check() is False
-                elif body.name == "confirm-secondary":
-                    device.confirm(body.phone_active, body.tablet_active)
+                elif body.name == "approve":
+                    device.approve(body.phone_active)
                 elif body.name in ("phone-active", "phone-lost"):
                     device.record_phone(body.name == "phone-active")
                 if body.name in ("setup-check", "setup-poll", "prepare", "configure", "bootstrap"):
@@ -761,8 +739,7 @@ def create_app(
                 if body.name in (
                     "setup-check",
                     "session-check",
-                    "login-check",
-                    "confirm-secondary",
+                    "approve",
                     "phone-active",
                     "phone-lost",
                 ):
@@ -772,21 +749,16 @@ def create_app(
                 "prepare": "Aurora가 준비되었습니다. 익명 로그인을 선택하고 카카오톡을 설치하세요."
                 if changed
                 else "기존 설치를 유지했습니다. 다음 설정 단계를 진행하세요.",
-                "configure": "구성 요소를 설치했습니다. 카카오톡을 열고 로그인 옵션을 확인하세요."
+                "configure": "구성 요소를 설치했습니다. 카카오톡을 열고 ‘다른 기기와 함께 사용’을 선택해 로그인하세요."
                 if changed
                 else "기존 기기 등록과 수집 승인을 유지했습니다.",
                 "open-store": "Aurora를 열었습니다. Kakao Corp.의 카카오톡을 검색하세요.",
                 "setup-check": "설정 상태를 새로고침했습니다.",
                 "setup-poll": "설정 상태를 새로고침했습니다.",
-                "bootstrap": "설치가 완료되었습니다. 카카오톡을 열고 로그인 옵션을 확인하세요.",
+                "bootstrap": "설치가 완료되었습니다. 카카오톡을 열고 ‘다른 기기와 함께 사용’을 선택해 로그인하세요.",
                 "open-kakao": "카카오톡을 열었습니다.",
                 "keyboard": "키보드를 연결했습니다. 태블릿의 입력란을 선택하세요.",
-                "login-check": (
-                    "이미 수집이 승인되었습니다. ‘상태 확인’에서 현재 상태를 확인하세요."
-                    if already_approved
-                    else "보조 기기 로그인 옵션을 확인했습니다. 이제 태블릿에 로그인하세요."
-                ),
-                "confirm-secondary": "두 기기의 로그인이 확인되었습니다. 메시지 수집을 시작합니다.",
+                "approve": "휴대폰 로그인 유지를 확인했습니다. 메시지 수집을 시작합니다.",
                 "session-check": "현재 화면과 로그인 확인 기록을 점검했습니다.",
                 "phone-active": "휴대폰을 직접 확인한 시간을 갱신했습니다.",
                 "phone-lost": "휴대폰 로그아웃을 기록하고 Iris 수집 승인을 취소했습니다.",
@@ -794,22 +766,18 @@ def create_app(
             job.update(state="done", message=message)
         except Exception as exc:  # noqa: BLE001 — isolate background jobs without leaking credentials
             # Login UI dumps, input strings, filesystem paths and exception bodies stay private.
-            message = (
-                "로그인 옵션을 확인할 수 없습니다. 로그인 전에 한국어 카카오톡 화면에서 ‘다른 기기와 함께 사용’을 선택하세요. 기존 수집 승인은 유지됩니다."
-                if body.name == "login-check"
-                else "보조 기기 로그인 확인에 실패했습니다. 사전 확인 유효 시간과 두 기기의 로그인을 확인하세요."
-                if body.name in ("confirm-secondary", "phone-active")
+            fallback = (
+                "수집 승인에 실패했습니다. 태블릿 로그인과 휴대폰 로그인을 확인하세요."
+                if body.name in ("approve", "phone-active")
                 else "수집을 중지하지 못했습니다. 기기 연결과 Iris 수집 상태를 확인하세요."
                 if body.name == "phone-lost"
                 else "작업에 실패했습니다. redroid 연결, APK 파일과 설치 상태를 확인하세요."
             )
-            job.update(state="failed", message=ERRORS.get(str(exc), message))
+            job.update(state="failed", message=device_message(exc, fallback))
 
     @app.post("/admin/api/action", status_code=202)
     def action(body: Action, current: Annotated[dict, Depends(authenticated)]):
-        if body.name == "confirm-secondary" and not (body.phone_active and body.tablet_active):
-            raise HTTPException(422, "휴대폰과 redroid의 로그인을 모두 직접 확인하세요.")
-        if body.name == "phone-active" and not body.phone_active:
+        if body.name in ("approve", "phone-active") and not body.phone_active:
             raise HTTPException(422, "휴대폰의 기존 로그인이 유지되는지 직접 확인하세요.")
         with session_lock:
             if job["state"] == "running":

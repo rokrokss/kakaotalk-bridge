@@ -1,5 +1,6 @@
 """Poll the restricted Iris endpoint through loopback ADB; commit before advancing."""
 
+import functools
 import hashlib
 import hmac
 import json
@@ -15,14 +16,29 @@ from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from device import cli, login_guard
+from device import cli, enrollment
 
-BUILD = "iris-ee1dc978-collector-v5"
-REMOTE_APK = "/data/local/tmp/kakaocollector-iris.apk"
-PID_FILE = "/data/local/tmp/kakaocollector-iris.pid"
+BUILD = "iris-ee1dc978-collector-v6"
 ENTRY = "party.qwer.iris.CollectorMain"
-AUTH_DIR = "/data/kakaocollector-iris"
-AUTH_FILE = AUTH_DIR + "/auth.json"
+LOCAL_APK = "/opt/iris.apk"
+HOME = enrollment.HOME
+REMOTE_APK = HOME + "/iris.apk"
+PID_FILE = HOME + "/iris.pid"
+AUTH_FILE = HOME + "/iris-auth.json"
+# Locations used by releases before 0.2. An unhealthy update rolls back to the previous
+# images within minutes, and they still need these files, so remove them only after
+# this build has collected for longer than that.
+LEGACY_PID_FILE = "/data/local/tmp/kakaocollector-iris.pid"
+LEGACY_FILES = (
+    "/data/local/tmp/kakaocollector-iris.apk*",
+    "/data/local/tmp/kakaocollector-native",
+    "/data/kakaocollector-iris",
+    enrollment.LEGACY_ENROLLMENT,
+)
+LEGACY_GRACE_SECONDS = 600
+# The API accepts 1 MiB bodies; leave room for the JSON envelope.
+MAX_BATCH_BYTES = 768 * 1024
+SKIP_REASONS = {"decrypt_failed", "metadata_unreadable"}
 
 
 def request(url, payload=None, token=None):
@@ -41,88 +57,88 @@ def identity(config):
     return str(uuid.uuid5(uuid.UUID(config["enrollment_epoch"]), "iris_db"))
 
 
-def check_enrollment():
-    config = json.loads(cli.adb("shell", "cat", cli.REMOTE_CONFIG))
-    if config.get("collector_mode") != "iris":
-        raise RuntimeError("iris_setup_required")
-    if config["device_id"] != os.getenv("DEVICE_ID", "personal-tablet"):
-        raise RuntimeError("device_identity_changed")
-    signature = login_guard.device_signature(cli.adb)
-    if (
-        config.get("secondary_login_version", 0) <= 0
-        or config["secondary_login_version"] != signature["kakao_version"]
-        or config.get("device_fingerprint") != signature["fingerprint"]
-    ):
-        raise RuntimeError("secondary_login_confirmation_required")
-    return config
+def account_identity(config):
+    return str(
+        uuid.uuid5(
+            uuid.UUID(config["enrollment_epoch"]), "kakao_account:" + config["approved_user_id"]
+        )
+    )
+
+
+@functools.cache
+def local_apk_sha():
+    return hashlib.sha256(Path(LOCAL_APK).read_bytes()).hexdigest()
 
 
 def stop():
-    pid = cli.adb("shell", "cat", PID_FILE, check=False)
-    if pid.isdecimal():
-        cmdline = cli.adb("shell", "cat", f"/proc/{pid}/cmdline", check=False)
-        if ENTRY in cmdline:
-            cli.adb("shell", "kill", pid, check=False)
-    cli.adb("shell", "rm", "-f", PID_FILE, check=False)
+    # Only a process whose command line is the collector entry point is signalled.
+    cli.adb(
+        "shell",
+        f"for f in {PID_FILE} {LEGACY_PID_FILE}; do p=$(cat $f 2>/dev/null); case \"$p\" in ''|*[!0-9]*) ;; "
+        f"*) grep -q {ENTRY} /proc/$p/cmdline 2>/dev/null && kill $p ;; esac; rm -f $f; done",
+        check=False,
+    )
 
 
-def ensure_auth(config):
+def ensure_auth(epoch):
     """Provision a root-only, enrollment-bound credential; never put it in argv/logs."""
     raw = cli.adb("shell", "cat", AUTH_FILE, check=False)
     try:
         record = json.loads(raw)
     except ValueError:
         record = {}
-    if record.get("enrollment_epoch") == config["enrollment_epoch"] and re.fullmatch(
+    if record.get("enrollment_epoch") == epoch and re.fullmatch(
         r"[A-Za-z0-9_-]{43}", record.get("token", "")
     ):
         return record["token"]
-    record = {"enrollment_epoch": config["enrollment_epoch"], "token": secrets.token_urlsafe(32)}
-    cli.adb("shell", "mkdir", "-p", AUTH_DIR)
-    cli.adb("shell", "chown", "0:0", AUTH_DIR)
-    cli.adb("shell", "chmod", "0700", AUTH_DIR)
+    record = {"enrollment_epoch": epoch, "token": secrets.token_urlsafe(32)}
+    staged = AUTH_FILE + ".next"
     with tempfile.TemporaryDirectory() as folder:
         local = Path(folder) / "auth.json"
         local.write_text(json.dumps(record))
         local.chmod(0o600)
-        cli.adb("push", str(local), AUTH_FILE + ".next")
-    cli.adb("shell", "chown", "0:0", AUTH_FILE + ".next")
-    cli.adb("shell", "chmod", "0600", AUTH_FILE + ".next")
-    if check_enrollment() != config:
-        cli.adb("shell", "rm", "-f", AUTH_FILE + ".next", check=False)
-        raise RuntimeError("enrollment_changed")
-    cli.adb("shell", "mv", AUTH_FILE + ".next", AUTH_FILE)
+        cli.adb("shell", f"mkdir -p {HOME} && chown 0:0 {HOME} && chmod 700 {HOME}")
+        cli.adb("push", str(local), staged)
+    cli.adb("shell", f"chown 0:0 {staged} && chmod 600 {staged} && mv {staged} {AUTH_FILE}")
     return record["token"]
 
 
-def ensure_started(config=None):
-    config = config or check_enrollment()
-    token = ensure_auth(config)
-    expected = hashlib.sha256(Path("/opt/iris.apk").read_bytes()).hexdigest()
-    actual = cli.adb("shell", "sha256sum", REMOTE_APK).split()[0]
-    if actual != expected:
-        raise RuntimeError("iris_binary_changed_rerun_bootstrap")
-    cli.adb("forward", "tcp:3000", "tcp:3000")
+def install():
+    """Put this image's Iris build on the device, so updates and rollbacks carry their own."""
+    wanted = local_apk_sha()
+    if cli.adb("shell", "sha256sum", REMOTE_APK, check=False).split()[:1] == [wanted]:
+        return False
+    staged = REMOTE_APK + ".next"
+    cli.adb("shell", f"mkdir -p {HOME} && chown 0:0 {HOME} && chmod 700 {HOME}")
+    cli.adb("push", LOCAL_APK, staged)
+    if cli.adb("shell", "sha256sum", staged).split()[:1] != [wanted]:
+        cli.adb("shell", "rm", "-f", staged, check=False)
+        raise RuntimeError("iris_upload_checksum_mismatch")
+    cli.adb("shell", f"chmod 0444 {staged} && mv {staged} {REMOTE_APK}")
+    return True
 
-    def healthy():
-        # Authenticate the listener before sending a bearer credential: an Android
-        # app can otherwise bind the loopback port while Iris is stopped.
-        challenge = secrets.token_hex(32)
-        info = request(
-            "http://127.0.0.1:3000/collector/health?" + urlencode({"challenge": challenge})
-        )
-        proof = hmac.new(
-            token.encode(), (challenge + ":" + BUILD).encode(), hashlib.sha256
-        ).hexdigest()
-        if info.get("build") != BUILD or not hmac.compare_digest(str(info.get("proof", "")), proof):
-            raise RuntimeError("unexpected_iris_server")
-        return token
 
+def healthy(token):
+    # Authenticate the listener before sending a bearer credential: an Android
+    # app can otherwise bind the loopback port while Iris is stopped.
+    challenge = secrets.token_hex(32)
+    info = request("http://127.0.0.1:3000/collector/health?" + urlencode({"challenge": challenge}))
+    proof = hmac.new(token.encode(), f"{challenge}:{BUILD}".encode(), hashlib.sha256).hexdigest()
+    if info.get("build") != BUILD or not hmac.compare_digest(str(info.get("proof", "")), proof):
+        raise RuntimeError("unexpected_iris_server")
+
+
+def ensure_started(epoch):
+    """Authenticate the running listener, or start this image's build. Returns the bearer."""
+    token = ensure_auth(epoch)
     try:
-        return healthy()
-    except OSError:
-        pass
+        healthy(token)
+        return token
+    except (OSError, ValueError, RuntimeError):
+        pass  # Not running, an earlier build, or not our listener.
     stop()
+    install()
+    cli.adb("forward", "tcp:3000", "tcp:3000")
     # All shell fragments are constants. No credentials or user content enters this command.
     cli.adb(
         "shell",
@@ -130,43 +146,16 @@ def ensure_started(config=None):
     )
     for _ in range(10):
         try:
-            return healthy()
+            healthy(token)
         except (OSError, ValueError):
-            pass
-        time.sleep(1)
+            time.sleep(1)
+            continue
+        return token
     raise RuntimeError("iris_start_failed")
 
 
-def upgrade_binary(expected_sha):
-    """Explicit component migration; caller must first stop iris-collector."""
-    if not re.fullmatch(r"[a-f0-9]{64}", expected_sha or ""):
-        raise ValueError("An exact previous Iris APK SHA-256 is required")
-    cli.connect()
-    config = check_enrollment()
-    actual = cli.adb("shell", "sha256sum", REMOTE_APK).split()[0]
-    if actual != expected_sha:
-        raise RuntimeError("iris_previous_binary_mismatch")
-    staged, backup = REMOTE_APK + ".next", REMOTE_APK + ".backup-" + actual
-    wanted = hashlib.sha256(Path("/opt/iris.apk").read_bytes()).hexdigest()
-    cli.adb("push", "/opt/iris.apk", staged)
-    try:
-        if cli.adb("shell", "sha256sum", staged).split()[0] != wanted:
-            raise RuntimeError("iris_upload_checksum_mismatch")
-        if check_enrollment() != config:
-            raise RuntimeError("enrollment_changed")
-        cli.adb("shell", "chmod", "0444", staged)
-        cli.adb("shell", "cp", REMOTE_APK, backup)
-        stop()
-        cli.adb("shell", "mv", staged, REMOTE_APK)
-        try:
-            ensure_started()
-        except BaseException:
-            stop()
-            cli.adb("shell", "cp", backup, REMOTE_APK)
-            raise
-    finally:
-        cli.adb("shell", "rm", "-f", staged, check=False)
-    return {"build": BUILD, "previous_sha256": actual, "sha256": wanted}
+def _field(value, pattern, fallback):
+    return value if isinstance(value, str) and re.fullmatch(pattern, value) else fallback
 
 
 def make_event(config, database_id, row):
@@ -174,7 +163,8 @@ def make_event(config, database_id, row):
     if not 0 < log_id <= 9223372036854775807:
         raise RuntimeError("unsupported_log_id")
     epoch = identity(config)
-    return {
+    reason = row.get("skipped")
+    event = {
         "event_id": str(uuid.uuid5(uuid.UUID(epoch), f"{database_id}:{log_id}")),
         "device_id": config["device_id"],
         "enrollment_epoch": epoch,
@@ -182,24 +172,49 @@ def make_event(config, database_id, row):
         "source": "iris_db",
         "kind": "db_row",
         "package_name": "com.kakao.talk",
-        "notification_key": "iris:" + row["chat_id"],
+        "notification_key": "iris:" + str(row.get("chat_id")),
         "observed_at": datetime.now(UTC).isoformat(),
         "payload": {
             "messages": [
                 {
-                    "body": row["message"],
-                    "sender": row["sender_id"],
-                    "timestamp": max(0, int(row["created_at"])) * 1000,
+                    "body": row.get("message"),
+                    "sender": row.get("sender_id"),
+                    "timestamp": max(0, int(row.get("created_at") or 0)) * 1000,
                 }
             ],
-            "truncated": row["truncated"],
+            "truncated": row.get("truncated", False),
         },
         "database_ref": {
             "database_id": database_id,
             **{
-                k: row[k]
+                k: row.get(k)
                 for k in ("log_id", "chat_id", "sender_id", "message_type", "origin", "is_mine")
             },
+        },
+    }
+    if reason:
+        return skipped(event, reason if reason in SKIP_REASONS else "unreadable")
+    return event
+
+
+def skipped(event, reason="invalid_row"):
+    """A cursor-only marker for a row that cannot be stored as a message."""
+    ref = event["database_ref"]
+    chat = _field(ref.get("chat_id"), r"-?[0-9]{1,20}", "0")
+    return {
+        **event,
+        "kind": "db_row_skipped",
+        "notification_key": "iris:" + chat,
+        "payload": {"messages": [], "truncated": False},
+        "database_ref": {
+            "database_id": ref["database_id"],
+            "log_id": ref["log_id"],
+            "chat_id": chat,
+            "sender_id": _field(ref.get("sender_id"), r"-?[0-9]{1,20}", "0"),
+            "message_type": str(ref.get("message_type") or "")[:32],
+            "origin": "",
+            "is_mine": ref.get("is_mine") is True,
+            "skip_reason": reason,
         },
     }
 
@@ -210,8 +225,15 @@ class Collector:
         self.epoch = str(uuid.UUID(int=0))
         self.last_seq = 0
         self.database_id = None
+        self.account_ref = None
+        self.kakao_version = None
         self.metadata_checked = 0
+        self.connected = False
         self.iris_token = None
+        self.iris_epoch = None
+        self.has_more = False
+        self.started = time.monotonic()
+        self.legacy_removed = False
 
     def api_request(self, path, payload=None):
         return request(
@@ -219,6 +241,16 @@ class Collector:
             payload,
             Path("/run/secrets/ingest_token").read_text().strip(),
         )
+
+    def reset(self):
+        self.connected = False
+        self.iris_token = None
+
+    def remove_legacy(self):
+        if self.legacy_removed or time.monotonic() - self.started < LEGACY_GRACE_SECONDS:
+            return
+        cli.adb("shell", "rm -rf " + " ".join(LEGACY_FILES), check=False)
+        self.legacy_removed = True
 
     def heartbeat(self, allowed, connected):
         self.api(
@@ -230,22 +262,39 @@ class Collector:
                 "database_id": self.database_id,
                 "secondary_login_confirmed": allowed,
                 "supports_message_send": True,
+                "account_ref": self.account_ref,
                 "listener_connected": connected,
-                "outbox_depth": 0,
                 "last_source_seq": self.last_seq,
+                "kakao_version": self.kakao_version,
             },
         )
 
+    def iris(self, enrollment_epoch):
+        if self.iris_token and self.iris_epoch == enrollment_epoch:
+            try:
+                healthy(self.iris_token)
+                return self.iris_token
+            except (OSError, ValueError, RuntimeError):
+                pass
+        self.iris_token = ensure_started(enrollment_epoch)
+        self.iris_epoch = enrollment_epoch
+        return self.iris_token
+
     def tick(self):
-        cli.connect()
-        config = check_enrollment()
+        if not self.connected:
+            cli.connect()
+            self.connected = True
+        snap = enrollment.require_approved()
+        config = snap.config
+        self.account_ref = account_identity(config)
+        self.kakao_version = snap.kakao_version
         self.epoch = identity(config)
         progress = self.api("/internal/v1/iris/cursor?" + urlencode({"epoch": self.epoch}))
         self.last_seq = progress["after"]
-        self.iris_token = ensure_started(config)
+        token = self.iris(config["enrollment_epoch"])
         page = request(
             "http://127.0.0.1:3000/collector/rows?" + urlencode({"after": self.last_seq}),
-            token=self.iris_token,
+            token=token,
         )
         if page["build"] != BUILD or page["enrollment_epoch"] != config["enrollment_epoch"]:
             raise RuntimeError("iris_identity_mismatch")
@@ -254,7 +303,7 @@ class Collector:
         if int(page["high_water"]) < self.last_seq:
             raise RuntimeError("iris_database_regressed_requires_new_epoch")
         # Check again after querying. Never ingest a page after observing revocation.
-        if check_enrollment() != config:
+        if page["rows"] and enrollment.require_approved().config != config:
             raise RuntimeError("enrollment_changed")
         self.database_id = page["database_id"]
         events = [make_event(config, self.database_id, row) for row in page["rows"]]
@@ -262,39 +311,29 @@ class Collector:
         if seqs != sorted(set(seqs)) or any(s <= self.last_seq for s in seqs):
             raise RuntimeError("iris_invalid_page_order")
         self.heartbeat(True, True)
-        # One event at a time: a rejected row must not be skipped by a later committed cursor.
-        for event in events:
-            if check_enrollment() != config:
-                raise RuntimeError("enrollment_changed")
-            result = self.api(
-                "/internal/v1/observations:batch", {"schema_version": 1, "events": [event]}
-            )
-            ack = result["results"][0]
-            if ack.get("event_id") != event["event_id"] or ack.get("status") not in (
-                "committed",
-                "duplicate",
-            ):
-                raise RuntimeError("iris_row_rejected")
-            self.last_seq = event["source_seq"]
-        self.heartbeat(True, True)
+        if events:
+            self.commit(events)
+            self.heartbeat(True, True)
+        self.has_more = bool(page.get("has_more"))
         # Metadata is refreshed independently: names must not change a committed row's identity.
         if time.monotonic() - self.metadata_checked > 10:
             self.metadata_checked = time.monotonic()
             try:
-                self.refresh_metadata(config)
+                self.refresh_metadata(config, token)
             except (OSError, ValueError, KeyError, RuntimeError):
                 print('{"iris_metadata":"unavailable","action":"check_profile_lookup"}', flush=True)
         self.send_pending(config)
         return len(events)
 
     def send_pending(self, config):
-        if check_enrollment() != config:
+        if enrollment.require_approved().config != config:
             raise RuntimeError("enrollment_changed")
         item = self.api(
             "/internal/v1/outgoing/claim",
             {
                 "enrollment_epoch": self.epoch,
                 "database_id": self.database_id,
+                "account_ref": self.account_ref,
             },
         )["item"]
         if item is None:
@@ -302,9 +341,10 @@ class Collector:
         status = "failed"
         try:
             if (
-                check_enrollment() != config
+                enrollment.require_approved().config != config
                 or item["epoch"] != self.epoch
                 or item["database_id"] != self.database_id
+                or item["account_ref"] != account_identity(config)
             ):
                 raise RuntimeError("send_enrollment_mismatch")
             status = "unknown"  # Any loss after beginning HTTP is ambiguous; do not retry.
@@ -316,6 +356,7 @@ class Collector:
                     "text": item["text"],
                     "database_id": self.database_id,
                     "enrollment_epoch": config["enrollment_epoch"],
+                    "approved_user_id": config["approved_user_id"],
                 },
                 self.iris_token,
             )
@@ -333,25 +374,52 @@ class Collector:
             pass
         self.api("/internal/v1/outgoing/" + item["request_id"] + "/result", {"status": status})
 
-    def refresh_metadata(self, config):
+    def commit(self, events):
+        """Send rows in order. The cursor only moves past rows the server stored."""
+        events = list(events)
+        position = 0
+        while position < len(events):
+            chunk, size = [], 0
+            for event in events[position : position + 100]:
+                encoded = len(json.dumps(event, ensure_ascii=False).encode())
+                if chunk and size + encoded > MAX_BATCH_BYTES:
+                    break
+                chunk.append(event)
+                size += encoded
+            results = self.api(
+                "/internal/v1/observations:batch", {"schema_version": 1, "events": chunk}
+            )["results"]
+            if len(results) != len(chunk):
+                raise RuntimeError("iris_row_rejected")
+            for offset, (event, ack) in enumerate(zip(chunk, results)):
+                if (
+                    ack.get("status") in ("committed", "duplicate")
+                    and ack.get("event_id") == event["event_id"]
+                ):
+                    self.last_seq = event["source_seq"]
+                    continue
+                if ack.get("reason") == "invalid_event" and event["kind"] == "db_row":
+                    # Keep later rows moving: store this one as unreadable and resend from it.
+                    events[position + offset] = skipped(event)
+                    position += offset
+                    break
+                raise RuntimeError("iris_row_rejected")
+            else:
+                position += len(chunk)
+
+    def refresh_metadata(self, config, token):
         targets = self.api(
             "/internal/v1/iris/metadata-targets?" + urlencode({"epoch": self.epoch})
         )["items"]
         if not targets:
             return
-        if check_enrollment() != config:
-            raise RuntimeError("enrollment_changed")
-        result = request(
-            "http://127.0.0.1:3000/collector/metadata", {"targets": targets}, self.iris_token
-        )
+        result = request("http://127.0.0.1:3000/collector/metadata", {"targets": targets}, token)
         if (
             result["build"] != BUILD
             or result["enrollment_epoch"] != config["enrollment_epoch"]
             or result["database_id"] != self.database_id
         ):
             raise RuntimeError("iris_metadata_identity_mismatch")
-        if check_enrollment() != config:
-            raise RuntimeError("enrollment_changed")
         self.api(
             "/internal/v1/iris/metadata",
             {
@@ -359,6 +427,7 @@ class Collector:
                 "enrollment_epoch": self.epoch,
                 "database_id": self.database_id,
                 "items": result["items"],
+                "self_identity_source": result.get("self_identity_source"),
             },
         )
 
@@ -368,8 +437,9 @@ def watch():
     while True:
         try:
             count = collector.tick()
+            collector.remove_legacy()
             print(json.dumps({"iris": "polling", "committed_rows": count}), flush=True)
-            time.sleep(0.2 if count == 50 else 3)
+            time.sleep(0.2 if collector.has_more else 3)
         except (
             OSError,
             ValueError,
@@ -378,8 +448,8 @@ def watch():
             TypeError,
             RuntimeError,
             subprocess.TimeoutExpired,
-        ):
-            # No exception interpolation: transport errors can include sensitive upstream content.
+        ) as exc:
+            collector.reset()
             try:
                 stop()
             except (RuntimeError, subprocess.TimeoutExpired):
@@ -388,8 +458,7 @@ def watch():
                 collector.heartbeat(False, False)
             except (OSError, ValueError, RuntimeError):
                 pass
-            print(
-                '{"iris":"locked_or_unavailable","action":"check_setup_login_and_database"}',
-                flush=True,
-            )
+            # Only fixed reason codes are logged: transport errors can carry upstream content.
+            reason = str(exc) if re.fullmatch(r"[a-z_]{3,64}", str(exc)) else "unavailable"
+            print(json.dumps({"iris": "locked_or_unavailable", "reason": reason}), flush=True)
             time.sleep(10)

@@ -89,8 +89,11 @@ if (root / marker).is_file() and (root / "release.json").is_file() and not (root
                            stdout=subprocess.DEVNULL, check=True)
             if sys.platform == "darwin":
                 from ops.onboarding import prepare_mac
+                from ops.setup_output import SetupOutput
 
-                prepare_mac(options)
+                # Dependency installers write to the private log, not the terminal.
+                with SetupOutput():
+                    prepare_mac(options)
                 config = json.loads((root / marker).read_text())
                 instances = subprocess.run(
                     ["limactl", "list", "--format", "{{.Name}}"],
@@ -111,7 +114,7 @@ if (root / marker).is_file() and (root / "release.json").is_file() and not (root
                 subprocess.run([*command, "upgrade", "--version", version], check=True)
         except subprocess.CalledProcessError as error:
             sys.exit(error.returncode)
-        except (OSError, RuntimeError, ValueError) as error:
+        except Exception as error:
             from ops.setup_output import report_error
 
             report_error(error)
@@ -121,12 +124,15 @@ os.execv(sys.executable, [*command, "up", *arguments])
 '
   # Never let a child consume the rest of a curl-piped installer. Use the terminal
   # for sudo/interactive prompts when available, otherwise provide EOF.
+  # Linux installs are managed as root, so elevate once for the whole run.
+  local bridge_elevate=''
+  if [[ "$(uname -s)" == Linux && "$(id -u)" != 0 ]]; then bridge_elevate=sudo; fi
   if [[ ! -t 0 && -r /dev/tty ]] && ( : </dev/tty ) 2>/dev/null; then
-    exec "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}" </dev/tty
+    exec $bridge_elevate "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}" </dev/tty
   elif [[ -t 0 ]]; then
-    exec "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}"
+    exec $bridge_elevate "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}"
   else
-    exec "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}" </dev/null
+    exec $bridge_elevate "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}" </dev/null
   fi
 }
 

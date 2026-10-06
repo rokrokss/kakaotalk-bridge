@@ -11,25 +11,25 @@ Bridge를 실행할 macOS·Linux 컴퓨터의 터미널에 붙여 넣으세요.
 curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/install.sh | bash
 ```
 
-첫 실행은 최신 정식 릴리스의 설치 파일과 미리 빌드한 이미지를 내려받습니다. 설치 파일의 SHA-256을 확인하고 이미지 버전을 고정합니다. 사용자 컴퓨터에서 Android 앱이나 서버 이미지를 빌드하지 않습니다. 필요하면 Python과 Mac의 Homebrew·Lima, Linux의 Docker를 설치하며 관리자 승인을 요청할 수 있습니다. Tailscale은 선택한 경우에만 설치합니다.
+첫 실행은 최신 정식 릴리스의 설치 파일과 미리 빌드한 이미지를 내려받습니다. 설치 파일의 SHA-256을 확인하고 이미지 버전을 고정합니다. 사용자 컴퓨터에서 Android 앱이나 서버 이미지를 빌드하지 않습니다. 필요하면 Python과 Mac의 Homebrew·Lima, Linux의 Docker를 설치하며 관리자 승인을 요청할 수 있습니다. Tailscale은 선택한 경우에만 설치합니다. Linux에서는 설치를 root로 실행하므로 sudo 비밀번호를 물을 수 있습니다.
 
-터미널에서 진행 상태를 확인할 수 있습니다. 실패하면 재시도 방법과 로그 위치가 표시됩니다.
+터미널에는 `[1/4] 실행 환경 준비`, `[2/4] 개인 Bridge 시작`, `[3/4] 선택한 AI 연결 준비`, `[4/4] 카카오톡 설정 화면 열기` 단계와 `· 이미지 내려받는 중…` 같은 짧은 진행 상황을 표시합니다. Lima·Docker·패키지 관리자의 출력은 실행마다 비공개 로그(설치 폴더의 `.bridge/logs/setup-*.log`)에 기록합니다. 실패하면 한국어로 원인과 다음 조치를 알리고 진단 로그 경로를 한 번 표시합니다. 설치 프로그램을 내려받는 첫 준비 단계는 임시 폴더의 별도 로그를 사용하며 그 경로도 표시합니다. 문제를 해결한 뒤 같은 명령을 다시 실행하면 이어서 진행하며 데이터는 유지됩니다.
 
-자세한 진단 출력은 `--verbose`로 확인하세요.
+도구의 원문 출력을 화면에서 보려면 `--verbose`를 사용하세요.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/install.sh | bash -s -- --verbose
-# Or, from a downloaded source checkout:
+# Or, in the installation folder:
 ./bridge up --verbose
 ```
 
 기본 설치 위치는 Mac의 `~/Library/Application Support/KakaoTalk Bridge`, Linux의 `${XDG_DATA_HOME:-~/.local/share}/kakaotalk-bridge`입니다. `BRIDGE_HOME`으로 바꿀 수 있습니다. `BRIDGE_VERSION=v0.1.0`처럼 설치·업데이트할 릴리스 버전을 지정할 수 있습니다. 소스 폴더에서 `bash install.sh`를 실행하면 `BRIDGE_HOME`을 지정하지 않는 한 그 폴더를 사용합니다.
 
-같은 설치 명령을 다시 실행하면 릴리스 업데이트를 확인하고 설치 파일과 이미지를 함께 갱신합니다. 이미 같은 버전이면 재설치 없이 관리 화면을 엽니다. 업데이트에 실패하면 중단하며, 초기 설치가 끝나지 않은 경우에는 먼저 그 설치를 이어서 진행합니다. Git 작업 폴더·소스 설치와 `--source`, `--manifest`, `--plan` 실행에는 자동 업데이트를 적용하지 않습니다. 업데이트 없이 다시 열려면 설치 폴더에서 `./bridge up`을 실행하세요.
+같은 설치 명령을 다시 실행하면 릴리스 업데이트를 확인하고 설치 파일과 이미지를 함께 갱신합니다. 설정, Android 데이터, 카카오톡 로그인, 수집 승인은 유지됩니다. 이미 같은 버전이면 재설치 없이 관리 화면을 엽니다. 업데이트에 실패하면 중단하며, 초기 설치가 끝나지 않은 경우에는 먼저 그 설치를 이어서 진행합니다. Git 작업 폴더·소스 설치와 `--source`, `--manifest`, `--plan` 실행에는 자동 업데이트를 적용하지 않습니다. 업데이트 없이 다시 열려면 설치 폴더에서 `./bridge up`을 실행하세요.
 
-[GitHub Releases](https://github.com/rokrokss/kakaotalk-bridge/releases)에서 `bridge-install.tar.gz`를 직접 내려받아 압축을 풀고 `bash install.sh`를 실행해도 됩니다. 자동 설치는 GitHub API가 제공하는 자산 해시와 비교하며, 공급망 출처 증명을 별도로 확인하려면 [고급 설치](onboarding.md)를 참고하세요.
+[GitHub Releases](https://github.com/rokrokss/kakaotalk-bridge/releases)에서 `bridge-install.tar.gz`를 직접 내려받아 압축을 풀고 `bash install.sh`를 실행해도 됩니다. 자동 설치는 GitHub API가 제공하는 자산 해시와 비교하며, 공급망 출처 증명을 별도로 확인하려면 [고급 설치](onboarding.md#install)를 참고하세요.
 
-설치 폴더에서 `./bridge upgrade`를 실행하면 최신 정식 릴리스의 설치 파일과 이미지를 함께 업데이트합니다. 특정 버전은 `./bridge upgrade --version v0.1.0`으로 선택하세요. Linux에서는 필요한 경우 sudo를 요청합니다. 업데이트 전에 암호화 백업을 만들며, 지원하지 않는 Iris 구성 요소 변경은 적용 전에 중단합니다.
+설치 폴더에서 `./bridge upgrade`를 실행하면 최신 정식 릴리스의 설치 파일과 이미지를 함께 업데이트합니다. 특정 버전은 `./bridge upgrade --version <태그>`로 선택하세요. 업데이트 전에 암호화 백업을 만들고, Iris 구성 요소는 수집기가 자동으로 교체합니다. [업데이트](operations.md#update)
 
 <a id="from-a-downloaded-source-checkout"></a>
 ## 이미 내려받은 소스에서 실행
@@ -52,7 +52,7 @@ bash install.sh --source
 1. 출력된 localhost 링크를 여세요. 원격 서버는 먼저 아래 SSH 포워딩을 실행하세요. 기존 설치는 관리 주소를 유지합니다.
 2. 패스키를 저장해 Bridge를 보호하세요. 다시 접속할 때는 저장한 패스키를 사용합니다.
 3. 가상 태블릿이 준비되면 Aurora 스토어에 익명으로 로그인하고 **Kakao Corp.의 카카오톡**을 설치하세요. 설치가 끝나면 Bridge가 카카오톡을 엽니다. [Aurora 설치 안내](web-ui.md#install-kakaotalk-in-aurora)
-4. **다른 기기와 함께 사용**을 선택하고 **로그인 옵션 확인**을 실행한 뒤 로그인하세요. 휴대폰 로그인이 유지되는지 직접 확인하고 두 항목을 체크해 수집을 시작하세요.
+4. **다른 기기와 함께 사용**을 선택해 로그인하세요. 관리 화면이 태블릿 로그인을 자동으로 감지합니다. 휴대폰 로그인이 유지되는지 직접 확인하고 **휴대폰의 카카오톡 로그인이 유지되고 있습니다**를 체크한 뒤 **메시지 수집 시작**을 누르세요.
 5. 휴대폰에서 나에게 테스트 메시지를 보내 수집을 확인하세요. 필요하면 **AI 연결 → 연결 추가 또는 변경**을 열고 사용할 곳을 선택하세요. 나중에 연결해도 됩니다. 터미널에서는 `./bridge setup-connection`을 사용합니다.
 
 공식 APK 전체 세트가 있다면 `./bridge up --apk-folder /path/to/apks`로 스토어 설치를 생략할 수 있습니다. 서로 다른 버전의 APK를 섞지 마세요. Bridge에는 카카오톡 APK나 계정 정보가 포함되지 않습니다.
@@ -75,14 +75,14 @@ bash install.sh --source
 
 | 환경 | 실행 방식 | 현재 검증 |
 | --- | --- | --- |
-| Apple Silicon Mac | 전용 Lima Ubuntu VM 자동 준비, Docker Desktop 불필요 | 새 VM에서 릴리스 이미지 설치·관리 화면 확인 |
+| Apple Silicon Mac | 전용 Lima Ubuntu VM 자동 준비, Docker Desktop 불필요 | 0.1.0 릴리스를 새 VM에 설치하고 관리 화면 확인. 이번 버전의 설치 전체 과정은 미검증 |
 | Intel Mac | QEMU 기반 Lima, 없으면 설치 | 코드 경로 제공, 실제 설치 미검증 |
-| Ubuntu·Debian Linux | 로컬 Docker Engine, Binder 모듈 설치·로드 시도 | 새 Ubuntu 24.04 arm64 VM에서 릴리스 설치·재부팅·업데이트 확인 |
+| Ubuntu·Debian Linux | 로컬 Docker Engine, Binder 모듈 설치·로드 시도 | 0.1.0 릴리스를 새 Ubuntu 24.04 arm64 VM에 설치·재부팅·업데이트 확인. 0.1.0에서 이번 버전으로의 업데이트는 카카오톡 계정 없는 Ubuntu 테스트 VM에서 확인 |
 | 기타 Linux | 호환되는 기존 도구와 Binder 재사용 | 지원하지 않는 필수 도구가 없으면 조치 안내와 함께 중단 |
 | Windows + Linux 서버 | PowerShell에서 SSH 설치 및 localhost 포워딩 유지 | 스크립트 제공, Windows 실행 미검증 |
 | Windows WSL2 | Binder가 이미 로드된 기존 배포판 | 호환성 확인 후 진행. 기본 WSL2가 작동한다고 보장하지 않음 |
 
-[설치 검증 내역과 미검증 범위](implementation.md#public-release-2026-10-06)
+[설치 검증 내역](implementation.md) · [미검증 범위](implementation.md#not-yet-verified)
 
 로컬 실행에는 arm64 또는 x86_64, 충분한 메모리·디스크, 가상화·커널 기능 접근 권한이 필요합니다. 권한이 제한된 컨테이너나 회사 관리 장비에서는 실행이 어려울 수 있습니다. Linux에서는 전용 호스트나 VM을 사용하세요.
 
@@ -112,7 +112,7 @@ Binder가 로드되지 않았으면 변경 전에 멈춥니다. WSL 설치·공�
 ./bridge up --no-browser                  # Print the link on a headless server
 ./bridge up --admin-port 19443            # Internal maintenance port on first Mac install
 ./bridge up --mcp-port 19787              # Local shared ingress port on first Mac install
-./bridge doctor                          # Diagnostics (sudo may be needed on Linux)
+./bridge doctor                          # Korean status summary (--json for JSON)
 ```
 
 기존 HTTPS 프록시가 있다면 하나의 HTTPS 출처를 공용 진입점(기본 `127.0.0.1:18787`)으로 전달하고 다음을 실행하세요.
@@ -146,4 +146,4 @@ ssh -N -L 127.0.0.1:18789:127.0.0.1:18789 user@your-server
 
 SSH를 닫아도 서버는 계속 실행됩니다. 관리할 때 다시 연결하세요. 새 링크가 필요하면 `./bridge passkey-login --link-only`를 사용하세요. 로컬 포트가 사용 중이면 `./bridge passkey-login --url http://localhost:19789` 등으로 브라우저 출처를 바꾸고 로컬 19789를 서버 18789로 전달하세요. 이후 해당 출처를 유지하세요.
 
-업데이트와 암호화 백업은 [운영](operations.md)을 참고하세요. `up`은 기존 이미지를 업데이트하지 않습니다.
+업데이트는 [운영의 업데이트](operations.md#update), 암호화 백업은 [운영](operations.md)을 참고하세요. `up`은 기존 이미지를 업데이트하지 않습니다.

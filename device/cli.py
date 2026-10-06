@@ -6,17 +6,16 @@ import json
 import os
 import re
 import subprocess
-import tempfile
 import time
 import uuid
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from device import login_guard, session_status
-
+# The keyboard app keeps the application ID it was first released with: Android stores
+# the enabled input method by this ID, so renaming it would orphan installed devices.
 PKG = "dev.kakaocollector.bridge"
-REMOTE_CONFIG = f"/data/user/0/{PKG}/files/enrollment.json"
+IME = f"{PKG}/dev.kakaotalkbridge.android.WebInputMethod"
 
 
 def adb(*args, timeout=25, check=True):
@@ -28,7 +27,7 @@ def adb(*args, timeout=25, check=True):
         check=False,
     )
     if check and result.returncode:
-        raise RuntimeError("ADB operation failed; inspect device connectivity")
+        raise RuntimeError("adb_failed")
     return result.stdout.strip()
 
 
@@ -48,7 +47,7 @@ def connect():
             if adb("shell", "id", "-u", check=False) == "0":
                 break
         else:
-            raise RuntimeError("Authorized root ADB is unavailable")
+            raise RuntimeError("root_adb_required")
 
 
 def is_installed(package):
@@ -85,15 +84,17 @@ def report(payload):
     )
     with urlopen(request, timeout=15) as response:
         if response.status != 200:
-            raise RuntimeError("Device status not committed")
+            raise RuntimeError("device_status_not_committed")
 
 
 def bootstrap(rotate_epoch=False, *, preserve=False):
+    from device import enrollment, iris
+
     print("Android 시작 대기 중… 최대 180초가 걸릴 수 있습니다.", flush=True)
     deadline = time.monotonic() + 180
     while sample()["state"] in ("offline", "booting"):
         if time.monotonic() >= deadline:
-            raise RuntimeError("Android did not boot; check binder/kernel compatibility")
+            raise RuntimeError("android_not_ready")
         time.sleep(3)
     # Dedicated redroid root ADB provisions enrollment and the Iris DB reader.
     adb("root", check=False)
@@ -106,23 +107,19 @@ def bootstrap(rotate_epoch=False, *, preserve=False):
             pass
         time.sleep(1)
     else:
-        raise RuntimeError("Bootstrap requires root ADB in the dedicated redroid instance")
+        raise RuntimeError("root_adb_required")
     state = Path("/state/enrollment.json")
-    has_config = (
-        adb("shell", "sh", "-c", f"'test -f {REMOTE_CONFIG} && echo present'", check=False)
-        == "present"
-    )
-    if has_config and not state.exists() and not rotate_epoch:
-        raise RuntimeError(
-            "Device has enrollment but host state is missing; restore device-state first"
-        )
-    if preserve and has_config:
-        remote = json.loads(adb("shell", "cat", REMOTE_CONFIG))
+    device = os.getenv("DEVICE_ID", "personal-tablet")
+    current = enrollment.current().config
+    if current and not state.exists() and not rotate_epoch:
+        raise RuntimeError("host_state_missing")
+    if preserve and current:
         identity = json.loads(state.read_text())
-        if identity.get("enrollment_epoch") != remote.get("enrollment_epoch") or identity.get(
-            "device_id"
-        ) != os.getenv("DEVICE_ID", "personal-tablet"):
-            raise RuntimeError("Enrollment mismatch; restore matching state")
+        if (
+            identity.get("enrollment_epoch") != current.get("enrollment_epoch")
+            or identity.get("device_id") != device
+        ):
+            raise RuntimeError("enrollment_mismatch")
         return False
     if preserve:
         from device.setup import verify_installed_kakao, verify_kakao
@@ -130,32 +127,20 @@ def bootstrap(rotate_epoch=False, *, preserve=False):
         if not is_installed("com.kakao.talk"):
             supplied = sorted(Path("/inputs/kakao").glob("*.apk"))
             if not supplied:
-                raise RuntimeError(
-                    "Install KakaoTalk in Aurora or import the official APK set first"
-                )
+                raise RuntimeError("kakao_not_installed")
             verify_kakao(supplied)
             adb("install-multiple", *map(str, supplied), timeout=180)
         verify_installed_kakao()
     if not state.exists():
         state.parent.mkdir(parents=True, exist_ok=True)
-        state.write_text(
-            json.dumps(
-                {
-                    "device_id": os.getenv("DEVICE_ID", "personal-tablet"),
-                    "enrollment_epoch": str(uuid.uuid4()),
-                }
-            )
-        )
+        state.write_text(json.dumps({"device_id": device, "enrollment_epoch": str(uuid.uuid4())}))
         state.chmod(0o600)
     identity = json.loads(state.read_text())
-    if identity["device_id"] != os.getenv("DEVICE_ID", "personal-tablet"):
-        raise RuntimeError("DEVICE_ID changed; restore matching configuration")
+    if identity["device_id"] != device:
+        raise RuntimeError("device_identity_changed")
     if rotate_epoch:
         identity["enrollment_epoch"] = str(uuid.uuid4())
         state.write_text(json.dumps(identity))
-    if not has_config and is_installed(PKG):
-        # A preinstalled but never enrolled Bridge is permitted. Its empty outbox has no epoch.
-        print("기존 Bridge를 등록합니다. 기존 앱 데이터는 유지됩니다.")
     apks = sorted(Path("/inputs/kakao").glob("*.apk"))
     if apks and not preserve:
         print("제공된 카카오톡 APK 세트 설치 중… 로그인은 수행하지 않습니다.")
@@ -164,29 +149,16 @@ def bootstrap(rotate_epoch=False, *, preserve=False):
                 print(f"APK SHA256 {hashlib.file_digest(source, 'sha256').hexdigest()}")
         adb("install-multiple", "-r", *map(str, apks), timeout=180)
     if not is_installed("com.kakao.talk"):
-        raise RuntimeError("Place the official KakaoTalk APK/split set in inputs/kakao and rerun")
+        raise RuntimeError("kakao_not_installed")
     adb("install", "-r", "/opt/bridge.apk", timeout=120)
-    from device import iris
-
     iris.stop()
-    adb("push", "/opt/iris.apk", iris.REMOTE_APK)
-    adb("shell", "chmod", "444", iris.REMOTE_APK)
-    ca = Path("/run/secrets/tls_cert").read_text()
-    config = {
-        **identity,
-        "url": os.environ["BRIDGE_URL"],
-        "token": Path("/run/secrets/ingest_token").read_text().strip(),
-        "ca_pem": ca,
-        "secondary_login_version": 0,
-        "collector_mode": "iris",
-    }
-    provision(config)
-    Path("/state/prelogin.json").unlink(missing_ok=True)
-    print(
-        "설치가 완료되었습니다. 수집은 잠겨 있습니다. 로그인 전에 보조 기기 옵션을 선택하고 login-check를 실행하세요."
+    # A new enrollment starts locked. The collector installs its own Iris build once approved.
+    enrollment.write(
+        {"device_id": identity["device_id"], "enrollment_epoch": identity["enrollment_epoch"]}
     )
     print(
-        "주 기기 이전 로그인은 진행하지 마세요. 카카오톡 로그인 작업은 수행하지 않았습니다."
+        "설치가 완료되었습니다. 카카오톡에서 ‘다른 기기와 함께 사용’을 선택해 로그인한 뒤, "
+        "관리 화면에서 휴대폰 로그인이 유지되는지 확인하면 수집이 시작됩니다."
     )
     return True
 
@@ -197,115 +169,45 @@ def bridge_uid():
     listing = adb("shell", "pm", "list", "packages", "--user", "0", "-U", PKG)
     matches = re.findall(rf"^package:{re.escape(PKG)} uid:(\d+)$", listing, re.MULTILINE)
     if len(matches) != 1 or not 10000 <= int(matches[0]) < 100000:
-        raise RuntimeError("Cannot resolve Bridge app UID")
+        raise RuntimeError("keyboard_app_unavailable")
     return matches[0]
 
 
-def provision_file(config):
-    uid = bridge_uid()
-    # Payload travels as a file, never as an ADB argument or logged shell command.
-    with tempfile.TemporaryDirectory() as folder:
-        file = Path(folder) / "enrollment.json"
-        file.write_text(json.dumps(config))
-        file.chmod(0o600)
-        remote = "/data/local/tmp/collector-enrollment.json"
-        try:
-            adb("push", str(file), remote)
-            adb("shell", "chmod", "600", remote)
-            directory = f"/data/user/0/{PKG}/files"
-            adb("shell", "mkdir", "-p", directory)
-            adb("shell", "chown", f"{uid}:{uid}", directory)
-            adb("shell", "chmod", "700", directory)
-            adb("shell", "cp", remote, REMOTE_CONFIG + ".tmp")
-            adb("shell", "chown", f"{uid}:{uid}", REMOTE_CONFIG + ".tmp")
-            adb("shell", "chmod", "600", REMOTE_CONFIG + ".tmp")
-            adb("shell", "mv", REMOTE_CONFIG + ".tmp", REMOTE_CONFIG)
-            adb("shell", "restorecon", "-R", directory)
-        finally:
-            adb("shell", "rm", "-f", remote, check=False)
-
-
-def provision(config):
-    provision_file(config)
-    adb("shell", "am", "start", "-n", f"{PKG}/.SetupActivity")
-
-
-def login_check():
-    connect()
-    config = json.loads(adb("shell", "cat", REMOTE_CONFIG))
-    signature = login_guard.device_signature(adb)
-    if (
-        session_status.enrollment_evidence(config, {}, signature)["collection_approval"]
-        == "approved"
-    ):
-        print("이미 수집이 승인되었습니다. session-check로 상태를 확인하세요.")
+def ensure_keyboard_app():
+    """Keep the keyboard app on the device at the build shipped in this image."""
+    if not is_installed(PKG):
         return False
-    # A failed inspection must leave the existing approval and proof untouched.
-    proof = login_guard.prelogin(adb)
-    proof["epoch"] = config["enrollment_epoch"]
-    config["secondary_login_version"] = 0
-    # Do not launch the Bridge Activity: the foreground KakaoTalk login UI must stay visible.
-    provision_file(config)
-    proof_path = Path("/state/prelogin.json")
-    proof_path.write_text(json.dumps(proof))
-    proof_path.chmod(0o600)
-    print(
-        "확인 완료: 태블릿 설정과 보조 기기 로그인 옵션 선택을 확인했습니다. 로그인은 수행하지 않았습니다."
-    )
-    print("직접 로그인한 뒤 두 기기의 로그인이 유지되는지 확인하고 confirm-secondary를 실행하세요.")
+    paths = adb("shell", "pm", "path", PKG).splitlines()
+    remote = paths[0].removeprefix("package:") if paths else ""
+    if not re.fullmatch(r"/data/app/[A-Za-z0-9_=/+.~-]+\.apk", remote):
+        raise RuntimeError("keyboard_app_unverified")
+    with open("/opt/bridge.apk", "rb") as source:
+        wanted = hashlib.file_digest(source, "sha256").hexdigest()
+    if adb("shell", "sha256sum", remote).split()[:1] == [wanted]:
+        return False
+    keyboard = adb("shell", "settings", "get", "secure", "default_input_method")
+    # Same signing key, so Android keeps the app's data and permissions.
+    adb("install", "-r", "/opt/bridge.apk", timeout=120)
+    if keyboard.startswith(PKG + "/"):
+        adb("shell", "ime", "enable", IME)
+        adb("shell", "ime", "set", IME)
     return True
 
 
-def confirm_secondary(phone_active=False, tablet_active=False):
-    connect()
-    proof_path = Path("/state/prelogin.json")
-    if not proof_path.exists():
-        raise RuntimeError("BLOCKED: run login-check before attempting KakaoTalk login")
-    config = json.loads(adb("shell", "cat", REMOTE_CONFIG))
-    proof = json.loads(proof_path.read_text())
-    if proof.get("epoch") != config["enrollment_epoch"]:
-        raise RuntimeError("BLOCKED: enrollment changed since pre-login check")
-    config.update(
-        login_guard.confirm(proof, login_guard.device_signature(adb), phone_active, tablet_active)
-    )
-    if config.get("collector_mode") == "iris":
-        # Iris observes this file directly. Opening Bridge here hides KakaoTalk and
-        # makes a successful confirmation look like another setup step.
-        provision_file(config)
-    else:
-        provision(config)
-    proof_path.unlink()
-    print(
-        "두 기기의 로그인을 직접 확인하여 수집을 허용했습니다. 이후 휴대폰 상태는 자동으로 감시하지 않습니다."
-    )
-
-
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="KakaoTalk Bridge 기기 작업")
     parser.add_argument(
-        "command",
-        choices=[
-            "watch",
-            "iris-watch",
-            "iris-upgrade",
-            "web-ui",
-            "bootstrap",
-            "prepare",
-            "configure",
-            "probe",
-            "login-check",
-            "confirm-secondary",
-        ],
+        "command", choices=["watch", "iris-watch", "web-ui", "bootstrap", "probe", "approve"]
     )
-    parser.add_argument("--phone-session-active", action="store_true")
-    parser.add_argument("--tablet-session-active", action="store_true")
+    parser.add_argument(
+        "--phone-session-active",
+        action="store_true",
+        help="태블릿 로그인 뒤 휴대폰의 카카오톡 로그인이 유지되는 것을 직접 확인함",
+    )
     parser.add_argument(
         "--rotate-epoch",
         action="store_true",
-        help="Android 상태 복구 후 outbox를 유지하면서 새 식별자 세대 시작",
-    )
-    parser.add_argument(
-        "--expected-iris-sha256", help="Iris만 이전할 때 사용하는 이전 APK 해시"
+        help="Android 상태 복구 후 새 식별자 세대 시작",
     )
     args = parser.parse_args()
     command = args.command
@@ -324,27 +226,27 @@ def main():
         from device.iris import watch
 
         watch()
-    elif command == "iris-upgrade":
-        from device.iris import upgrade_binary
-
-        print(json.dumps(upgrade_binary(args.expected_iris_sha256)))
     elif command == "probe":
         print(json.dumps(sample()))
-    elif command == "prepare":
-        from device.setup import prepare
-
-        print(json.dumps({"prepared": prepare()}))
-    elif command == "configure":
-        bootstrap(preserve=True)
     elif command == "bootstrap":
         bootstrap(args.rotate_epoch)
-    elif command == "login-check":
-        login_check()
-    elif command == "confirm-secondary":
-        confirm_secondary(args.phone_session_active, args.tablet_session_active)
+    elif command == "approve":
+        from device import enrollment
+
+        connect()
+        enrollment.approve(args.phone_session_active)
+        print("수집을 승인했습니다. 휴대폰 로그인 상태는 자동으로 감시하지 않습니다.")
     else:
+        keyboard_checked = False
         while True:
             payload = sample()
+            if payload.get("bridge_installed") and not keyboard_checked:
+                keyboard_checked = True
+                try:
+                    if ensure_keyboard_app():
+                        print(json.dumps({"keyboard_app": "updated"}), flush=True)
+                except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                    print(json.dumps({"keyboard_app": "update_failed"}), flush=True)
             try:
                 report(payload)
                 print(json.dumps({"state": payload["state"], "reported": True}), flush=True)
@@ -354,7 +256,10 @@ def main():
 
 
 if __name__ == "__main__":
+    from device.messages import message
+
     try:
         main()
-    except (RuntimeError, subprocess.TimeoutExpired) as exc:
-        raise SystemExit(str(exc)) from None
+    except (RuntimeError, ValueError, subprocess.TimeoutExpired) as exc:
+        code = str(exc) if re.fullmatch(r"[a-z_]{3,64}", str(exc)) else None
+        raise SystemExit(message(exc) + (f" ({code})" if code else "")) from None

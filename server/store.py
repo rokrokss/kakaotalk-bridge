@@ -19,6 +19,29 @@ class Conflict(Exception):
     pass
 
 
+# Fields that earlier releases always serialized. Keeping them in the digest lets a row
+# committed by an older collector be replayed after an upgrade without a false conflict.
+LEGACY_PAYLOAD = {
+    "title": None,
+    "text": None,
+    "big_text": None,
+    "text_lines": [],
+    "is_group_summary": False,
+}
+
+
+def digest(event: Observation):
+    canonical = event.model_dump(mode="json")
+    canonical.pop("observed_at")  # Replay keeps the first receipt; row identity is stable.
+    canonical["notification_posted_at"] = None
+    canonical["payload"] = {**LEGACY_PAYLOAD, **canonical["payload"]}
+    if canonical["database_ref"]["skip_reason"] is None:
+        del canonical["database_ref"]["skip_reason"]
+    return hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
+
+
 class Store:
     def __init__(self, path: str):
         self.path = path
@@ -73,31 +96,23 @@ class Store:
 
     def ingest(self, event: Observation):
         serialized = json.dumps(event.model_dump(mode="json"), sort_keys=True, ensure_ascii=False)
-        canonical = event.model_dump(mode="json")
-        if event.source == "notification":
-            canonical.pop("database_ref")
-        if event.source == "iris_db":
-            canonical.pop("observed_at")  # Replay keeps the first receipt; row identity is stable.
-        digest = hashlib.sha256(
-            json.dumps(canonical, sort_keys=True, ensure_ascii=False).encode()
-        ).hexdigest()
+        signature = digest(event)
         identity = (event.device_id, str(event.enrollment_epoch), str(event.event_id))
+        key = f"iris:{event.device_id}:{event.enrollment_epoch}"
         received = now()
         with self.connect() as db:
             # Serialize check + write to avoid competing retries racing on the unique constraint.
             db.execute("BEGIN IMMEDIATE")
-            if event.source == "iris_db":
-                key = f"iris:{event.device_id}:{event.enrollment_epoch}"
-                existing = db.execute("SELECT value FROM metadata WHERE key=?", (key,)).fetchone()
-                progress = json.loads(existing[0]) if existing else None
-                if progress and progress["database_id"] != event.database_ref.database_id:
-                    raise Conflict("iris_database_changed_requires_new_epoch")
+            existing = db.execute("SELECT value FROM metadata WHERE key=?", (key,)).fetchone()
+            progress = json.loads(existing[0]) if existing else {"after": 0, "skipped": 0}
+            if progress.get("database_id") not in (None, event.database_ref.database_id):
+                raise Conflict("iris_database_changed_requires_new_epoch")
             prior = db.execute(
                 "SELECT digest FROM observations WHERE device_id=? AND epoch=? AND event_id=?",
                 identity,
             ).fetchone()
             if prior:
-                if prior[0] != digest:
+                if prior[0] != signature:
                     raise Conflict("event_id_conflict")
                 return "duplicate"
             if db.execute(
@@ -108,45 +123,37 @@ class Store:
             row = db.execute(
                 "INSERT INTO observations(device_id,epoch,event_id,source_seq,digest,received_at,body) "
                 "VALUES(?,?,?,?,?,?,?)",
-                (*identity, event.source_seq, digest, received, serialized),
+                (*identity, event.source_seq, signature, received, serialized),
             ).lastrowid
-            p = event.payload
-            if event.kind != "removed" and not p.is_group_summary:
-                items = [(m.sender, m.body, m.timestamp) for m in p.messages]
-                if not items:
-                    body = p.big_text or p.text or "\n".join(p.text_lines)
-                    items = [(None, body, None)] if body else []
-                for ordinal, (sender, body, timestamp) in enumerate(items):
-                    db.execute(
-                        "INSERT INTO candidates(observation_id,item_ordinal,title,sender,body,"
-                        "source_time,observed_at,received_at,notification_key,truncated) "
-                        "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                        (
-                            row,
-                            ordinal,
-                            p.title,
-                            sender,
-                            body,
-                            timestamp,
-                            event.observed_at.isoformat(),
-                            received,
-                            event.notification_key,
-                            p.truncated,
-                        ),
-                    )
-            db.execute(INDEX_SQL + " WHERE c.observation_id=?", (row,))
-            name_history.index_new(db, observation_id=row)
-            if event.source == "iris_db":
-                cursor = max(event.source_seq, progress["after"] if progress else 0)
+            if event.kind == "db_row":
+                message = event.payload.messages[0]
                 db.execute(
-                    "INSERT INTO metadata VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    "INSERT INTO candidates(observation_id,item_ordinal,title,sender,body,"
+                    "source_time,observed_at,received_at,notification_key,truncated) "
+                    "VALUES(?,0,NULL,?,?,?,?,?,?,?)",
                     (
-                        key,
-                        json.dumps(
-                            {"after": cursor, "database_id": event.database_ref.database_id}
-                        ),
+                        row,
+                        message.sender,
+                        message.body,
+                        message.timestamp,
+                        event.observed_at.isoformat(),
+                        received,
+                        event.notification_key,
+                        event.payload.truncated,
                     ),
                 )
+                db.execute(INDEX_SQL + " WHERE c.observation_id=?", (row,))
+                name_history.index_new(db, observation_id=row)
+            else:
+                progress["skipped"] = progress.get("skipped", 0) + 1
+            progress.update(
+                after=max(event.source_seq, progress["after"]),
+                database_id=event.database_ref.database_id,
+            )
+            db.execute(
+                "INSERT INTO metadata VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, json.dumps(progress)),
+            )
         # Context exit committed before an ACK can be returned.
         return "committed"
 
@@ -155,7 +162,20 @@ class Store:
             row = db.execute(
                 "SELECT value FROM metadata WHERE key=?", (f"iris:{device_id}:{epoch}",)
             ).fetchone()
-        return json.loads(row[0]) if row else {"after": 0, "database_id": None}
+        progress = json.loads(row[0]) if row else {}
+        return {"after": progress.get("after", 0), "database_id": progress.get("database_id")}
+
+    def bridge_status(self, timeout=180):
+        with self.connect() as db:
+            row = db.execute("SELECT received_at,body FROM statuses WHERE kind='bridge'").fetchone()
+        if not row:
+            return None
+        age = (datetime.now(UTC) - datetime.fromisoformat(row["received_at"])).total_seconds()
+        return {
+            **json.loads(row["body"]),
+            "received_at": row["received_at"],
+            "stale": age > timeout,
+        }
 
     def status_update(self, kind, payload, timeout=180):
         received = now()
@@ -178,8 +198,6 @@ class Store:
                         gap_reason = "enrollment_changed"
                     elif payload["last_source_seq"] < old["last_source_seq"]:
                         gap_reason = "sequence_regressed_restore_requires_new_epoch"
-                    elif payload["dropped_events"] > old.get("dropped_events", 0):
-                        gap_reason = "bridge_storage_loss"
                 else:
                     gap_reason = "collection_started_history_unknown"
                 if gap_reason:
@@ -208,43 +226,24 @@ class Store:
 
     def status(self, timeout=180):
         with self.connect() as db:
-            states = {}
-            for row in db.execute("SELECT * FROM statuses"):
-                age = (
-                    datetime.now(UTC) - datetime.fromisoformat(row["received_at"])
-                ).total_seconds()
-                states[row["kind"]] = {
-                    **json.loads(row["body"]),
-                    "received_at": row["received_at"],
-                    "stale": age > timeout,
-                }
+            device = db.execute("SELECT * FROM statuses WHERE kind='device'").fetchone()
             gaps = [dict(r) for r in db.execute("SELECT * FROM gaps ORDER BY id DESC LIMIT 100")]
-            last = db.execute("SELECT max(received_at) FROM observations").fetchone()[0]
+            # Rows are appended in receipt order, so the newest row avoids a table scan.
+            last = db.execute(
+                "SELECT received_at FROM observations ORDER BY id DESC LIMIT 1"
+            ).fetchone()
             floor = db.execute("SELECT value FROM metadata WHERE key='pruned_cursor'").fetchone()
             cursor_epoch = db.execute(
                 "SELECT value FROM metadata WHERE key='cursor_epoch'"
             ).fetchone()[0]
-        bridge = states.get("bridge")
+            skipped = sum(
+                json.loads(value).get("skipped", 0)
+                for (value,) in db.execute("SELECT value FROM metadata WHERE key LIKE 'iris:%'")
+            )
+        bridge = self.bridge_status(timeout)
         collecting = bridge and not bridge["stale"] and bridge["listener_connected"]
-        secondary_confirmed = bool(
-            bridge and not bridge["stale"] and bridge.get("secondary_login_confirmed")
-        )
-        warnings = []
-        if not secondary_confirmed:
-            warnings.append("secondary_login_confirmation_required")
-        if bridge:
-            if bridge.get("quarantine_depth", 0):
-                warnings.append("quarantined_events")
-            if bridge.get("dropped_events", 0):
-                warnings.append("bridge_reported_data_loss")
-            if (
-                bridge.get("oldest_pending_at")
-                and (
-                    datetime.now(UTC) - datetime.fromisoformat(bridge["oldest_pending_at"])
-                ).total_seconds()
-                > 72 * 3600
-            ):
-                warnings.append("outbox_older_than_72h")
+        approved = bool(bridge and not bridge["stale"] and bridge.get("secondary_login_confirmed"))
+        warnings = [] if approved else ["secondary_login_confirmation_required"]
         if bridge and bridge["stale"]:
             gaps.insert(
                 0,
@@ -258,20 +257,28 @@ class Store:
             "state": "collecting_partial" if collecting and not warnings else "needs_attention",
             "warnings": warnings,
             "mode": "passive",
-            "device": states.get("device"),
+            "device": {
+                **json.loads(device["body"]),
+                "received_at": device["received_at"],
+                "stale": (
+                    datetime.now(UTC) - datetime.fromisoformat(device["received_at"])
+                ).total_seconds()
+                > timeout,
+            }
+            if device
+            else None,
             "bridge": bridge,
-            "last_observation_received_at": last,
+            "last_observation_received_at": last[0] if last else None,
             "coverage": {
-                "secondary_login_operator_confirmed": secondary_confirmed,
+                "secondary_login_operator_confirmed": approved,
                 "phone_session_monitoring": False,
                 "cursor_epoch": cursor_epoch,
                 "complete": False,
-                "scope": "redroid_local_database_rows"
-                if bridge and bridge.get("source") == "iris_db"
-                else "posted_notifications_only",
+                "scope": "redroid_local_database_rows",
                 "login_verified": False,
                 "read_receipt_preservation_verified": False,
                 "possible_duplicates": True,
+                "skipped_rows": skipped,
                 "gaps": gaps,
                 "pruned_through_cursor": int(floor[0]) if floor else 0,
             },
@@ -291,21 +298,13 @@ class Store:
                 "pruned_through_cursor": int(floor[0]) if floor else 0,
             }
 
-    def messages(self, after=0, limit=50, query=None, conversation_ref=None):
-        where = "c.id > ?"
-        params = [after]
-        if query is not None:
-            # Literal substring, not user-provided SQL/FTS grammar.
-            where += " AND instr(lower(c.body),lower(?)) > 0"
-            params.append(query)
-        if conversation_ref is not None:
-            where += " AND (o.device_id || ':' || o.epoch || ':' || json_extract(o.body,'$.database_ref.chat_id')) = ?"
-            params.append(conversation_ref)
+    def messages(self, after=0, limit=50):
+        """Event-cursor rows for pending-message delivery; human queries use server.queries."""
         with self.connect() as db:
             rows = db.execute(
                 "SELECT c.*,o.event_id,o.body AS observation_body,o.epoch AS observation_epoch,o.device_id FROM candidates c JOIN observations o ON o.id=c.observation_id "
-                f"WHERE {where} ORDER BY c.id LIMIT ?",
-                (*params, limit + 1),
+                "WHERE c.id > ? ORDER BY c.id LIMIT ?",
+                (after, limit + 1),
             ).fetchall()
         items = [dict(r) for r in rows[:limit]]
         for item in items:
@@ -313,6 +312,7 @@ class Store:
             epoch = item.pop("observation_epoch")
             device_id = item.pop("device_id")
             ref = observation.get("database_ref")
+            # Rows stored by the retired notification collector stay readable until pruned.
             item.update(
                 source="notification",
                 completeness="notification_only",
@@ -332,26 +332,6 @@ class Store:
             "items": items,
             "next_cursor": items[-1]["id"] if items else after,
             "has_more": len(rows) > limit,
-        }
-
-    def conversations(self, after=0, limit=50):
-        page = self.messages(after, limit)
-        return {
-            "items": [
-                {
-                    "observation_cursor": r["id"],
-                    "title": r["title"],
-                    "notification_key": r["notification_key"],
-                    "conversation_ref": r["conversation_ref"],
-                    "identity_confidence": "database_id"
-                    if r["source"] == "iris_db"
-                    else "unresolved",
-                }
-                for r in page["items"]
-            ],
-            "next_cursor": page["next_cursor"],
-            "has_more": page["has_more"],
-            "scope": "observed_conversations_may_repeat",
         }
 
     def prune(self, days):

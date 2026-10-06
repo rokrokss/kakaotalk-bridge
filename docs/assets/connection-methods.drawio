@@ -430,7 +430,7 @@
         <mxCell id="24" value="수집 API" style="text;html=0;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;spacing=0;fontFamily=Helvetica;fontSize=18;fontColor=#242320;fontStyle=1;" vertex="1" parent="21">
           <mxGeometry x="32" y="20" width="150" height="26" as="geometry" />
         </mxCell>
-        <mxCell id="25" value="읽기 전용 조회" style="text;html=0;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;spacing=0;fontFamily=Helvetica;fontSize=13;fontColor=#6f7069;fontStyle=0;" vertex="1" parent="21">
+        <mxCell id="25" value="메시지 조회·전송" style="text;html=0;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;spacing=0;fontFamily=Helvetica;fontSize=13;fontColor=#6f7069;fontStyle=0;" vertex="1" parent="21">
           <mxGeometry x="18" y="61" width="162" height="21" as="geometry" />
         </mxCell>
         <mxCell id="26" value="" style="group;" vertex="1" parent="1">

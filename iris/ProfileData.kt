@@ -86,6 +86,39 @@ object ProfileData {
         finally { spec.clearPassword(); password.fill('\u0000'); saltBytes.fill(0) }
     }
 
+    private val ACCOUNT_KEYS = setOf("memochat_user_id", "old_user_id")
+
+    /** Signed-in user IDs from KakaoTalk's LocalUser DataStore. Only the two ID keys are decoded. */
+    fun accountIds(preferences: ByteArray): List<Long> {
+        require(preferences.size in 1..4 * 1024 * 1024)
+        val ids = mutableListOf<Long>()
+        val root = Wire(preferences)
+        while (root.pos < root.end) {
+            val tag = root.integer().toInt()
+            require(tag > 0)
+            if (tag != 10) { root.skip(tag and 7); continue }
+            val entry = root.block()
+            var key: String? = null
+            var value: Wire? = null
+            while (entry.pos < entry.end) {
+                val field = entry.integer().toInt()
+                when (field) {
+                    10 -> { key = entry.block().text() }
+                    18 -> { value = entry.block() }
+                    else -> { require(field > 0); entry.skip(field and 7) }
+                }
+            }
+            val name = key ?: continue
+            val content = value ?: continue
+            if (name !in ACCOUNT_KEYS) continue
+            // Value.long is field 4; any other type is not an account ID.
+            if (content.integer() != 32L) continue
+            val id = content.integer()
+            if (id > 0) ids.add(id)
+        }
+        return ids
+    }
+
     data class Name(val value: String, val source: String)
 
     fun displayName(nickname: String, friend: String?, contact: String?, relation: Int): Name {

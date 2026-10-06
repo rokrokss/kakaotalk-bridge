@@ -27,7 +27,7 @@
 <rect x="696" y="176" width="192" height="98" rx="12" fill="#ffffff" stroke="#dedad0"/>
 <rect x="712" y="195" width="5" height="24" rx="2" fill="#f6df80" stroke="none"/>
 <text x="728" y="216" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="18" font-weight="600" fill="#242320" text-anchor="start">수집 API</text>
-<text x="714" y="252" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">읽기 전용 조회</text>
+<text x="714" y="252" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="400" fill="#6f7069" text-anchor="start">메시지 조회·전송</text>
 <rect x="976" y="176" width="88" height="98" rx="12" fill="#ffffff" stroke="#dedad0"/>
 <rect x="992" y="195" width="5" height="24" rx="2" fill="#f6df80" stroke="none"/>
 <text x="1008" y="216" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif" font-size="17" font-weight="600" fill="#242320" text-anchor="start">데이터</text>

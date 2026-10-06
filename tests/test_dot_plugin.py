@@ -76,13 +76,8 @@ class Source:
             "pruned_through_cursor": self.floor,
         }
 
-    def messages(self, after, limit=50, conversation_ref=None):
-        rows = [
-            r
-            for r in self.rows
-            if r["id"] > after
-            and (not conversation_ref or r["conversation_ref"] == conversation_ref)
-        ]
+    def messages(self, after, limit=50):
+        rows = [r for r in self.rows if r["id"] > after]
         selected = deepcopy(rows[:limit])
         return {
             "items": selected,
@@ -94,20 +89,12 @@ class Source:
     def get(self, path, **params):
         if path == "/v1/status":
             return {"state": "collecting_partial", "warnings": []}
-        if path == "/v1/conversations":
-            return {
-                "items": [{"conversation_ref": "room-a"}],
-                "next_cursor": len(self.rows),
-                "has_more": False,
-            }
         if path == "/v2/messages":
             return {
                 "items": [r for r in self.rows if not params.get("q") or params["q"] in r["body"]],
                 "next_cursor": None,
                 "has_more": False,
             }
-        if path == "/v1/search":
-            return {"items": [r for r in self.rows if params["q"] in r["body"]]}
         raise AssertionError(path)
 
 
@@ -283,7 +270,7 @@ def test_approval_requires_exact_origin_even_with_valid_ticket_cookie_and_key(pl
         headers["Origin"] = origin
     denied = client.post("/authorize", data=data, headers=headers, follow_redirects=False)
     assert denied.status_code == 403
-    assert denied.json() == {"error": "invalid_origin"}
+    assert "다른 주소에서 보낸 요청" in denied.text and "invalid_origin" not in denied.text
     assert denied.headers["referrer-policy"] == "no-referrer"
     # Rejection must not consume the valid browser-bound approval.
     approved = client.post(

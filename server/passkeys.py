@@ -204,8 +204,8 @@ class Passkeys:
             rp_id=config["rp_id"],
             rp_name="KakaoTalk Bridge",
             user_id=decode(config["user_id"]),
-            user_name="Bridge owner",
-            user_display_name="Bridge owner",
+            user_name="KakaoTalk Bridge 관리자",
+            user_display_name="KakaoTalk Bridge 관리자",
             challenge=decode(row["challenge"]),
             timeout=120000,
             authenticator_selection=AuthenticatorSelectionCriteria(
