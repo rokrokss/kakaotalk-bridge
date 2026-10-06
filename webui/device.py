@@ -134,7 +134,7 @@ class Android:
     def open_store(self):
         from device.setup import open_store
 
-        open_store()
+        return open_store()
 
     def configure(self):
         changed = cli.bootstrap(preserve=True)

@@ -538,7 +538,7 @@ function renderSetup() {
   let next = ['서버 준비 상태를 확인하고 있습니다.', '', ''];
   if (s && !ready) next = ['개인 기기를 시작하고 있습니다. 준비되면 자동으로 계속됩니다.', '', ''];
   else if (ready && !s.kakao_installed) next = s.aurora_installed
-    ? ['스토어에서 익명 로그인을 선택하고 Kakao Corp.의 카카오톡을 설치하세요. 설정은 자동으로 계속됩니다.', 'open-store', '스토어 열기']
+    ? ['스토어에서 익명 로그인을 마친 뒤 스토어 열기를 다시 누르고 카카오톡을 설치하세요. 설정은 자동으로 계속됩니다.', 'open-store', '스토어 열기']
     : ['기기와 앱 스토어 준비 중…', 'prepare', '준비 다시 시도'];
   else if (ready && !enrolled) next = ['카카오톡 로그인 준비 마무리 중…', 'configure', '준비 다시 시도'];
   else if (enrolled && !approved) next = session?.kakao?.login === 'logged_in'

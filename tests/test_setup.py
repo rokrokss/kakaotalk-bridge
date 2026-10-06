@@ -70,6 +70,34 @@ def test_wrong_aurora_artifact_is_never_installed(monkeypatch, tmp_path):
     assert all("install" not in call.args for call in adb.call_args_list)
 
 
+@pytest.mark.parametrize(
+    ("prefs", "listing"),
+    [
+        ("", False),
+        ('<map>\n    <boolean name="PREFERENCE_INTRO" value="true" />\n</map>', False),
+        ('<map>\n    <boolean name="ACCOUNT_SIGNED_IN" value="true" />\n</map>', True),
+    ],
+)
+def test_store_opens_kakaotalk_listing_only_after_aurora_login(monkeypatch, prefs, listing):
+    monkeypatch.setattr(cli, "connect", Mock())
+
+    def adb(*args, **kwargs):
+        if "resolve-activity" in args:
+            return "priority=0\ncom.aurora.store/.ComposeActivity"
+        return prefs if args[:2] == ("shell", "cat") else ""
+
+    adb = Mock(side_effect=adb)
+    monkeypatch.setattr(cli, "adb", adb)
+    assert setup.open_store() is listing
+    calls = [call.args for call in adb.call_args_list]
+    grant = ("shell", "appops", "set", "com.aurora.store", "REQUEST_INSTALL_PACKAGES", "allow")
+    start = calls[-1]
+    assert calls.index(grant) < calls.index(start)
+    assert start[:3] == ("shell", "am", "start")
+    assert start[-2:] == ("-n", "com.aurora.store/.ComposeActivity")
+    assert ("com.kakao.talk" in start) is listing
+
+
 def test_preserve_bootstrap_keeps_identity_and_approval(monkeypatch, tmp_path):
     identity = {"device_id": "personal-tablet", "enrollment_epoch": "e"}
     host = tmp_path / "enrollment.json"

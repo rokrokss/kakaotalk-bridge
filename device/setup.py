@@ -12,6 +12,7 @@ from device import cli
 
 AURORA_URL = "https://f-droid.org/repo/com.aurora.store_76.apk"
 AURORA_SHA256 = "fd9c75d90d0f4a7c132b9b4a5a2cf1992a45e03b8d8ff988b7dcfbc0db2c4d11"
+AURORA_PREFS = "/data/data/com.aurora.store/shared_prefs/com.aurora.store_preferences.xml"
 KAKAO_SIGNER = "2b06cc3d47782d7c497c07f17cb5f859cd6bbcb66829f3e67b96b7a44820d2ce"
 
 
@@ -83,7 +84,27 @@ def open_store():
     component = lines[-1] if lines else ""
     if not re.fullmatch(r"com\.aurora\.store/[A-Za-z0-9_.$]+", component):
         raise RuntimeError("aurora_not_installed")
-    cli.adb("shell", "am", "start", "-n", component)
+    # Allow Aurora's installs up front so the user is not sent to Android settings.
+    cli.adb("shell", "appops", "set", "com.aurora.store", "REQUEST_INSTALL_PACKAGES", "allow")
+    # Aurora shows an error for a listing opened before login, so open the KakaoTalk
+    # listing only once its own login flag is set. Onboarding and login come first.
+    prefs = cli.adb("shell", "cat", AURORA_PREFS, check=False)
+    if not re.search(r'name="ACCOUNT_SIGNED_IN" value="true"', prefs):
+        cli.adb("shell", "am", "start", "-n", component)
+        return False
+    cli.adb(
+        "shell",
+        "am",
+        "start",
+        "-a",
+        "android.intent.action.SHOW_APP_INFO",
+        "--es",
+        "android.intent.extra.PACKAGE_NAME",
+        "com.kakao.talk",
+        "-n",
+        component,
+    )
+    return True
 
 
 def prepare():
