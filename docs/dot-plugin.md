@@ -9,7 +9,7 @@
 
 **AI 연결 → AI 연결 설정**에서 **ChatGPT** 또는 **다른 원격 AI 서비스**를 선택하고 기존 HTTPS 주소나 Tailscale을 고르세요. 출처 주소 또는 전체 `/mcp` URL을 입력하면 OAuth를 준비하고 클라이언트 주소를 표시합니다. 기존 관리·패스키 출처는 유지됩니다. 수동 배포는 아래 절차를 따르세요.
 
-1. ChatGPT 웹에서 **플러그인(Plugins) → + → 사용자 지정 MCP 서버 만들기(Create custom MCP server)**를 여세요. 이름을 `KakaoTalk Bridge`로 정하고 저장된 `https://<your-host>/mcp`와 **OAuth**를 선택하세요. 등록 방식을 물으면 CIMD를 선택하고 선택적인 고정 클라이언트 인증 정보는 비워 두세요. 안내를 확인하고 생성하세요.
+1. ChatGPT 웹에서 **플러그인(Plugins) → + → 사용자 지정 MCP 서버 만들기(Create custom MCP server)** 메뉴를 여세요. 이름을 `KakaoTalk Bridge`로 정하고 저장된 `https://<your-host>/mcp`와 **OAuth**를 선택하세요. 등록 방식을 물으면 CIMD를 선택하고 선택적인 고정 클라이언트 인증 정보는 비워 두세요. 안내를 확인하고 생성하세요.
 2. 동의 화면을 따르세요. 공용 HTTPS 관리·MCP 구성은 패스키로 인증하고 클라이언트·돌아갈 주소·권한을 확인한 뒤 **연결 허용**을 누릅니다. localhost·비공개 관리 구성은 **AI 연결**에서 8자리 코드를 맞추고 **연결 승인**을 누릅니다. 취소하면 연결되지 않습니다.
 3. 플러그인을 설치하고 대화에서 **@KakaoTalk Bridge**를 선택하세요. 수집 상태를 요청한 뒤 휴대폰에서 나에게 구별되는 메시지를 보내 정확한 문구를 찾아보세요. [완료와 문제 해결](web-ui.md#finish-in-your-ai-client)
 

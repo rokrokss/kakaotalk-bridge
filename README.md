@@ -24,16 +24,13 @@ Bridge는 redroid로 가상 Android 태블릿을 띄우고 카카오톡과 Iris�
 <a id="getting-started"></a>
 ## 시작하기
 
-Apple Silicon Mac 또는 호환되는 Linux 서버에서 실행하세요.
-[실행 환경](#requirements-and-validation)
-
-실행할 컴퓨터의 터미널에서 아래 명령을 입력하세요.
+Apple Silicon Mac 또는 Linux 서버의 터미널에서 실행하세요. [실행 환경](#requirements-and-validation)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/install.sh | bash
 ```
 
-검증된 릴리스 이미지를 내려받고 브라우저에서 설정 화면을 엽니다. 이미 설치했다면 최신 릴리스로 업데이트한 뒤 설정 화면을 엽니다. Linux 헤드리스 서버는 [SSH 설치 안내](docs/quickstart.md#local-and-ssh-admin-access)를 따르세요.
+끝나면 브라우저에 관리 화면이 열립니다. 이미 설치했다면 같은 명령이 최신 릴리스로 업데이트합니다. 화면 없는 서버는 [SSH 설치](docs/quickstart.md#local-and-ssh-admin-access)를 보세요.
 
 <p align="center">
   <picture>
@@ -42,12 +39,13 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
   </picture>
 </p>
 
-1. **카카오톡 설치:** 패스키를 저장하면 가상 태블릿이 준비됩니다. 화면의 스토어에서 **Kakao Corp.의 카카오톡**을 설치하세요.
-2. **로그인과 수집:** 카카오톡 로그인 화면에서 **다른 기기와 함께 사용**을 선택하고 로그인하세요. 관리 화면이 태블릿 로그인을 자동으로 확인합니다. 휴대폰의 기존 로그인이 유지되는지 확인하고 **메시지 수집 시작**을 누르세요. 카카오톡이 업데이트되어도 같은 계정이면 계속 수집합니다.
-3. **[AI 연결](#connect-your-ai):** 사용할 곳을 고르면 필요한 단계만 차례로 안내합니다. 연결하지 않아도 수집은 계속됩니다.
+1. **카카오톡 설치:** 패스키를 만들고, 태블릿의 스토어(Aurora)에 익명으로 로그인해 **Kakao Corp.의 카카오톡**을 설치하세요.
+2. **로그인과 수집:** **다른 기기와 함께 사용**을 선택해 로그인하고, 휴대폰 로그인이 유지되는지 확인한 뒤 **메시지 수집 시작**을 누르세요.
+3. **[AI 연결](#connect-your-ai) (선택):** **AI 연결 → AI 연결 설정**에서 사용할 곳을 고르세요.
 
-로그인 화면 안내는 한국어 카카오톡 화면을 인식합니다. 보조 기기 옵션이 없거나 주 계정 이전을 요구하면 진행을 멈추세요.
-[로그인 단계별 안내 →](docs/web-ui.md#first-login)
+> **다른 기기와 함께 사용** 옵션이 없거나 기기 이전을 요구하면 멈추세요. 휴대폰 카카오톡이 로그아웃될 수 있습니다.
+
+[설치와 실행 가이드 →](docs/quickstart.md) · [화면별 상세 →](docs/web-ui.md#first-login)
 
 <a id="try-your-first-question"></a>
 ## 첫 질문 해보기
