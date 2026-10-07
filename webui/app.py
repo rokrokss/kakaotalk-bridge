@@ -746,7 +746,7 @@ def create_app(
                     session_snapshot = device.session_status()
                     snapshot_invalidated = False
             message = {
-                "prepare": "Aurora가 준비되었습니다. 시작 안내와 익명 로그인을 마친 뒤 스토어 열기를 다시 누르세요."
+                "prepare": "Aurora가 준비되었습니다. 시작 안내와 익명 로그인을 마치면 카카오톡 페이지가 열립니다."
                 if changed
                 else "기존 설치를 유지했습니다. 다음 설정 단계를 진행하세요.",
                 "configure": "구성 요소를 설치했습니다. 카카오톡을 열고 ‘다른 기기와 함께 사용’을 선택해 로그인하세요."
@@ -754,7 +754,7 @@ def create_app(
                 else "기존 기기 등록과 수집 승인을 유지했습니다.",
                 "open-store": "Aurora에서 카카오톡 페이지를 열었습니다. 설치를 누르세요."
                 if changed
-                else "Aurora를 열었습니다. 시작 안내와 익명 로그인을 마친 뒤 스토어 열기를 다시 누르세요.",
+                else "Aurora를 열었습니다. 시작 안내와 익명 로그인을 마치면 카카오톡 페이지가 열립니다.",
                 "setup-check": "설정 상태를 새로고침했습니다.",
                 "setup-poll": "설정 상태를 새로고침했습니다.",
                 "bootstrap": "설치가 완료되었습니다. 카카오톡을 열고 ‘다른 기기와 함께 사용’을 선택해 로그인하세요.",

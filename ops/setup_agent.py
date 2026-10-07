@@ -172,7 +172,7 @@ def execute(data):
         if not public and not result["configured"]:
             return {
                 "state": "ready",
-                "message": "공개 연결이나 터널이 설정되지 않았습니다. 위에서 방식을 선택하거나 로컬 클라이언트에서 stdio를 사용하세요.",
+                "message": "공개 연결이나 터널이 설정되지 않았습니다. ‘다른 방식으로 연결’에서 방식을 고르거나 로컬 앱에는 stdio를 사용하세요.",
             }
         return {
             "state": "ready",
