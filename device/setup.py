@@ -32,7 +32,14 @@ def status():
             apk_available=any(Path("/inputs/kakao").glob("*.apk")),
             locale=cli.adb("shell", "getprop", "persist.sys.locale")[:32],
         )
+        if result["aurora_installed"] and not result.get("kakao_installed"):
+            result["aurora_signed_in"] = aurora_signed_in()
     return result
+
+
+def aurora_signed_in():
+    prefs = cli.adb("shell", "cat", AURORA_PREFS, check=False)
+    return bool(re.search(r'name="ACCOUNT_SIGNED_IN" value="true"', prefs))
 
 
 def verify_kakao(paths):
@@ -88,8 +95,7 @@ def open_store():
     cli.adb("shell", "appops", "set", "com.aurora.store", "REQUEST_INSTALL_PACKAGES", "allow")
     # Aurora shows an error for a listing opened before login, so open the KakaoTalk
     # listing only once its own login flag is set. Onboarding and login come first.
-    prefs = cli.adb("shell", "cat", AURORA_PREFS, check=False)
-    if not re.search(r'name="ACCOUNT_SIGNED_IN" value="true"', prefs):
+    if not aurora_signed_in():
         cli.adb("shell", "am", "start", "-n", component)
         return False
     cli.adb(

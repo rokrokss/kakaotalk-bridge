@@ -98,6 +98,26 @@ def test_store_opens_kakaotalk_listing_only_after_aurora_login(monkeypatch, pref
     assert ("com.kakao.talk" in start) is listing
 
 
+@pytest.mark.parametrize(
+    ("sample", "prefs", "expected"),
+    [
+        ({"kakao_installed": False}, "", False),
+        ({"kakao_installed": False}, '<boolean name="ACCOUNT_SIGNED_IN" value="true" />', True),
+        ({"kakao_installed": True}, '<boolean name="ACCOUNT_SIGNED_IN" value="true" />', None),
+    ],
+)
+def test_status_reports_aurora_login_only_while_kakaotalk_is_missing(
+    monkeypatch, sample, prefs, expected
+):
+    monkeypatch.setattr(cli, "sample", lambda: {"state": "needs_setup", **sample})
+    monkeypatch.setattr(cli, "is_installed", lambda package: True)
+    monkeypatch.setattr(setup, "enrolled", lambda: False)
+    monkeypatch.setattr(
+        cli, "adb", lambda *args, **kwargs: prefs if args[:2] == ("shell", "cat") else "ko-KR"
+    )
+    assert setup.status().get("aurora_signed_in") is expected
+
+
 def test_preserve_bootstrap_keeps_identity_and_approval(monkeypatch, tmp_path):
     identity = {"device_id": "personal-tablet", "enrollment_epoch": "e"}
     host = tmp_path / "enrollment.json"

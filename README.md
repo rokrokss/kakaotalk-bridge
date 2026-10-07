@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 
 1. **카카오톡 설치:** 패스키를 저장하면 가상 태블릿이 준비됩니다. 화면의 스토어에서 **Kakao Corp.의 카카오톡**을 설치하세요.
 2. **로그인과 수집:** 카카오톡 로그인 화면에서 **다른 기기와 함께 사용**을 선택하고 로그인하세요. 관리 화면이 태블릿 로그인을 자동으로 확인합니다. 휴대폰의 기존 로그인이 유지되는지 확인하고 **메시지 수집 시작**을 누르세요. 카카오톡이 업데이트되어도 같은 계정이면 계속 수집합니다.
-3. **[AI 연결](#connect-your-ai):** 연결 방식을 선택하세요. **나중에 결정**을 선택하면 수집만 계속할 수 있습니다.
+3. **[AI 연결](#connect-your-ai):** 사용할 곳을 고르면 필요한 단계만 차례로 안내합니다. 연결하지 않아도 수집은 계속됩니다.
 
 로그인 화면 안내는 한국어 카카오톡 화면을 인식합니다. 보조 기기 옵션이 없거나 주 계정 이전을 요구하면 진행을 멈추세요.
 [로그인 단계별 안내 →](docs/web-ui.md#first-login)
@@ -66,13 +66,13 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 <a id="connect-your-ai"></a>
 ## AI 연결하기
 
-**AI 연결 → 연결 추가 또는 변경**에서 메시지를 사용할 곳을 선택하세요. 여러 연결 방식을 함께 사용할 수 있습니다.
+**AI 연결 → AI 연결 설정**에서 메시지를 사용할 곳을 선택하세요. 여러 연결 방식을 함께 사용할 수 있습니다.
 
 | 사용하려는 환경 | 관리 화면에서 선택 | 필요한 것 |
 | --- | --- | --- |
-| 공개 서버 주소 없이 ChatGPT 사용 | **개인 터널 · 공개 주소 불필요** | OpenAI 터널 ID와 실행용 API 키. [터널 안내](docs/openai-tunnel.md) |
-| HTTPS로 ChatGPT 또는 다른 원격 AI 연결 | **기존 HTTPS 주소 사용** 또는 **Tailscale로 HTTPS 주소 만들기** | 설정된 HTTPS 프록시 또는 Tailscale Funnel. [HTTPS 안내](docs/dot-plugin.md) |
-| 내 컴퓨터의 AI 앱 | **AI 앱에서 Bridge 실행 · 로컬 또는 SSH** | MCP 명령을 실행할 수 있는 클라이언트. 원격 서버라면 SSH 접근 권한. [클라이언트 설정](docs/api.md#stdio-mcp) |
+| 공개 서버 주소 없이 ChatGPT 사용 | **ChatGPT → 개인 터널** | OpenAI 터널 ID와 실행용 API 키. [터널 안내](docs/openai-tunnel.md) |
+| HTTPS로 ChatGPT 또는 다른 원격 AI 연결 | **기존 HTTPS 주소** 또는 **Tailscale로 주소 만들기** | 설정된 HTTPS 프록시 또는 Tailscale Funnel. [HTTPS 안내](docs/dot-plugin.md) |
+| 내 컴퓨터의 AI 앱 | **내 컴퓨터의 AI 앱** | MCP 명령을 실행할 수 있는 클라이언트. 원격 서버라면 SSH 접근 권한. [클라이언트 설정](docs/api.md#stdio-mcp) |
 
 설정을 저장한 뒤 [AI 앱에서도 연결을 추가하세요](docs/web-ui.md#finish-in-your-ai-client).
 

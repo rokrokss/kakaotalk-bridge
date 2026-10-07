@@ -64,7 +64,8 @@ const redirect = 'https://chatgpt.com/connector_platform_oauth_redirect';
       allowSend = body.allow_send; decisions.push(allowSend);
       return route.fulfill({json:{ok:true}});
     });
-    await page.getByRole('button', {name:'AI 연결', exact:true}).click();
+    // The menu shortcut is hidden while setup is incomplete; the panel itself is always available.
+    await page.locator('#connections-panel > summary').click();
     await page.getByRole('button', {name:'메시지 전송 허용', exact:true}).click();
     await page.getByRole('button', {name:'메시지 전송 권한 해제', exact:true}).waitFor();
     await page.screenshot({path:'artifacts/send-permission.png', fullPage:true});

@@ -20,6 +20,10 @@ class SetupAndroid(FakeAndroid):
         self.setup.update(aurora_installed=True, locale="ko-KR")
         return True
 
+    def open_store(self):
+        self.calls.append(("open-store", ()))
+        return bool(self.setup.get("aurora_signed_in"))
+
     def configure(self):
         if not self.setup.get("kakao_installed"):
             raise RuntimeError("kakao_not_installed")
@@ -44,6 +48,11 @@ def preview():
         auth_mode="local",
         connections=connections,
     )
+
+    @app.post("/test/aurora-login")
+    def aurora_login():
+        android.setup["aurora_signed_in"] = True
+        return {"ok": True}
 
     @app.post("/test/install-kakao")
     def install():
