@@ -1,13 +1,13 @@
-# 밝은 관리 화면
+# Bridge 삭제 명령
 
-관리 화면이 운영체제의 다크 모드 설정과 관계없이 항상 밝은 화면으로 표시됩니다.
+`./bridge cleanup` 한 번으로 이 설치가 만든 VM, 컨테이너, 데이터와 설치 폴더를 지울 수 있습니다.
 
 ## 주요 변경
 
-- **관리 화면 라이트 모드:** 운영체제가 다크 모드여도 관리 화면과 입력창·스크롤바를 밝은 색으로 표시합니다. AI 연결 동의와 패스키 로그인 화면은 계속 운영체제 설정을 따릅니다.
-- **설치·운영 안내 정리:** [설치 안내](https://github.com/rokrokss/kakaotalk-bridge/blob/main/docs/quickstart.md), [운영](https://github.com/rokrokss/kakaotalk-bridge/blob/main/docs/operations.md), [고급 설치](https://github.com/rokrokss/kakaotalk-bridge/blob/main/docs/onboarding.md) 문서를 실행할 명령과 단계부터 보이도록 다시 썼습니다.
+- **`./bridge cleanup`:** 지울 항목을 보여 주고 `삭제`를 입력하면 진행합니다(`--yes`로 확인 생략). Mac은 관리되는 Lima VM을, Linux는 이 설치의 컨테이너·볼륨(복구 전 볼륨 포함)·네트워크·이미지, 웹 연결 설정 서비스, Binder 자동 로드 설정을 지운 뒤 설치 폴더를 지웁니다. 카카오톡 로그인, 수집한 메시지, 패스키, 백업도 함께 사라지며 되돌릴 수 없습니다. [삭제 안내](https://github.com/rokrokss/kakaotalk-bridge/blob/main/docs/operations.md#uninstall)
+- **공용 도구 유지:** Docker, Homebrew, Lima, Tailscale, uv는 다른 프로그램도 쓸 수 있으므로 지우지 않습니다. `./bridge expose`로 켠 Tailscale Funnel은 설정이 바뀌지 않았을 때만 끕니다. AI 앱에 추가한 연결과 Tailscale 관리 콘솔의 기기는 직접 지우세요.
 
-0.1.0에서 바로 업데이트한다면 [0.2.0 릴리스](https://github.com/rokrokss/kakaotalk-bridge/releases/tag/v0.2.0)의 변경 사항도 확인하세요.
+이전 버전에서 바로 업데이트한다면 건너뛴 릴리스의 변경 사항도 확인하세요: [0.2.1](https://github.com/rokrokss/kakaotalk-bridge/releases/tag/v0.2.1)(밝은 관리 화면), [0.2.0](https://github.com/rokrokss/kakaotalk-bridge/releases/tag/v0.2.0).
 
 ## 업데이트 방법
 
@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 
 ## 확인한 범위
 
-자동 테스트와 운영체제를 다크 모드로 설정한 브라우저에서 관리 화면이 밝게 표시되는 것을 확인했습니다. [0.2.0에서 확인되지 않은 부분](https://github.com/rokrokss/kakaotalk-bridge/releases/tag/v0.2.0)은 그대로입니다.
+자동 테스트와 함께, 카카오톡 계정이 없는 Linux 테스트 VM의 릴리스 설치에서 `./bridge cleanup`을 실행해 서비스, 컨테이너, 볼륨, 네트워크, 이미지, Binder 설정, 설치 폴더가 지워지고 관련 없는 볼륨과 네트워크는 남는 것을 확인했습니다. Mac의 VM 삭제와 Tailscale Funnel 해제는 자동 테스트로만 확인했습니다. [0.2.0에서 확인되지 않은 부분](https://github.com/rokrokss/kakaotalk-bridge/releases/tag/v0.2.0)은 그대로입니다.
 
 새로 설치하는 방법과 실행 조건은 [설치 안내](https://github.com/rokrokss/kakaotalk-bridge/blob/main/docs/quickstart.md)를 참고하세요.
 
