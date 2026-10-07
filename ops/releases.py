@@ -34,6 +34,10 @@ PERSISTENT = {".git", ".bridge", ".env", "secrets", "inputs", "artifacts", "back
 SOURCE_RECORD = ".bridge/source.json"
 # Setup modes and help that run the installation as it is (argparse also accepts prefixes).
 AS_IS = ("--plan", "--source", "--manifest", "--help")
+# The oldest installed version this release upgrades in place. The upgrade reads it from
+# the downloaded release, so every release declares its own floor; older installations
+# are deleted and installed fresh.
+UPGRADE_FROM = "0.3.1"
 
 
 def validate_manifest(data):
@@ -223,6 +227,20 @@ def current(root, kind, incoming, version):
     return recorded == version and re.fullmatch(VERSION, version) is not None
 
 
+def version_tuple(text):
+    match = re.match(r"v?(\d+)\.(\d+)\.(\d+)", text or "")
+    return tuple(int(part) for part in match.groups()) if match else ()
+
+
+def declared(path, name):
+    """A top-level `name = "..."` string from a file, or None when it is absent."""
+    try:
+        match = re.search(rf'^{name} = "([^"]+)"', path.read_text(), re.MULTILINE)
+    except OSError:
+        return None
+    return match[1] if match else None
+
+
 def vm_missing(root):
     """Whether the Mac's managed VM is gone. A Lima failure stops instead of guessing."""
     if sys.platform != "darwin":
@@ -292,6 +310,14 @@ def upgrade_installation(root, version="latest", *, bridge, plan=None, say=print
                 flush=True,
             )
             return False
+        floor = declared(incoming / "ops/releases.py", "UPGRADE_FROM")
+        installed = declared(root / "pyproject.toml", "version")
+        if floor and version_tuple(installed) < version_tuple(floor):
+            raise BridgeError(
+                f"{installed or '버전을 알 수 없는'} 설치는 {version}으로 업데이트할 수 없습니다. "
+                f"{root}에서 ./bridge cleanup으로 삭제한 뒤(명령이 없으면 Lima VM과 설치 폴더를 직접 삭제) "
+                "설치 명령을 다시 실행하세요. 카카오톡 로그인과 수집한 데이터도 삭제됩니다."
+            )
         missing = vm_missing(root)
         source = swapper(incoming)
         archive = Path(folder) / "code.tar.gz"

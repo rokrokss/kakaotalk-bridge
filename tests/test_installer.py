@@ -76,6 +76,7 @@ def new_version(prefix=""):
         prefix + "bridge": CLI.replace("GENERATION", "new"),
         prefix + "ops/cli.py": "# new cli",
         prefix + "ops/source.py": (ROOT / "ops/source.py").read_text(),
+        prefix + "ops/releases.py": (ROOT / "ops/releases.py").read_text(),
         prefix + "compose.yaml": "services: {}",
     }
 
@@ -99,6 +100,7 @@ def installation(tmp_path):
     shutil.copytree(ROOT / "ops", root / "ops", ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copyfile(ROOT / "install.sh", root / "install.sh")
     (root / "release.json").write_text('{"version":"v0.1.0"}')
+    (root / "pyproject.toml").write_text('[project]\nversion = "0.3.1"\n')
     (root / "bridge").write_text(CLI.replace("GENERATION", "old"))
     state = root / ".bridge"
     state.mkdir()
@@ -330,6 +332,21 @@ def test_invalid_setup_options_restore_the_code_before_updating(installation, ar
     result, calls = run_installer(installation, *arguments, BRIDGE_TEST_PLAN_EXIT="2")
     assert result.returncode == 2
     assert calls == [["new", ["up", "--plan", *arguments]]]
+    assert '"old"' in (installation / "bridge").read_text()
+    assert (installation / "release.json").read_text() == '{"version":"v0.1.0"}'
+
+
+@pytest.mark.parametrize("version", ["0.3.0", None])
+def test_installations_below_the_release_floor_are_never_upgraded(installation, version):
+    project = installation / "pyproject.toml"
+    if version:
+        project.write_text(f'[project]\nversion = "{version}"\n')
+    else:
+        project.unlink()
+    result, calls = run_installer(installation, "--no-browser")
+    assert result.returncode == 1
+    assert calls == []
+    assert "업데이트할 수 없습니다" in result.stderr and "./bridge cleanup" in result.stderr
     assert '"old"' in (installation / "bridge").read_text()
     assert (installation / "release.json").read_text() == '{"version":"v0.1.0"}'
 
