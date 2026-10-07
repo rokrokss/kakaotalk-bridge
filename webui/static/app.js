@@ -566,18 +566,6 @@ async function refreshConnections() {
     const allowed = data.grants.length + (data.tunnel?.approved ? 1 : 0);
     $('overview-ai').textContent = activity ? '도구 호출 성공 기록 있음' : allowed ? '첫 AI 요청 대기 중' : '허용된 AI 연결 없음';
     $('overview-ai-detail').textContent = activity ? `마지막 성공: ${localTime(activity)} · 현재 연결 가능 여부는 별도 확인이 필요합니다.` : allowed ? '접근이 허용되었습니다. AI에 수집 상태 확인을 요청하세요.' : '선택 사항입니다. 로컬 클라이언트는 stdio 설정도 사용할 수 있습니다.';
-    $('mcp-address').textContent = data.resource;
-    $('connection-help').textContent = data.approval_mode === 'passkey'
-      ? 'ChatGPT에 이 MCP 주소를 추가하고 OAuth를 선택하세요. 패스키로 인증하고 접근 권한을 확인한 뒤 연결을 허용하세요. 여기에서 연결을 해제할 수 있습니다.'
-      : data.approval_mode === 'key'
-        ? '이 서버는 기존 연결 키 승인 방식을 사용합니다. 연결 중인 브라우저에 연결 키를 입력하세요.'
-        : 'ChatGPT에 이 MCP 주소를 추가하고 OAuth를 선택하세요. 브라우저의 코드와 일치하는 요청만 승인하세요.';
-    if (data.resource.includes('.invalid/')) {
-      $('mcp-address').textContent = '공개 OAuth 연결이 설정되지 않았습니다.';
-      $('connection-help').textContent = data.tunnel?.configured
-        ? '아래에서 개인 OpenAI 터널을 승인하세요. 나중에 다른 연결도 추가할 수 있습니다.'
-        : 'AI 연결 없이도 수집할 수 있습니다. ‘연결 추가 또는 변경’에서 AI를 연결하세요.';
-    }
     $('pending-count').textContent = data.pending.length ? `승인 대기 ${data.pending.length}개` : `허용 ${allowed}개`;
     const signature = JSON.stringify(data);
     if (signature === connectionSignature) return;
@@ -590,7 +578,7 @@ async function refreshConnections() {
       card.append(paragraph('OpenAI 개인 터널'), paragraph(tunnel.tunnel_id));
       card.append(paragraph(tunnel.last_tool_at && tunnel.approved ? `마지막 도구 호출 성공: ${localTime(tunnel.last_tool_at)}` : '이 승인 이후 성공한 도구 호출 기록이 없습니다.'));
       card.append(paragraph(tunnel.approved
-        ? `${tunnel.expires === null ? '자동 만료 없이 접근이 허용됩니다.' : `${localTime(tunnel.expires)}까지 접근이 허용됩니다.`} ChatGPT에서 터널(Tunnel)을 선택하고 이 ID를 지정하세요. OAuth 로그인은 필요하지 않습니다.`
+        ? tunnel.expires === null ? '자동 만료 없이 접근이 허용됩니다.' : `${localTime(tunnel.expires)}까지 접근이 허용됩니다.`
         : '이 개인 터널이 수집된 메시지를 읽고 요청한 이벤트 구독을 관리하도록 허용합니다. 본인만 접근할 수 있는 터널을 사용하세요. 승인은 자동 만료되지 않으며 여기에서 연결을 해제할 수 있습니다.'));
       if (tunnel.approved && tunnel.expires !== null) {
         card.append(button('승인 만료 기한 없애기', async () => {
@@ -637,8 +625,8 @@ async function refreshConnections() {
         await api(`connections/${row.id}/revoke`, {}); await refreshConnections();
       })); nodes.push(card);
     }
-    $('connections-list').replaceChildren(...(nodes.length ? nodes : [paragraph('대기 중이거나 승인된 OAuth 클라이언트가 없습니다.')]));
-  } catch { if (active) { $('mcp-address').textContent = '연결 상태를 가져올 수 없습니다. ‘연결 새로고침’을 눌러 보세요.'; $('overview-ai').textContent = 'AI 상태를 가져오지 못했습니다'; $('overview-ai-detail').textContent = '‘AI 연결’을 열고 새로고침하세요.'; } }
+    $('connections-list').replaceChildren(...(nodes.length || tunnel?.configured ? nodes : [paragraph('아직 연결된 AI가 없습니다.')]));
+  } catch { if (active) { $('connections-list').replaceChildren(paragraph('연결 상태를 가져올 수 없습니다. ‘연결 새로고침’을 눌러 보세요.')); $('overview-ai').textContent = 'AI 상태를 가져오지 못했습니다'; $('overview-ai-detail').textContent = '‘AI 연결’을 열고 새로고침하세요.'; } }
   finally { connectionsLoading = false; }
 }
 $('refresh-connections').addEventListener('click', refreshConnections);

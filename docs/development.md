@@ -54,7 +54,7 @@ uv export --frozen --no-dev --no-emit-project --output-file requirements.lock
 | `ops/setup_output.py`, `ops/errors.py` | 한국어 진행 표시, 비공개 진단 로그, 하위 명령 보고, `BridgeError` |
 | `ops/setup_agent.py`, `server/connection_setup.py`, `webui/setup.py` | 비공개 호스트 설정 작업, 공유 입력 검증, 인증된 관리 프록시 |
 | `install.sh`, `install.ps1` | 설치 명령. 설치된 릴리스에서는 `bridge upgrade` 후 `bridge up` 실행 |
-| `webui/static/connection-setup.js` | 사용처·방식 선택, 저장된 안내, 진행·재시도 화면 |
+| `webui/static/connection-setup.js` | 단계별 AI 연결 화면(사용할 곳 → 서버 준비 → AI 앱에 추가), 진행·재시도 |
 | `tests/` | 합성 데이터 테스트와 브라우저 미리보기용 가상 기기 |
 | `deploy/`, `scripts/` | Lima VM 템플릿, 감독 서비스 예시, 직접 만든 Lima VM용 스크립트, 키 생성, 릴리스 빌드·검증, smoke 테스트, 휴대폰 APK 가져오기 |
 

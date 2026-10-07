@@ -62,109 +62,86 @@
           <details class="management-panel" id="connections-panel">
             <summary>AI 연결 <span id="pending-count"></span></summary>
             <div class="section-body">
-              <button id="open-ai-setup">연결 추가 또는 변경</button>
-              <p id="connection-help">ChatGPT에 아래 MCP 주소를 추가하고 OAuth를 선택하세요. 연결 중인 브라우저에서 패스키로 인증하고 접근 권한을 확인하세요.</p>
-              <code id="mcp-address" class="endpoint">공개 AI 연결이 설정되지 않았습니다.</code>
               <div id="tunnel-connection" hidden aria-live="polite"></div>
-              <button id="refresh-connections" class="quiet">연결 새로고침</button>
               <div id="connections-list" aria-live="polite"></div>
-              <p class="hint">연결만으로 이벤트가 자동 구독되지는 않습니다.</p>
-      <details id="ai-setup" class="ai-setup">
-        <summary>연결 추가 또는 변경 <span>선택 사항 · 기존 연결 유지</span></summary>
-        <div class="ai-setup-body">
-          <ol class="ai-steps" aria-label="AI 연결 단계"><li>연결 방식 선택</li><li>서버 설정</li><li>AI 클라이언트에서 마무리</li></ol>
-          <p id="ai-agent-status" class="hint" role="status">웹 설정 사용 가능 여부 확인 중…</p>
-          <form id="ai-setup-form" autocomplete="off">
-            <fieldset id="ai-setup-fields" disabled>
-              <div class="ai-setup-grid">
-                <div>
-                  <label for="ai-destination">메시지를 어디에서 사용하시겠어요?</label>
-                  <select id="ai-destination"><option value="none">나중에 결정</option><option value="chatgpt">ChatGPT</option><option value="desktop">내 컴퓨터의 AI 앱</option><option value="remote">다른 원격 AI 클라이언트</option><option value="advanced">모든 연결 방식</option></select>
-                  <label for="ai-method">연결 방식</label>
-                  <select id="ai-method">
-                    <option value="none">나중에 결정</option>
-                    <option value="openai-tunnel">개인 터널 · 공개 주소 불필요</option>
-                    <option value="https">기존 HTTPS 주소 사용</option>
-                    <option value="tailscale">Tailscale로 HTTPS 주소 만들기</option>
-                    <option value="stdio">AI 앱에서 Bridge 실행 · 로컬 또는 SSH</option>
-                  </select>
-                  <p id="ai-method-help" class="hint"></p>
-                  <p class="hint">여러 방식을 함께 사용할 수 있습니다. 다른 방식을 선택해도 기존 연결은 유지됩니다.</p>
+              <div class="ai-setup-actions"><button id="open-ai-setup" class="primary">AI 연결 설정</button><button id="refresh-connections" class="quiet">연결 새로고침</button></div>
+              <section id="ai-setup" class="ai-setup" aria-labelledby="ai-setup-title" hidden>
+                <div class="ai-setup-head"><h3 id="ai-setup-title">AI 연결 설정</h3><button id="ai-close" type="button" class="quiet">닫기</button></div>
+                <ol id="ai-progress" class="setup-progress"><li>사용할 곳</li><li>서버 준비</li><li>AI 앱에 추가</li></ol>
+                <p id="ai-agent-status" class="setup-reason" role="status" hidden></p>
+                <div id="ai-choose" class="ai-step">
+                  <h4>어디에서 메시지를 사용하시겠어요?</h4>
+                  <div class="ai-choices">
+                    <button type="button" data-destination="chatgpt"><strong>ChatGPT</strong><span>ChatGPT에서 수집한 메시지 조회</span></button>
+                    <button type="button" data-destination="desktop"><strong>내 컴퓨터의 AI 앱</strong><span>MCP 서버를 직접 실행하는 데스크톱 앱</span></button>
+                    <button type="button" data-destination="remote"><strong>다른 원격 AI 서비스</strong><span>HTTPS 주소와 OAuth로 연결</span></button>
+                  </div>
+                  <p class="hint">AI 없이도 수집은 계속되며, 새 방식을 추가해도 기존 연결은 유지됩니다. 터미널에서는 <code>./bridge setup-connection</code>을 사용할 수 있습니다.</p>
                 </div>
-                <details id="ai-edit" class="ai-method-fields" open><summary>연결 설정</summary>
-                  <div data-ai-method="none"><h3>필요할 때 연결하세요</h3><p>AI를 연결하지 않아도 메시지 수집과 관리 화면을 사용할 수 있습니다.</p></div>
-                  <div data-ai-method="openai-tunnel" hidden>
-                    <h3>OpenAI에서 터널 정보 가져오기</h3>
-                    <ol class="manual-steps">
-                      <li><a href="https://platform.openai.com/settings/organization/tunnels" target="_blank" rel="noopener noreferrer">OpenAI 터널 설정 ↗</a>에서 터널을 만들고 사용할 ChatGPT 워크스페이스에 연결하세요.</li>
-                      <li><strong>터널 ID</strong>를 복사하고 <strong>Tunnels Read + Use</strong> 권한이 있는 실행용 API 키를 발급받으세요.</li>
-                      <li>이 화면으로 돌아와 두 항목을 입력하고 접근 허용 내용을 확인한 뒤 <strong>터널 설정 및 허용</strong>을 누르세요. 아래 <strong>연결 안내</strong>에 따라 마무리하세요.</li>
-                    </ol>
-                    <details><summary>터널을 만들거나 찾을 수 없나요?</summary><p>터널 생성에는 Tunnels Read + Manage 권한이 필요합니다. 터널 선택에는 Read + Use 권한과 ChatGPT 워크스페이스의 접근 권한이 필요합니다. 메뉴가 보이지 않으면 조직 또는 워크스페이스 관리자에게 문의하세요. <a href="https://developers.openai.com/api/docs/guides/secure-mcp-tunnels" target="_blank" rel="noopener noreferrer">OpenAI 터널 안내 ↗</a></p></details>
-                    <label for="ai-tunnel-id">터널 ID</label><input id="ai-tunnel-id" placeholder="tunnel_…" maxlength="39" spellcheck="false" autocapitalize="off">
-                    <label for="ai-api-key">실행용 API 키</label><input id="ai-api-key" type="password" autocomplete="new-password" maxlength="512" spellcheck="false" autocapitalize="off" aria-describedby="ai-key-help">
-                    <p id="ai-key-help" class="hint">서버에 저장됩니다. 저장한 키는 이 화면에 다시 표시되지 않습니다.</p>
-                    <label class="check"><input id="ai-tunnel-approve" type="checkbox">이 개인 터널이 수집된 메시지를 읽고 이벤트 구독을 관리하도록 허용합니다. 연결을 해제할 때까지 접근이 허용됩니다.</label>
-                    <p class="hint">본인만 접근할 수 있는 터널을 사용하세요. 대화 이벤트는 별도로 켜기 전까지 꺼져 있습니다.</p>
+                <form id="ai-setup-form" class="ai-step" autocomplete="off" hidden>
+                  <fieldset id="ai-setup-fields" disabled>
+                    <div id="ai-methods" class="ai-methods">
+                      <label data-method="openai-tunnel"><input type="radio" name="ai-method" value="openai-tunnel"><span><strong>개인 터널</strong> 권장 · 공개 주소 불필요</span></label>
+                      <label data-method="https"><input type="radio" name="ai-method" value="https"><span><strong>기존 HTTPS 주소</strong> 운영 중인 도메인이 있을 때</span></label>
+                      <label data-method="tailscale"><input type="radio" name="ai-method" value="tailscale"><span><strong>Tailscale로 주소 만들기</strong> 도메인이 없을 때</span></label>
+                    </div>
+                    <div data-ai-method="openai-tunnel" hidden>
+                      <ol class="setup-steps">
+                        <li><a href="https://platform.openai.com/settings/organization/tunnels" target="_blank" rel="noopener noreferrer">OpenAI 터널 설정 ↗</a>에서 터널을 만들고 ChatGPT 워크스페이스에 연결하세요.</li>
+                        <li>터널 ID와 <strong>Tunnels Read + Use</strong> 권한의 실행용 API 키를 붙여 넣으세요.</li>
+                      </ol>
+                      <label for="ai-tunnel-id">터널 ID</label><input id="ai-tunnel-id" placeholder="tunnel_…" maxlength="39" spellcheck="false" autocapitalize="off">
+                      <label for="ai-api-key">실행용 API 키</label><input id="ai-api-key" type="password" autocomplete="new-password" maxlength="512" spellcheck="false" autocapitalize="off" aria-describedby="ai-key-help">
+                      <p id="ai-key-help" class="hint"></p>
+                      <label class="check"><input id="ai-tunnel-approve" type="checkbox">연결을 해제할 때까지 이 개인 터널이 수집된 메시지를 읽고 이벤트 구독을 관리하도록 허용합니다. 본인만 쓰는 터널인지 확인하세요.</label>
+                      <details><summary>터널을 만들거나 찾을 수 없나요?</summary><p>터널을 만들려면 Tunnels Read + Manage, 고르려면 Read + Use 권한과 ChatGPT 워크스페이스 접근 권한이 필요합니다. 메뉴가 보이지 않으면 조직 또는 워크스페이스 관리자에게 문의하세요. <a href="https://developers.openai.com/api/docs/guides/secure-mcp-tunnels" target="_blank" rel="noopener noreferrer">OpenAI 터널 안내 ↗</a></p></details>
+                    </div>
+                    <div data-ai-method="https" hidden>
+                      <label for="ai-public-url">Bridge에 연결된 HTTPS 주소</label><input id="ai-public-url" type="url" placeholder="https://bridge.example.com" maxlength="253" autocapitalize="off" spellcheck="false">
+                      <p class="hint">리버스 프록시가 이미 이 서버로 연결되어 있어야 합니다. /mcp까지 붙여 넣어도 됩니다.</p>
+                    </div>
+                    <div data-ai-method="tailscale" hidden>
+                      <p id="ai-tailscale-location"></p>
+                      <label class="check"><input id="ai-tailscale-allow" type="checkbox">이 서버에 Tailscale을 설치하거나 기존 설치를 사용하고, Funnel로 MCP 주소를 공개합니다.</label>
+                      <p class="hint">로그인이나 승인이 필요하면 다음 화면에 링크가 나옵니다.</p>
+                    </div>
+                    <p id="ai-form-error" class="setup-error" role="alert" hidden></p>
+                    <div class="ai-setup-actions"><button id="ai-setup-submit" type="submit" class="primary">설정</button><button id="ai-back" type="button" class="quiet">← 이전</button></div>
+                  </fieldset>
+                  <div id="ai-job" class="ai-job" aria-live="polite" hidden>
+                    <p id="ai-job-message"></p><p id="ai-job-time" class="hint"></p>
+                    <div class="ai-setup-actions"><a id="ai-provider-action" class="button primary" target="_blank" rel="noopener noreferrer" hidden>Tailscale 승인 페이지 열기 ↗</a><button id="ai-continue" type="button" hidden>설정 계속</button></div>
                   </div>
-                  <div data-ai-method="https" hidden>
-                    <label for="ai-public-url">기존 HTTPS 주소</label><input id="ai-public-url" type="url" placeholder="https://kakao.example.com" maxlength="253" autocapitalize="off" spellcheck="false">
-                    <p class="hint">이미 Bridge에 연결된 HTTPS 주소가 있을 때 사용하세요. /mcp를 포함한 전체 URL도 입력할 수 있습니다. OAuth를 설정하며 현재 관리 화면 주소는 유지됩니다.</p>
-                  </div>
-                  <div data-ai-method="tailscale" hidden>
-                    <h3>Tailscale로 HTTPS 주소 설정</h3><p>필요하면 Tailscale을 설치한 뒤 Funnel과 OAuth를 설정합니다. 로그인이나 Funnel 승인이 필요하면 여기에 링크가 표시됩니다.</p>
-                    <ol class="manual-steps">
-                      <li>아래 동의 항목을 확인하고 <strong>Tailscale 및 OAuth 설정</strong>을 누르세요.</li>
-                      <li><strong>승인이 필요합니다</strong>가 표시되면 Tailscale 승인 링크를 열어 로그인 또는 승인을 완료하세요.</li>
-                      <li>이 화면으로 돌아와 <strong>설정 계속</strong>을 누르세요. 추가 승인이 있으면 완료한 뒤 <strong>연결 안내</strong>에 저장된 MCP URL을 사용하세요.</li>
-                    </ol>
-                    <p id="ai-tailscale-location" class="hint"></p>
-                    <label class="check"><input id="ai-tailscale-allow" type="checkbox">이 서버에 Tailscale을 설치하거나 기존 설치를 사용하고, Funnel로 MCP 접속 주소를 공개합니다.</label>
-                  </div>
-                  <div data-ai-method="stdio" hidden>
-                    <h3>AI 클라이언트에 설정 복사</h3><p>공개 주소, OAuth, 터널이 필요하지 않습니다. 클라이언트가 Bridge를 설치한 컴퓨터에서 명령을 실행할 수 있어야 합니다.</p>
-                    <label for="ai-ssh-target">원격 서버의 SSH 접속 대상 (선택)</label><input id="ai-ssh-target" placeholder="user@your-server" maxlength="253" autocapitalize="off" spellcheck="false">
-                    <p class="hint">Bridge를 설치한 컴퓨터의 SSH 호스트 별칭이나 user@host를 입력하세요. 해당 계정은 추가 입력 없이 Bridge 설정과 Docker에 접근해 실행할 수 있어야 합니다.</p>
-                    <pre id="ai-stdio-config" class="ai-copy-block"></pre><button id="ai-copy-stdio" type="button">클라이언트 설정 복사</button>
-                    <ol class="manual-steps">
-                      <li><strong>클라이언트 설정 복사</strong>를 누른 뒤 AI 앱의 MCP 서버 설정이나 설정 파일을 여세요.</li>
-                      <li>기존 서버 설정을 유지하면서 <code>mcpServers</code>에 <code>kakaotalk</code> 항목을 추가하세요. 입력 폼을 사용하는 앱이라면 표시된 명령어와 인수를 해당 항목에 복사하세요.</li>
-                      <li>저장한 뒤 AI 앱의 MCP 연결을 새로고침하거나 앱을 다시 실행하세요. KakaoTalk Bridge를 활성화하고 수집 상태 확인을 요청하세요.</li>
-                    </ol>
-                    <p class="hint">명령을 실행할 수 없으면 AI 앱에서 설치 경로에 접근할 수 있는지 확인하세요. SSH는 비밀번호 입력 없이 접속할 수 있어야 합니다.</p>
-                  </div>
-                </details>
-              </div>
-              <p id="ai-form-error" role="alert" hidden></p><div class="ai-setup-actions"><button id="ai-setup-submit" type="submit" class="primary">현재 설정 유지</button><button id="ai-check" type="button">서버 연결 확인</button></div>
-            </fieldset>
-          </form>
-          <div id="ai-job" class="ai-job" hidden aria-live="polite">
-            <h3 id="ai-job-title"></h3><p id="ai-job-message"></p><p id="ai-job-time" class="hint"></p><button id="ai-retry" type="button" hidden>설정 다시 시도</button>
-            <a id="ai-provider-action" target="_blank" rel="noopener noreferrer" hidden>Tailscale 승인 페이지 열기 ↗</a>
-            <button id="ai-continue" type="button" hidden>설정 계속</button>
-          </div>
-          <div id="ai-finish" class="ai-finish" hidden>
-            <h3>연결 안내</h3><p id="ai-finish-help"></p>
-            <strong id="ai-client-label"></strong><code id="ai-client-value" class="endpoint"></code>
-            <div class="ai-setup-actions"><button id="ai-copy-value" type="button">복사</button><a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">ChatGPT 플러그인 열기 ↗</a></div>
-            <ol id="ai-finish-tunnel" class="manual-steps" hidden>
-              <li>ChatGPT 웹에서 <strong>플러그인(Plugins) → + → 사용자 지정 MCP 서버 만들기(Create custom MCP server)</strong>를 여세요. 이름은 <strong>KakaoTalk Bridge</strong>로 지정하세요.</li>
-              <li><strong>연결(Connection)</strong>에서 <strong>터널(Tunnel)</strong>을 선택하고 위 ID를 선택하거나 붙여 넣으세요. 승인된 개인 터널에는 <strong>인증 없음(No authentication)</strong>을 선택하세요.</li>
-              <li>안내를 확인하고 플러그인을 만드세요. 워크스페이스에 설치한 뒤 대화에서 <strong>@KakaoTalk Bridge</strong>를 선택하세요.</li>
-            </ol>
-            <ol id="ai-finish-https" class="manual-steps" hidden>
-              <li>AI 클라이언트에 원격 MCP 서버를 추가하세요. ChatGPT 웹에서는 <strong>플러그인(Plugins) → + → 사용자 지정 MCP 서버 만들기(Create custom MCP server)</strong>에서 이름을 <strong>KakaoTalk Bridge</strong>로 지정하세요.</li>
-              <li><strong>서버 URL(Server URL)</strong>에 위 URL을 붙여 넣고 <strong>OAuth</strong>를 선택하세요. ChatGPT에서 등록 방식을 물으면 CIMD를 사용하고, 선택 항목인 고정 클라이언트 인증 정보는 비워 두세요. 안내를 확인하고 플러그인을 만드세요.</li>
-              <li>패스키로 승인하거나 관리 화면의 <strong>AI 연결</strong>에서 코드가 일치하는 요청의 <strong>연결 승인</strong>을 누르세요. 클라이언트로 돌아가 연결을 마무리하세요.</li>
-              <li>연결을 설치하거나 활성화하세요. ChatGPT에서는 대화에서 <strong>@KakaoTalk Bridge</strong>를 선택하세요.</li>
-            </ol>
-            <details><summary>연결 방식이 보이지 않거나 승인이 끝나지 않았나요?</summary><p>ChatGPT 워크스페이스 권한을 확인하세요. 터널이 보이지 않으면 워크스페이스 연결 여부와 Read + Use 권한을 확인하세요. OAuth 요청이 만료되면 AI 클라이언트에서 다시 연결하고 새로 표시된 코드와 일치하는 요청을 승인하세요. <a href="https://developers.openai.com/api/docs/guides/custom-mcp-server" target="_blank" rel="noopener noreferrer">ChatGPT 연결 안내 ↗</a></p></details>
-            <p><strong>연결 확인:</strong> AI에 수집 상태 확인을 요청하세요. 휴대폰에서 ‘Bridge 확인 14:32’처럼 구별하기 쉬운 메시지를 나에게 보내고 AI에 해당 문구를 찾아 달라고 요청하세요.</p>
-            <p class="hint">서버 설정과 접근 승인만으로 AI 요청의 성공 여부를 알 수는 없습니다. 요청 후 현황의 <strong>원격 AI 사용 기록</strong>을 확인하세요.</p>
-          </div>
-          <p class="hint">터미널에서는 <code>./bridge setup-connection</code>을 사용할 수 있습니다.</p>
-        </div>
-      </details>
+                </form>
+                <div id="ai-finish" class="ai-step" hidden>
+                  <p id="ai-finish-help"></p>
+                  <button id="ai-approve-tunnel" type="button" class="primary" hidden>개인 터널 허용</button>
+                  <div id="ai-client" class="ai-copy-row"><strong id="ai-client-label"></strong><code id="ai-client-value" class="endpoint"></code><button id="ai-copy-value" type="button">복사</button></div>
+                  <div id="ai-stdio" hidden><pre id="ai-stdio-config" class="ai-copy-block"></pre><button id="ai-copy-stdio" type="button">설정 복사</button></div>
+                  <ol id="ai-finish-tunnel" class="setup-steps" hidden>
+                    <li><a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">ChatGPT 플러그인 ↗</a>에서 <strong>+ → 사용자 지정 MCP 서버 만들기</strong>를 열고 이름을 <strong>KakaoTalk Bridge</strong>로 지정하세요.</li>
+                    <li><strong>연결</strong>은 <strong>터널(Tunnel)</strong>과 위 ID, 인증은 <strong>인증 없음</strong>을 고르세요.</li>
+                    <li>만든 뒤 대화에서 <strong>@KakaoTalk Bridge</strong>를 선택하세요.</li>
+                  </ol>
+                  <ol id="ai-finish-https" class="setup-steps" hidden>
+                    <li>AI 서비스에 원격 MCP 서버를 추가하세요. ChatGPT는 <a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">플러그인 ↗</a>에서 <strong>+ → 사용자 지정 MCP 서버 만들기</strong>입니다.</li>
+                    <li>위 URL을 붙여 넣고 인증은 <strong>OAuth</strong>를 고르세요. 등록 방식을 물으면 CIMD를 고르고 고정 인증 정보는 비워 두세요.</li>
+                    <li id="ai-https-approve"></li>
+                  </ol>
+                  <ol id="ai-finish-stdio" class="setup-steps" hidden>
+                    <li>AI 앱의 MCP 설정 파일에서 기존 서버는 그대로 두고 <code>mcpServers</code>에 위 <code>kakaotalk</code> 항목을 추가하세요. 입력 폼이라면 명령과 인수를 옮겨 적으세요.</li>
+                    <li>앱을 다시 시작하고 KakaoTalk Bridge를 켜세요.</li>
+                  </ol>
+                  <details id="ai-ssh" hidden><summary>다른 컴퓨터에서 SSH로 실행하나요?</summary>
+                    <label for="ai-ssh-target">Bridge가 설치된 서버의 SSH 접속 대상</label><input id="ai-ssh-target" placeholder="user@your-server" maxlength="253" autocapitalize="off" spellcheck="false">
+                    <p class="hint">비밀번호 입력 없이 접속되고 Bridge 설정과 Docker를 실행할 수 있는 계정이어야 합니다. 입력하면 위 설정이 바뀝니다.</p>
+                  </details>
+                  <p id="ai-verify" class="ai-verify"><strong>확인:</strong> AI에게 “카카오톡 수집 상태 알려줘”라고 요청하세요. 휴대폰에서 나에게 보낸 메시지를 찾아 달라고 해도 됩니다.<span id="ai-activity" class="setup-detected"></span></p>
+                  <p id="ai-check-result" class="hint" role="status" hidden></p>
+                  <div class="ai-setup-actions"><button id="ai-check" type="button" class="quiet">서버 연결 확인</button><button id="ai-edit-method" type="button" class="quiet">설정 변경</button><button id="ai-restart" type="button" class="quiet">다른 방식으로 연결</button></div>
+                  <details><summary>연결 방식이 보이지 않거나 승인이 끝나지 않나요?</summary><p>ChatGPT 워크스페이스 권한을 확인하세요. 터널이 보이지 않으면 워크스페이스 연결과 Read + Use 권한을 확인하세요. OAuth 요청이 만료되면 AI 서비스에서 다시 연결하고 새 코드를 승인하세요. <a href="https://developers.openai.com/api/docs/guides/custom-mcp-server" target="_blank" rel="noopener noreferrer">ChatGPT 연결 안내 ↗</a></p></details>
+                </div>
+              </section>
             </div>
           </details>
           <details id="events-panel" class="management-panel">
