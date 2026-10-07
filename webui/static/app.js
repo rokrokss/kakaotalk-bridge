@@ -7,11 +7,10 @@ if (location.hash) history.replaceState(null, '', location.pathname + location.s
 // Opening a server-issued link in this existing tab must run login initialization again.
 window.addEventListener('hashchange', () => { if (location.hash) location.reload(); });
 let collectionBaseline = null, lastObservation = null;
-let overviewInitialized = false;
-let setupState = null, latestState = null;
+let latestState = null, setupMode = null, shownStep = null, clickedAction = null;
 let csrf = '', active = false, paused = false, fetching = false, rendering = false;
 let frame = null, pointer = null, blobURL = null, busy = false, generation = 0;
-let setupInitialized = false, tabletLoggedIn = false, collectionApproved = false;
+let tabletLoggedIn = false, collectionApproved = false;
 let loginAlreadyApproved = false;
 let loginMode = 'passkey';
 const preparationAttempts = new Set();
@@ -40,8 +39,10 @@ function locked() {
   active = false;
   csrf = '';
   frame = pointer = null;
-  busy = tabletLoggedIn = collectionApproved = setupInitialized = loginAlreadyApproved = false;
-  overviewInitialized = false;
+  busy = tabletLoggedIn = collectionApproved = loginAlreadyApproved = false;
+  latestState = setupMode = shownStep = clickedAction = null;
+  delete $('console').dataset.mode;
+  delete $('console').dataset.step;
   preparationAttempts.clear();
   $('console').hidden = true;
   $('login-panel').hidden = false;
@@ -211,28 +212,19 @@ function renderSessions(s, stale) {
   $('approval-detail').textContent = collectionApproved
     ? '같은 카카오톡 계정으로 로그인되어 있는 동안 승인이 유지됩니다. 카카오톡이 업데이트되어도 계속 수집합니다.'
     : fresh ? approvalReasons[s.approval_reason] || '' : s ? `마지막 점검: ${localTime(s.checked_at)}. 확인 내용을 변경하기 전에 새로고침하세요.` : '';
-  const screen = s?.screen;
-  $('login-option-status').textContent = !fresh ? '태블릿 화면을 확인하는 중입니다.'
-    : login === 'logged_in' ? '태블릿 카카오톡에 로그인되어 있습니다.'
-    : screen?.state === 'login_required' ? (screen.secondary_option === 'selected'
-      ? '‘다른 기기와 함께 사용’이 선택되어 있습니다. 이제 로그인하세요.'
-      : '‘다른 기기와 함께 사용’이 선택되지 않았습니다. 선택한 뒤 로그인하세요.')
-    : '태블릿에서 카카오톡을 열면 로그인 화면을 확인합니다.';
-  $('tablet-login-status').textContent = tabletLoggedIn
-    ? (loginAlreadyApproved ? '태블릿 로그인과 수집 승인이 확인되었습니다.' : '태블릿 로그인이 확인되었습니다. 휴대폰을 확인하세요.')
-    : '태블릿에 로그인하면 자동으로 확인됩니다.';
-  $('setup-summary').textContent = loginAlreadyApproved ? '승인됨' : tabletLoggedIn ? '로그인됨' : '';
+  // Shown on the login step only while the tablet shows KakaoTalk's login screen.
+  const screen = fresh && login !== 'logged_in' && s.screen?.state === 'login_required' ? s.screen : null;
+  $('login-option-status').dataset.state = !screen ? '' : screen.secondary_option === 'selected' ? 'ok' : 'missing';
+  $('login-option-status').textContent = !screen ? ''
+    : screen.secondary_option === 'selected' ? '✓ 선택되어 있습니다. 이제 로그인하세요.' : '아직 선택되지 않았습니다.';
   $('overview-phone').textContent = $('phone-status').textContent;
   $('overview-phone-detail').textContent = phone?.confirmed_at ? `마지막 직접 확인: ${localTime(phone.confirmed_at)}` : '태블릿 로그인 후 휴대폰에서 직접 확인하세요.';
-  if (fresh && !setupInitialized) {
-    $('login-setup').open = s.collection_approval === 'locked';
-    setupInitialized = true;
-  }
 }
 
 function updateControls() {
-  document.querySelectorAll('[data-action], [data-key], #install, #send-text').forEach(button => { button.disabled = busy; });
+  document.querySelectorAll('[data-action], [data-key], #install, #send-text, #setup-retry, #setup-check').forEach(button => { button.disabled = busy; });
   $('confirm').disabled = busy || !tabletLoggedIn || !$('phone-active').checked;
+  $('confirm-help').textContent = busy || tabletLoggedIn ? '' : '태블릿 로그인을 다시 확인하는 중입니다. 잠시 기다리거나 다시 확인을 누르세요.';
   $('phone-recheck').disabled = busy || !collectionApproved || !$('phone-rechecked').checked;
   $('phone-recheck-help').textContent = busy ? '진행 중인 태블릿 작업이 끝날 때까지 기다리세요.' : !loginAlreadyApproved ? '먼저 카카오톡 로그인과 수집 승인을 완료하세요.' : !collectionApproved ? '휴대폰 확인을 갱신하기 전에 태블릿 점검을 새로고침하세요.' : !$('phone-rechecked').checked ? '휴대폰을 확인한 뒤 위의 확인 항목을 선택하세요.' : '';
   $('phone-inspect').hidden = !loginAlreadyApproved || collectionApproved;
@@ -248,9 +240,12 @@ async function updateState() {
       setupCheckedAt = Date.now();
     }
     latestState = state;
-    setupState = state.setup;
+    // Setup mode hides the job line, so confirm the user's own clicks with a toast.
+    if (clickedAction && state.job.action === clickedAction && state.job.state !== 'running') {
+      if (setupMode && state.job.state === 'done') feedback(state.job.message);
+      clickedAction = null;
+    }
     lastObservation = state.collector.last_observation_received_at || null;
-    renderSetup();
     if (collectionBaseline !== null && lastObservation && Date.parse(lastObservation) > collectionBaseline) {
       $('test-result').textContent = '새 메시지가 수집되었습니다. ChatGPT에서 내용을 확인하세요.';
       collectionBaseline = null;
@@ -259,18 +254,17 @@ async function updateState() {
     $('job').hidden = !state.job.message;
     $('job').textContent = state.job.message;
     $('job').dataset.state = state.job.state;
-    const loginJob = state.job.action === 'approve';
-    $('login-result').hidden = !loginJob || !state.job.message;
-    $('login-result').textContent = loginJob ? state.job.message : '';
-    $('login-result').dataset.state = state.job.state;
     const collector = state.collector.state;
+    // Iris starts after approval; a fresh approval is not yet a problem to check.
+    const starting = state.sessions?.collection_approval === 'approved' && Date.now() / 1000 - state.sessions.approved_at < 600;
     $('collector-status').dataset.state = collector;
     $('collector-status').textContent = collector === 'collecting_partial' ? '메시지 수집 중'
-      : collector === 'unavailable' ? '수집 서버 대기 중' : '수집 상태 확인 필요';
+      : starting ? '수집 시작 중' : collector === 'unavailable' ? '수집 서버 대기 중' : '수집 상태 확인 필요';
     $('collector-status').title = '태블릿에서 수신한 메시지를 수집합니다. 전체 대화 기록을 복원하지는 않습니다.';
     $('overview-collection').textContent = $('collector-status').textContent;
     $('overview-last').textContent = lastObservation ? `마지막 수집: ${new Date(lastObservation).toLocaleString('ko-KR')} · 일부 기록만 수집` : '아직 수집된 메시지가 없습니다.';
     renderSessions(state.sessions, state.sessions_stale);
+    renderSetup();
     updateControls();
     // Decide only after busy/session state is updated. Mark the action before
     // starting it, since action() itself refreshes state.
@@ -299,7 +293,6 @@ async function updateState() {
 
 async function action(name, extra = {}) {
   if (!active || busy) return;
-  if (['open-kakao', 'open-store', 'prepare', 'configure'].includes(name)) openPanel('tablet-workspace');
   if (['setup-check', 'setup-poll'].includes(name)) setupCheckedAt = Date.now();
   busy = true;
   updateControls();
@@ -317,7 +310,7 @@ async function action(name, extra = {}) {
 }
 
 document.querySelectorAll('[data-action]').forEach(button => {
-  button.addEventListener('click', () => action(button.dataset.action));
+  button.addEventListener('click', () => { clickedAction = button.dataset.action; action(button.dataset.action); });
 });
 $('install').addEventListener('click', () => {
   if (active && !busy) { $('install-dialog').returnValue = ''; $('install-dialog').showModal(); }
@@ -514,45 +507,43 @@ $('owner-form').addEventListener('submit', async event => {
   } catch (error) { feedback(error.message); }
 });
 
+// Until collection is approved, the console shows one setup step beside the tablet.
+const setupStages = {starting: 0, preparing: 0, 'store-login': 0, install: 0, finishing: 0, checking: 1, login: 1, phone: 2};
+const setupRetries = {preparing: 'prepare', finishing: 'configure'};
+const revokedReasons = ['account_changed', 'android_changed', 'phone_reported_lost', 'account_ambiguous'];
 function renderSetup() {
-  const s = setupState;
-  const session = latestState?.sessions;
-  const ready = !!s && !['offline', 'booting'].includes(s.state);
-  const enrolled = !!s?.enrolled;
-  const approved = session?.collection_approval === 'approved';
-  const collecting = latestState?.collector.state === 'collecting_partial';
-  $('setup-store-guide').hidden = !ready || !!s.kakao_installed || !s.aurora_installed;
-  const steps = [enrolled, approved, collecting];
-  const labels = ['준비', '로그인', '수집'];
-  $('guide-summary').textContent = collecting ? '수집 실행 중' : '설정 계속';
-  if (!overviewInitialized && s) {
-    overviewInitialized = true;
-    $('setup-guide').open = !collecting;
-    $('tablet-workspace').open = !collecting;
+  const state = latestState, step = setupStep(state), job = state.job;
+  const setup = step !== 'done';
+  if (setup !== setupMode) {
+    if (!setup && shownStep === 'phone') feedback('설정이 끝났습니다. 메시지 수집을 시작합니다.');
+    setupMode = setup;
+    $('console').dataset.mode = setup ? 'setup' : 'manage';
+    $('console-title').textContent = setup ? '카카오톡 연결' : '내 Bridge';
+    $('tablet-workspace').open = setup;
   }
-  if (latestState?.job.state === 'failed') $('setup-guide').open = true;
-  $('setup-progress').replaceChildren(...labels.map((label, i) => {
-    const item = document.createElement('li'); item.textContent = label;
-    item.dataset.complete = String(steps[i]); return item;
-  }));
-  let next = ['서버 준비 상태를 확인하고 있습니다.', '', ''];
-  if (s && !ready) next = ['개인 기기를 시작하고 있습니다. 준비되면 자동으로 계속됩니다.', '', ''];
-  else if (ready && !s.kakao_installed) next = s.aurora_installed
-    ? ['스토어에서 익명 로그인을 마친 뒤 스토어 열기를 다시 누르고 카카오톡을 설치하세요. 설정은 자동으로 계속됩니다.', 'open-store', '스토어 열기']
-    : ['기기와 앱 스토어 준비 중…', 'prepare', '준비 다시 시도'];
-  else if (ready && !enrolled) next = ['카카오톡 로그인 준비 마무리 중…', 'configure', '준비 다시 시도'];
-  else if (enrolled && !approved) next = session?.kakao?.login === 'logged_in'
-    ? ['태블릿 로그인이 확인되었습니다. 휴대폰의 카카오톡 로그인이 유지되는지 확인하고 아래에서 수집을 시작하세요.', 'session-check', '상태 확인']
-    : ['카카오톡을 열고 ‘다른 기기와 함께 사용’을 선택해 로그인하세요. 로그인은 자동으로 확인됩니다.', 'open-kakao', '카카오톡 열기'];
-  else if (approved && !collecting) next = ['수집이 승인되었습니다. 수집기를 기다리는 중입니다. 필요하면 상태를 새로고침하세요.', 'session-check', '상태 확인'];
-  else if (collecting) next = ['카카오톡 수집이 준비되었습니다. AI 연결은 선택 사항이며 필요할 때 추가할 수 있습니다.', '', ''];
-  if (latestState?.job.state === 'failed') next[0] = latestState.job.message || '준비가 중단되었습니다. 아래 결과를 확인하고 다시 시도하세요.';
-  $('setup-next').textContent = next[0];
-  $('setup-next-button').hidden = !next[1];
-  $('setup-next-button').textContent = next[2];
-  $('setup-next-button').onclick = () => next[1] === 'connect-ai' ? connectionSetup.open() : action(next[1]);
-  $('setup-next-button').disabled = latestState?.job.state === 'running';
+  shownStep = step;
+  $('console').dataset.step = step;
+  if (!setup) return;
+  document.querySelectorAll('[data-setup]').forEach(node => { node.hidden = node.dataset.setup !== step; });
+  [...$('setup-progress').children].forEach((item, i) => {
+    item.dataset.state = i < setupStages[step] ? 'done' : i === setupStages[step] ? 'current' : 'todo';
+    if (i === setupStages[step]) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
+  });
+  const reason = state.sessions?.approval_reason;
+  $('setup-reason').hidden = !['login', 'phone'].includes(step) || !revokedReasons.includes(reason);
+  $('setup-reason').textContent = approvalReasons[reason] || '';
+  // Offer a manual retry only when nothing automatic is about to run.
+  const failed = job.state === 'failed';
+  $('setup-retry').hidden = !setupRetries[step] || !(failed || (job.state !== 'running' && !nextPreparation(state, preparationAttempts)));
+  $('setup-card').dataset.stalled = String(failed || !$('setup-retry').hidden);
+  $('setup-error').hidden = !failed;
+  $('setup-error').textContent = failed ? job.message : '';
 }
+$('setup-retry').addEventListener('click', () => action(setupRetries[shownStep]));
+$('setup-check').addEventListener('click', () => {
+  clickedAction = ['checking', 'login', 'phone'].includes(shownStep) ? 'session-check' : 'setup-check';
+  action(clickedAction);
+});
 
 function paragraph(text) { const p = document.createElement('p'); p.textContent = text; return p; }
 function button(text, fn) {
@@ -588,7 +579,6 @@ async function refreshConnections() {
         : 'AI 연결 없이도 수집할 수 있습니다. ‘연결 추가 또는 변경’에서 AI를 연결하세요.';
     }
     $('pending-count').textContent = data.pending.length ? `승인 대기 ${data.pending.length}개` : `허용 ${allowed}개`;
-    renderSetup();
     const signature = JSON.stringify(data);
     if (signature === connectionSignature) return;
     connectionSignature = signature;

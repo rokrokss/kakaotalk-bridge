@@ -31,10 +31,9 @@
 .ai-job[data-state="failed"], .ai-job[data-state="interrupted"] { border-color: var(--danger); }
 .ai-job > a { margin-right: 14px; }
 .ai-finish { background: var(--background); }
-.manual-guide { margin: 18px 0; padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .manual-steps { padding-left: 22px; margin: 14px 0; }
 .manual-steps li { margin: 10px 0; overflow-wrap: anywhere; }
-.manual-guide summary, .ai-setup-body details > summary { cursor: pointer; }
+.ai-setup-body details > summary { cursor: pointer; }
 @media (max-width: 650px) {
   .ai-setup-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .ai-steps { gap: 12px; font-size: 11px; }
@@ -76,8 +75,9 @@ main { max-width: 1168px; padding: 32px 24px 48px; margin: auto; }
 .collector-state { font-size: 13px; color: var(--muted); }
 .collector-state::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 8px 2px 0; border-radius: 50%; background: var(--muted); }
 .collector-state[data-state="collecting_partial"]::before { background: #51825c; }
-.workspace { display: grid; grid-template-columns: minmax(0, 1fr) 332px; gap: 40px; align-items: start; }
-.device-panel { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); position: sticky; top: 20px; }
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr) 332px; grid-template-rows: auto 1fr; grid-template-areas: "tablet card" "tablet side"; column-gap: 40px; align-items: start; }
+.workspace > aside { grid-area: side; }
+.device-panel { grid-area: tablet; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); position: sticky; top: 20px; }
 .screen-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; gap: 8px; color: var(--muted); font-size: 12px; }
 .toolbar-actions { display: flex; }
 .screen-stage { min-height: 380px; padding: 20px; display: flex; align-items: center; justify-content: center; background: var(--stage); }
@@ -105,11 +105,6 @@ aside { min-width: 0; }
 .input-row { display: flex; gap: 7px; }
 .input-row button { flex-shrink: 0; }
 .input-tools { display: flex; align-items: center; justify-content: space-between; margin: 0 -7px; }
-.login-steps { margin: 0; padding: 0 0 0 20px; }
-.login-steps li { padding-left: 4px; }
-.login-steps li + li { margin-top: 22px; }
-.login-steps p { margin: 7px 0 12px; font-size: 13px; }
-.login-steps .hint { margin-bottom: 0; font-size: 12px; }
 .job { padding: 12px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .job[data-state="failed"] { color: var(--danger); }
 .login-panel { max-width: 360px; margin: 10vh auto; }
@@ -122,15 +117,15 @@ dialog::backdrop { background: #0005; }
 dialog p { margin: 12px 0 24px; font-size: 13px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 850px) {
-  .workspace { grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; }
+  .workspace { grid-template-columns: minmax(0, 1fr) 300px; column-gap: 24px; }
   .screen-stage { padding: 12px; }
 }
 @media (max-width: 680px) {
   .app-header { padding: 12px 18px; }
   .brand span, #connection { display: none; }
   main { padding: 24px 18px 40px; }
-  .workspace { grid-template-columns: 1fr; gap: 28px; }
-  .device-panel { position: static; }
+  .workspace { grid-template-columns: 1fr; grid-template-areas: "card" "tablet" "side"; }
+  .device-panel { position: static; margin-bottom: 28px; }
   .screen-stage { min-height: 250px; }
   #screen { max-height: 54vh; }
   .page-heading { margin-bottom: 18px; }
@@ -140,14 +135,42 @@ dialog p { margin: 12px 0 24px; font-size: 13px; }
   :root { --background: #1c1c1a; --surface: #252522; --stage: #141413; --ink: #edece6; --muted: #aaa89e; --line: #3c3c36; --hover: #33332d; --accent: #e7cf76; --danger: #ef9b8f; --focus: #d3ba65; --success: #8bcca3; }
 }
 
-/* Setup and access management use the same compact controls as the tablet. */
-.setup-guide { border: 1px solid var(--line); border-radius: 10px; padding: 0 24px; margin-bottom: 16px; }
-.setup-guide > summary { padding: 18px 0; cursor: pointer; font-weight: 600; }
-.setup-guide > summary span { font-weight: 400; font-size: 12px; margin-left: 12px; color: var(--muted); }
-.setup-progress { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0; font-size: .85rem; color: var(--muted); }
-.setup-progress li::before { content: '○ '; }
-.setup-progress li[data-complete="true"] { color: var(--success); }
-.setup-progress li[data-complete="true"]::before { content: '✓ '; }
+/* Setup mode: one step beside the tablet. Everything else waits until collection is approved. */
+#console[data-mode="setup"] { display: flex; flex-direction: column; }
+#console[data-mode="setup"] > .page-heading { order: -2; }
+#console[data-mode="setup"] > #tablet-workspace { order: -1; }
+#console[data-mode="setup"] :is(.overview, .section-nav, #collector-status, .status-section, #phone-panel, #test-panel, #job),
+#console[data-mode="setup"] > #tablet-workspace > summary,
+#console[data-mode="setup"]:not([data-step="login"]) #text-panel,
+#console:not([data-mode="setup"]) #setup-card { display: none; }
+#console[data-mode="setup"] > #tablet-workspace > .workspace { padding-top: 22px; }
+.setup-card { grid-area: card; margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.setup-card h2 { font-size: 18px; letter-spacing: -.3px; margin: 18px 0 8px; }
+.setup-card p { font-size: 13px; margin: 8px 0; }
+.setup-card .hint { font-size: 12px; }
+.setup-card details { margin-top: 12px; font-size: 12px; color: var(--muted); }
+.setup-card summary { cursor: pointer; }
+.setup-progress { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0; counter-reset: setup; font-size: 12px; color: var(--muted); }
+.setup-progress li { flex: 1; counter-increment: setup; padding-top: 7px; border-top: 3px solid var(--line); }
+.setup-progress li::before { content: counter(setup) ". "; }
+.setup-progress li[data-state="done"] { color: var(--success); border-color: var(--success); }
+.setup-progress li[data-state="done"]::before { content: "✓ "; }
+.setup-progress li[data-state="current"] { color: var(--ink); border-color: var(--focus); font-weight: 600; }
+.setup-steps { padding-left: 20px; margin: 12px 0; }
+.setup-steps li { margin: 9px 0; font-size: 14px; }
+.setup-steps li::marker { color: var(--muted); }
+.setup-detected { display: block; margin-top: 4px; font-size: 12px; }
+.setup-detected[data-state="ok"] { color: var(--success); }
+.setup-detected[data-state="missing"] { color: var(--danger); font-weight: 600; }
+.setup-card .setup-warning, .setup-error { color: var(--danger); }
+.setup-reason { margin: 16px 0 0 !important; padding: 10px 12px; border-radius: 6px; background: var(--hover); color: var(--ink); }
+.setup-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin-top: 12px; }
+.setup-card > .setup-actions { margin-top: 4px; }
+.setup-wait::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; vertical-align: -1px; border: 2px solid var(--line); border-top-color: var(--focus); border-radius: 50%; animation: setup-spin 1s linear infinite; }
+.setup-card[data-stalled="true"] .setup-wait { display: none; }
+@keyframes setup-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .setup-wait::before { animation: none; } }
+/* Access management uses the same compact controls as the tablet. */
 .connection-card { padding: 16px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .connection-card button { margin: 6px 8px 0 0; }
 .endpoint { display: block; overflow-wrap: anywhere; margin: 12px 0; font-size: .85rem; }
@@ -188,5 +211,4 @@ dialog p { margin: 12px 0 24px; font-size: 13px; }
   .management-panel > .section-body, .management-panel > .workspace { padding: 0 16px 16px; }
   .ai-setup > summary { padding: 16px; }
   .ai-setup-body { padding: 0 16px 16px; }
-  .setup-guide { padding: 0 16px; }
 }

@@ -26,7 +26,7 @@ uv run python -m tests.setup_preview
 node tests/setup-browser.cjs
 ```
 
-`PLAYWRIGHT_MODULE`에 기존 Playwright 모듈 경로, `CHROME_EXECUTABLE`에 Chrome·Chromium 실행 파일을 지정할 수 있습니다. 포트 19449에서 자동 준비, 스토어 설치 감지, 구성 요소 설치, 카카오톡 열기, 로그인 자동 감지, 휴대폰 확인 전 수집 시작 비활성, 재설치 없는 새로고침을 검사합니다. 실제 VM이나 카카오톡 로그인은 실행하지 않으며 검사마다 미리보기를 다시 시작하세요.
+`PLAYWRIGHT_MODULE`에 기존 Playwright 모듈 경로, `CHROME_EXECUTABLE`에 Chrome·Chromium 실행 파일을 지정할 수 있습니다. 포트 19449에서 단계별 설정 화면, 자동 준비, Aurora 로그인 감지와 카카오톡 페이지 열기, 스토어 설치 감지, 구성 요소 설치, 카카오톡 열기, 로그인 자동 감지, 휴대폰 확인 전 수집 시작 비활성, 재설치 없는 새로고침을 검사합니다. 실제 VM이나 카카오톡 로그인은 실행하지 않으며 검사마다 미리보기를 다시 시작하세요.
 
 Python 의존성은 `uv.lock`과 해시를 포함한 `requirements.lock`에 고정합니다. 변경 후 다음으로 맞추세요.
 
