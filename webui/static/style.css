@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --background: #faf9f6;
   --surface: #fff;
   --stage: #eeede9;
@@ -134,9 +134,6 @@ dialog p { margin: 12px 0 24px; font-size: 13px; }
   #screen { max-height: 54vh; }
   .page-heading { margin-bottom: 18px; }
   .collector-state { font-size: 12px; }
-}
-@media (prefers-color-scheme: dark) {
-  :root { --background: #1c1c1a; --surface: #252522; --stage: #141413; --ink: #edece6; --muted: #aaa89e; --line: #3c3c36; --hover: #33332d; --accent: #e7cf76; --danger: #ef9b8f; --focus: #d3ba65; --success: #8bcca3; }
 }
 
 /* Setup mode: one step beside the tablet. Everything else waits until collection is approved. */
