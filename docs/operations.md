@@ -9,6 +9,7 @@
 | 중지·시작 | `./bridge stop`, `./bridge start` |
 | 관리 화면 열기 | `./bridge admin` (서비스 시작까지 하려면 `./bridge up`) |
 | 백업·복구 | `./bridge backup`, `./bridge restore` · [유지 관리와 복구](onboarding.md#maintain-and-recover) |
+| 삭제 | `./bridge cleanup` · [삭제](#uninstall) |
 
 `./bridge` 명령은 설치 폴더에서 실행합니다. 아래 `docker compose` 명령은 Linux 설치 폴더에서 실행하고, Docker 권한이 없으면 `sudo`를 붙이세요. Mac은 VM 안에서 실행합니다.
 
@@ -167,3 +168,17 @@ sudo chmod 444 secrets/tls_cert.pem secrets/tls_key.pem
 
 - 이 인증서를 지정한 클라이언트(예: [HTTP API](api.md)의 `--cacert`)는 새 파일을 쓰세요. Android, 카카오톡 로그인, 수집 승인에는 영향이 없습니다.
 - 소스로 빌드한 설치의 Bridge 서명 키 `secrets/bridge.jks`는 바꾸지 마세요. 키보드 앱을 업데이트할 수 없게 됩니다.
+
+<a id="uninstall"></a>
+## 삭제
+
+```bash
+./bridge cleanup         # Lists what goes, then asks you to type 삭제
+./bridge cleanup --yes   # No prompt
+```
+
+- 카카오톡 로그인, 수집한 메시지, 패스키, 백업, 설정과 키를 모두 지우며 되돌릴 수 없습니다. 남겨 둘 백업은 먼저 `backups/`와 `secrets/backup_key`를 다른 곳에 복사하세요(Mac은 VM 안에 있음).
+- Mac은 관리되는 Lima VM을, Linux는 이 설치의 컨테이너·볼륨(복구 전 볼륨 포함)·네트워크·이미지, 웹 연결 설정 서비스, Binder 자동 로드 설정을 지웁니다. 다른 컨테이너가 사용 중인 이미지는 남깁니다.
+- 마지막으로 설치 폴더를 지웁니다. Git 작업 폴더는 소스 코드를 남기고 `.env`, `secrets/`, `.bridge/`, `backups/`, `inputs/`, `artifacts/`만 지웁니다.
+- `./bridge expose`로 켠 Tailscale Funnel은 설정이 그대로일 때만 끕니다.
+- Docker, Homebrew, Lima, Tailscale, uv 같은 공용 도구와 Lima 이미지 캐시는 지우지 않습니다. AI 앱에 추가한 연결과 Tailscale 관리 콘솔의 기기는 직접 지우세요.

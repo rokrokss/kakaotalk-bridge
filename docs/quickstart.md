@@ -64,6 +64,7 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 ./bridge stop        # Stop; data and logins are kept
 ./bridge start       # Start again
 ./bridge backup      # Encrypted backup to backups/*.kcs
+./bridge cleanup     # Delete Bridge, its data and backups (shared tools stay)
 ```
 
 > `docker compose down -v`는 카카오톡 로그인과 DB를 지웁니다. 중지는 `./bridge stop`을 쓰세요. [운영과 복구](operations.md)

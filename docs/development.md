@@ -50,6 +50,7 @@ uv export --frozen --no-dev --no-emit-project --output-file requirements.lock
 | `ops/install.py`, `ops/releases.py`, `ops/source.py` | 설치·업데이트, 검증된 릴리스 다운로드, 소스 교체와 롤백 |
 | `ops/onboarding.py`, `ops/lima.py` | `./bridge up` 단계, Mac의 Lima VM |
 | `ops/doctor.py`, `ops/backup.py`, `ops/snapshot.py` | 상태 점검, 암호화 전체 백업·복구 |
+| `ops/cleanup.py` | `./bridge cleanup`: 이 설치가 만든 VM·컨테이너·볼륨·이미지·서비스와 설치 폴더 삭제. 공용 도구는 유지 |
 | `ops/access.py`, `ops/connections.py`, `ops/expose.py`, `ops/tunnel.py` | 관리 화면 링크와 패스키 설정, AI 연결 선택, Tailscale HTTPS, OpenAI 터널 |
 | `ops/setup_output.py`, `ops/errors.py` | 한국어 진행 표시, 비공개 진단 로그, 하위 명령 보고, `BridgeError` |
 | `ops/setup_agent.py`, `server/connection_setup.py`, `webui/setup.py` | 비공개 호스트 설정 작업, 공유 입력 검증, 인증된 관리 프록시 |

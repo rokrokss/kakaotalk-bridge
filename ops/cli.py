@@ -273,6 +273,8 @@ def main():
     cmd.add_argument("--name", help=argparse.SUPPRESS)
     cmd = sub.add_parser("doctor", help="실행 환경과 서비스 상태 점검")
     cmd.add_argument("--json", action="store_true", help="점검 결과를 JSON으로 출력")
+    cmd = sub.add_parser("cleanup", help="Bridge와 데이터·백업을 모두 삭제 (공용 도구는 유지)")
+    cmd.add_argument("--yes", action="store_true", help="확인 없이 삭제")
     for name, description in (
         ("start", "서비스 시작"),
         ("stop", "서비스 중지 (데이터와 로그인은 유지)"),
@@ -312,6 +314,11 @@ def execute(args):
         return
     if args.command == "up":
         up(args)
+        return
+    if args.command == "cleanup":
+        from ops.cleanup import cleanup
+
+        cleanup(args)
         return
     if args.command == "setup-connection":
         from ops.connections import setup
