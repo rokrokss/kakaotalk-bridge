@@ -1,5 +1,7 @@
 import json
+import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
@@ -116,6 +118,23 @@ def test_stale_login_or_changed_database_cannot_send(sending, change):
         data = json.loads(db.execute("SELECT body FROM statuses WHERE kind='bridge'").fetchone()[0])
         db.execute("UPDATE statuses SET body=? WHERE kind='bridge'", (json.dumps(data | change),))
     assert enqueue(client, body).status_code in (409, 423)
+
+
+def test_send_waits_until_kakaotalk_has_shown_a_notification(sending, monkeypatch):
+    collector, client, _, body = sending
+    monkeypatch.setattr(iris, "notification_reply_ready", Mock(return_value=False))
+    collector.send_checked = 0
+    collector.tick()
+    response = enqueue(client, body)
+    assert response.status_code == 423
+    assert response.json() == {"error": "sending_unavailable_until_kakaotalk_notification"}
+    # An unreadable check does not block: Iris still verifies the referer before sending.
+    timeout = subprocess.TimeoutExpired("adb", 25)
+    monkeypatch.setattr(iris, "notification_reply_ready", Mock(side_effect=timeout))
+    collector.send_checked = 0
+    collector.tick()
+    assert collector.send_ready is None
+    assert enqueue(client, body).json()["status"] == "queued"
 
 
 def test_expiry_prevents_delayed_delivery(sending):

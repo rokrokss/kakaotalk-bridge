@@ -1,3 +1,4 @@
+import io
 import json
 import struct
 import threading
@@ -232,6 +233,33 @@ def test_long_job_blocks_device_controls_and_sanitizes_failures(console):
         time.sleep(0.01)
     assert response.json()["job"]["state"] == "failed"
     assert "secret password" not in response.text
+
+
+@pytest.mark.parametrize(
+    ("bridge", "needed"),
+    [
+        ({"notification_reply_ready": False}, True),
+        ({"notification_reply_ready": None}, False),
+        (None, False),
+    ],
+)
+def test_collector_status_flags_sending_before_first_notification(monkeypatch, bridge, needed):
+    from webui import app as webui
+
+    status = {
+        "state": "collecting_partial",
+        "warnings": [],
+        "coverage": {},
+        "last_observation_received_at": None,
+        "bridge": bridge,
+    }
+    monkeypatch.setattr(webui, "secret", lambda name: "read-token")
+    monkeypatch.setattr(
+        webui, "urlopen", lambda request, timeout: io.BytesIO(json.dumps(status).encode())
+    )
+    result = webui.collector_status()
+    assert result["send_needs_notification"] is needed
+    assert "bridge" not in result
 
 
 def test_text_not_echoed_even_on_failure_and_request_size_bounded(console):

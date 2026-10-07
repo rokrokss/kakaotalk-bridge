@@ -262,6 +262,7 @@ async function updateState() {
       : starting ? '수집 시작 중' : collector === 'unavailable' ? '수집 서버 대기 중' : '수집 상태 확인 필요';
     $('collector-status').title = '태블릿에서 수신한 메시지를 수집합니다. 전체 대화 기록을 복원하지는 않습니다.';
     $('overview-collection').textContent = $('collector-status').textContent;
+    $('overview-send').hidden = !state.collector.send_needs_notification;
     $('overview-last').textContent = lastObservation ? `마지막 수집: ${new Date(lastObservation).toLocaleString('ko-KR')} · 일부 기록만 수집` : '아직 수집된 메시지가 없습니다.';
     renderSessions(state.sessions, state.sessions_stale);
     renderSetup();

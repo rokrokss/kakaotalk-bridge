@@ -69,6 +69,7 @@ class Collector:
                     "request_id_conflict",
                     "conversation_not_in_current_enrollment",
                     "sending_unavailable_confirm_login_and_upgrade_iris",
+                    "sending_unavailable_until_kakaotalk_notification",
                     "send_rate_limited",
                     "send_request_not_found",
                     "sending_not_configured",

@@ -76,6 +76,7 @@ def pipeline(tmp_path, monkeypatch):
         monkeypatch.setattr(iris.enrollment, "require_approved", lambda: snapshot())
         monkeypatch.setattr(iris, "ensure_started", Mock(return_value="a" * 43))
         monkeypatch.setattr(iris, "healthy", Mock())
+        monkeypatch.setattr(iris, "notification_reply_ready", Mock(return_value=True))
         page = {
             "build": iris.BUILD,
             "enrollment_epoch": CONFIG["enrollment_epoch"],
@@ -118,6 +119,7 @@ def test_iris_end_to_end_ids_history_and_repeat_text(pipeline):
     status = client.get("/v1/status", headers=auth()).json()
     assert status["state"] == "collecting_partial"
     assert status["bridge"]["kakao_version"] == 29260820
+    assert status["bridge"]["notification_reply_ready"] is True
     assert status["coverage"]["scope"] == "redroid_local_database_rows"
     assert not status["coverage"]["complete"]
     assert not status["coverage"]["phone_session_monitoring"]
@@ -321,6 +323,18 @@ def apk_device(monkeypatch, remote_sha, health):
     monkeypatch.setattr(iris, "healthy", health)
     monkeypatch.setattr(iris.time, "sleep", lambda seconds: None)
     return calls
+
+
+@pytest.mark.parametrize(
+    ("answer", "ready"), [("ready", True), ("missing", False), ("", None), ("error: closed", None)]
+)
+def test_notification_reply_check_reports_presence_only(monkeypatch, answer, ready):
+    calls = []
+    monkeypatch.setattr(iris.cli, "adb", lambda *args, **kwargs: calls.append(args) or answer)
+    assert iris.notification_reply_ready() is ready
+    ((shell, command),) = calls
+    # grep -q prints nothing, so the referer value cannot reach the collector or its logs.
+    assert shell == "shell" and command.startswith("grep -qE ") and iris.KAKAO_PREFS in command
 
 
 def test_running_current_build_is_reused_without_reinstalling(monkeypatch):

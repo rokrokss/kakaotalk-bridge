@@ -131,6 +131,9 @@ class Outgoing:
                     raise SendError("request_id_conflict")
                 return self.view(prior)
             bridge = self.gate(db)
+            if bridge.get("notification_reply_ready") is False:
+                # Unknown does not block: Iris checks the referer again before sending.
+                raise SendError("sending_unavailable_until_kakaotalk_notification", 423)
             target = db.execute(
                 "SELECT * FROM message_lookup WHERE conversation_ref=? "
                 "ORDER BY message_id DESC LIMIT 1",

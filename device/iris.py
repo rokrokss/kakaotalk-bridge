@@ -25,6 +25,8 @@ HOME = enrollment.HOME
 REMOTE_APK = HOME + "/iris.apk"
 PID_FILE = HOME + "/iris.pid"
 AUTH_FILE = HOME + "/iris-auth.json"
+# Iris replies through KakaoTalk notifications using the referer stored here.
+KAKAO_PREFS = "/data/user/0/com.kakao.talk/shared_prefs/KakaoTalk.hw.perferences.xml"
 # The API accepts 1 MiB bodies; leave room for the JSON envelope.
 MAX_BATCH_BYTES = 768 * 1024
 SKIP_REASONS = {"decrypt_failed", "metadata_unreadable"}
@@ -115,6 +117,21 @@ def healthy(token):
     proof = hmac.new(token.encode(), f"{challenge}:{BUILD}".encode(), hashlib.sha256).hexdigest()
     if info.get("build") != BUILD or not hmac.compare_digest(str(info.get("proof", "")), proof):
         raise RuntimeError("unexpected_iris_server")
+
+
+def notification_reply_ready():
+    """Whether KakaoTalk stored its reply referer. None when ADB cannot tell.
+
+    KakaoTalk saves it with its first message notification. Only presence is
+    reported; the value never leaves the device.
+    """
+    answer = cli.adb(
+        "shell",
+        "grep -qE '<string name=\"NotificationReferer\">[^<]*[^<[:space:]]' "
+        f"{KAKAO_PREFS} 2>/dev/null && echo ready || echo missing",
+        check=False,
+    )
+    return {"ready": True, "missing": False}.get(answer)
 
 
 def ensure_started(epoch):
@@ -217,6 +234,8 @@ class Collector:
         self.account_ref = None
         self.kakao_version = None
         self.metadata_checked = 0
+        self.send_ready = None
+        self.send_checked = 0
         self.connected = False
         self.iris_token = None
         self.iris_epoch = None
@@ -243,6 +262,7 @@ class Collector:
                 "database_id": self.database_id,
                 "secondary_login_confirmed": allowed,
                 "supports_message_send": True,
+                "notification_reply_ready": self.send_ready,
                 "account_ref": self.account_ref,
                 "listener_connected": connected,
                 "last_source_seq": self.last_seq,
@@ -291,6 +311,12 @@ class Collector:
         seqs = [e["source_seq"] for e in events]
         if seqs != sorted(set(seqs)) or any(s <= self.last_seq for s in seqs):
             raise RuntimeError("iris_invalid_page_order")
+        if time.monotonic() - self.send_checked > 10:
+            self.send_checked = time.monotonic()
+            try:
+                self.send_ready = notification_reply_ready()
+            except (OSError, subprocess.TimeoutExpired):
+                self.send_ready = None
         self.heartbeat(True, True)
         if events:
             self.commit(events)
