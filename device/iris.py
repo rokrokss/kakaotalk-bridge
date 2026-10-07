@@ -125,13 +125,16 @@ def notification_reply_ready():
     KakaoTalk saves it with its first message notification. Only presence is
     reported; the value never leaves the device.
     """
+    # Without root the app's data is hidden, so a missing file would look like a denied one.
     answer = cli.adb(
         "shell",
+        f"[ $(id -u) = 0 ] || exit; [ -e {KAKAO_PREFS} ] || {{ echo 1; exit; }}; "
         "grep -qE '<string name=\"NotificationReferer\">[^<]*[^<[:space:]]' "
-        f"{KAKAO_PREFS} 2>/dev/null && echo ready || echo missing",
+        f"{KAKAO_PREFS} 2>/dev/null; echo $?",
         check=False,
     )
-    return {"ready": True, "missing": False}.get(answer)
+    # grep exits 1 when the value is absent and 2 when it cannot read the file.
+    return {"0": True, "1": False}.get(answer)
 
 
 def ensure_started(epoch):

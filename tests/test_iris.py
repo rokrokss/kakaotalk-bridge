@@ -1,5 +1,7 @@
 import hashlib
 import json
+import os
+import subprocess
 from copy import deepcopy
 from unittest.mock import Mock
 
@@ -326,7 +328,8 @@ def apk_device(monkeypatch, remote_sha, health):
 
 
 @pytest.mark.parametrize(
-    ("answer", "ready"), [("ready", True), ("missing", False), ("", None), ("error: closed", None)]
+    ("answer", "ready"),
+    [("0", True), ("1", False), ("2", None), ("", None), ("error: closed", None)],
 )
 def test_notification_reply_check_reports_presence_only(monkeypatch, answer, ready):
     calls = []
@@ -334,7 +337,45 @@ def test_notification_reply_check_reports_presence_only(monkeypatch, answer, rea
     assert iris.notification_reply_ready() is ready
     ((shell, command),) = calls
     # grep -q prints nothing, so the referer value cannot reach the collector or its logs.
-    assert shell == "shell" and command.startswith("grep -qE ") and iris.KAKAO_PREFS in command
+    assert shell == "shell" and "grep -qE " in command and iris.KAKAO_PREFS in command
+
+
+REFERER = '<string name="NotificationReferer">synthetic==</string>'
+
+
+@pytest.mark.parametrize(
+    ("prefs", "fakes", "ready"),
+    [
+        (REFERER, {"id": "echo 0"}, True),
+        ('<string name="NotificationReferer">  </string>', {"id": "echo 0"}, False),
+        ('<string name="Other">synthetic</string>', {"id": "echo 0"}, False),
+        (None, {"id": "echo 0"}, False),
+        # Without root the app's data is hidden, so absence cannot be told from denial.
+        (REFERER, {"id": "echo 2000"}, None),
+        (None, {"id": "echo 2000"}, None),
+        (REFERER, {"id": "echo 0", "grep": "exit 2"}, None),
+    ],
+)
+def test_notification_reply_check_blocks_only_on_a_confirmed_absence(
+    tmp_path, monkeypatch, prefs, fakes, ready
+):
+    tools = tmp_path / "bin"
+    tools.mkdir()
+    for name, body in fakes.items():
+        (tools / name).write_text("#!/bin/sh\n" + body + "\n")
+        (tools / name).chmod(0o755)
+    path = tmp_path / "prefs.xml"
+    if prefs:
+        path.write_text(f"<map>\n    {prefs}\n</map>\n")
+    monkeypatch.setattr(iris, "KAKAO_PREFS", str(path))
+    monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{os.environ['PATH']}")
+
+    def device_shell(shell, command, check):
+        result = subprocess.run(["sh", "-c", command], capture_output=True, text=True, check=check)
+        return result.stdout.strip()
+
+    monkeypatch.setattr(iris.cli, "adb", device_shell)
+    assert iris.notification_reply_ready() is ready
 
 
 def test_running_current_build_is_reused_without_reinstalling(monkeypatch):
