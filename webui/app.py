@@ -108,9 +108,10 @@ def collector_status():
     with urlopen(request, timeout=3) as response:
         data = json.load(response)
         # Status only: this service does not proxy arbitrary API paths or messages.
+        bridge = data.get("bridge") or {}
         return {
             k: data[k] for k in ("state", "warnings", "coverage", "last_observation_received_at")
-        }
+        } | {"send_needs_notification": bridge.get("notification_reply_ready") is False}
 
 
 def create_app(

@@ -69,6 +69,7 @@ class Batch(StrictModel):
 
 class Heartbeat(StrictModel):
     supports_message_send: bool = False
+    notification_reply_ready: bool | None = None
     account_ref: UUID | None = None
     source: Literal["iris_db"] = "iris_db"
     database_id: Annotated[str, Field(max_length=128)] | None = None
