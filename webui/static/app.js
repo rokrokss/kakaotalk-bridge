@@ -407,7 +407,7 @@ async function initLogin() {
       $('passkey-remember').closest('label').hidden = !!passkeyEnrollment;
       $('passkey-help').textContent = passkeyEnrollment
         ? '기기나 비밀번호 관리자에 패스키를 저장하세요. 이 설정 링크는 한 번만 사용할 수 있습니다.'
-        : !info.owner_registered ? '서버에서 ./bridge passkey-login으로 발급한 설정 링크를 여세요.'
+        : !info.owner_registered ? '서버에서 kakaotalk-bridge passkey-login으로 발급한 설정 링크를 여세요.'
         : '기기, 휴대폰 또는 보안 키로 인증하세요.';
     }
     $('recovery-panel').hidden = loginMode !== 'local';
@@ -427,7 +427,7 @@ async function initLogin() {
     } else if (passkeyEnrollment && loginMode === 'passkey') {
       locked();
     } else {
-      $('pair-help').textContent = '관리자 비밀번호를 사용하거나 ./bridge admin --recovery로 브라우저를 연결하세요.';
+      $('pair-help').textContent = '관리자 비밀번호를 사용하거나 kakaotalk-bridge admin --recovery로 브라우저를 연결하세요.';
       try { unlocked(await api('session')); } catch { locked(); }
     }
   } catch (error) { feedback(error.message); }
@@ -502,7 +502,7 @@ $('owner-form').addEventListener('submit', async event => {
     $('owner-password').required = true;
     $('owner-password').autocomplete = 'current-password';
     $('owner-submit').textContent = '로그인';
-    $('pair-help').textContent = '관리자 비밀번호를 사용하거나 ./bridge admin --recovery로 브라우저를 연결하세요.';
+    $('pair-help').textContent = '관리자 비밀번호를 사용하거나 kakaotalk-bridge admin --recovery로 브라우저를 연결하세요.';
     unlocked(session);
   } catch (error) { feedback(error.message); }
 });

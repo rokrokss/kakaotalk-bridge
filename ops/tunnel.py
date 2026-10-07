@@ -78,7 +78,7 @@ def status():
 def configure(identity, key_file):
     key = credentials(identity, key_file)
     if not (cli.ROOT / "secrets/mcp_storage_key").is_file():
-        raise BridgeError("터널을 설정하기 전에 ./bridge up으로 Bridge를 설치하세요.")
+        raise BridgeError("터널을 설정하기 전에 kakaotalk-bridge up으로 Bridge를 설치하세요.")
     values = cli.read_env()
     private = cli.ROOT / "secrets/mcp_tunnel_authorization"
     if private.exists() and not re.fullmatch(
@@ -160,7 +160,7 @@ def configure(identity, key_file):
                     "up", "-d", "--no-build", "--force-recreate", "dot-tunnel", "openai-tunnel"
                 )
         except (RuntimeError, OSError):
-            raise BridgeError("터널 설정에 실패했고 이전 설정 복구도 끝나지 않았습니다. 설정을 확인하고 ./bridge doctor를 실행하세요. 인증 정보는 출력하지 않았습니다.") from None
+            raise BridgeError("터널 설정에 실패했고 이전 설정 복구도 끝나지 않았습니다. 설정을 확인하고 kakaotalk-bridge doctor를 실행하세요. 인증 정보는 출력하지 않았습니다.") from None
         # Revoked grants stay revoked; rollback never restores data access.
         raise BridgeError("터널 설정에 실패해 이전 설정으로 되돌렸습니다. 터널 ID를 바꾸던 중이었다면 관리 화면에서 이전 터널을 다시 승인하세요.") from None
     show_configured(identity)

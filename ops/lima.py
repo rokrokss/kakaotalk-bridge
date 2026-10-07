@@ -8,13 +8,12 @@ import secrets
 import shutil
 import socket
 import subprocess
-import sys
 import tarfile
 import tempfile
 import time
 from pathlib import Path
 
-from ops import access, cli
+from ops import access, cli, launcher
 from ops.errors import BridgeError
 
 
@@ -43,6 +42,7 @@ def package_source(destination):
         elif entry.is_file() and entry.name in {
             "bridge",
             "compose.yaml",
+            "LICENSE",
             "pyproject.toml",
             "uv.lock",
             "requirements.lock",
@@ -91,7 +91,7 @@ def mac(args):
         raise BridgeError("Lima를 먼저 설치하세요: brew install lima (Docker Desktop은 필요하지 않습니다).")
     config_path = cli.ROOT / ".bridge/mac.json"
     if not config_path.exists() and args.command != "install":
-        raise BridgeError("이 설치에는 관리되는 Lima VM이 없습니다. ./bridge up으로 먼저 설치하세요.")
+        raise BridgeError("이 설치에는 관리되는 Lima VM이 없습니다. kakaotalk-bridge up으로 먼저 설치하세요.")
     existing_config = config_path.exists()
     if existing_config:
         config = json.loads(config_path.read_text())
@@ -132,7 +132,7 @@ def mac(args):
                     if probe.connect_ex(("127.0.0.1", port)) == 0:
                         raise BridgeError(f"{port} 포트가 이미 사용 중입니다. 기존 서비스는 그대로 두고 비어 있는 포트를 --admin-port로 지정하세요.")
             if args.command != "install":
-                raise BridgeError("먼저 ./bridge up으로 설치하세요.")
+                raise BridgeError("먼저 kakaotalk-bridge up으로 설치하세요.")
             template = (
                 (cli.ROOT / "deploy/lima.yaml")
                 .read_text()
@@ -220,7 +220,10 @@ def mac(args):
                     directory + "/.bridge/stdio-client.json",
                 ],
                 input=json.dumps(
-                    {"command": sys.executable, "args": [str(cli.ROOT / "bridge"), "mcp"]}
+                    {
+                        "command": launcher.client_command()[0],
+                        "args": [*launcher.client_command()[1:], "mcp"],
+                    }
                 ),
             )
         invoke("setup-agent", args.agent_command)
@@ -332,7 +335,7 @@ def mac(args):
         if args.command == "start":
             instances = cli.run(["limactl", "list", "--format", "{{.Name}}"], capture=True).splitlines()
             if vm not in instances:
-                raise BridgeError("관리되는 Lima VM이 없습니다. ./bridge up을 실행하면 다시 만듭니다.")
+                raise BridgeError("관리되는 Lima VM이 없습니다. kakaotalk-bridge up을 실행하면 다시 만듭니다.")
             cli.progress("가상 머신 시작 중…")
             cli.run(["limactl", "start", "--tty=false", vm])
         options = [args.command]
@@ -340,4 +343,4 @@ def mac(args):
             options += ["--url", args.url]
         invoke(*options)
         if args.command == "connect":
-            print(args.url + "/mcp\n./bridge passkey-login으로 이 주소의 로그인을 설정하세요.")
+            print(args.url + "/mcp\nkakaotalk-bridge passkey-login으로 이 주소의 로그인을 설정하세요.")

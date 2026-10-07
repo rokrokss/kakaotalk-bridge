@@ -233,8 +233,8 @@ def main():
     agent = sub.add_parser("setup-agent", help="관리 화면의 연결 설정 서비스 관리")
     agent.add_argument("agent_command", choices=("install", "serve", "job"), metavar="작업")
     for name, description in (
-        ("install", "Bridge 설치 (보통 ./bridge up을 사용)"),
-        ("update", "같은 설치에서 이미지 업데이트 (보통 ./bridge upgrade를 사용)"),
+        ("install", "Bridge 설치 (보통 kakaotalk-bridge up을 사용)"),
+        ("update", "같은 설치에서 이미지 업데이트 (보통 kakaotalk-bridge upgrade를 사용)"),
     ):
         cmd = sub.add_parser(name, help=description)
         mode = cmd.add_mutually_exclusive_group()
@@ -266,7 +266,7 @@ def main():
     cmd.add_argument("--url", required=True, metavar="주소", help="공개 HTTPS 주소")
     cmd = sub.add_parser("import-apks", help="공식 카카오톡 APK 세트 가져오기")
     cmd.add_argument("folder", metavar="폴더", help="APK 파일이 있는 폴더")
-    cmd = sub.add_parser("restore", help="./bridge backup으로 만든 백업 복구")
+    cmd = sub.add_parser("restore", help="kakaotalk-bridge backup으로 만든 백업 복구")
     cmd.add_argument("file", metavar="백업파일", help=".kcs 백업 파일")
     cmd.add_argument("--key", required=True, metavar="키파일", help="백업할 때의 secrets/backup_key")
     cmd = sub.add_parser("backup", help="Android·수집 데이터·설정 전체를 암호화해 백업")

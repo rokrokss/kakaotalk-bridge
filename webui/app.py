@@ -151,7 +151,7 @@ def create_app(
     auth_mode = auth_mode or os.getenv("ADMIN_AUTH_MODE", "passkey")
     if auth_mode not in {"local", "passkey"}:
         raise ValueError(
-            "ADMIN_AUTH_MODE must be passkey or local; use ./bridge passkey-login to migrate"
+            "ADMIN_AUTH_MODE must be passkey or local; use kakaotalk-bridge passkey-login to migrate"
         )
     token = admin_token or secret("ADMIN_TOKEN")
     if len(token) < 32:
@@ -286,7 +286,7 @@ def create_app(
     def login(body: Login, request: Request, response: Response):
         if auth_mode != "local":
             raise HTTPException(
-                403, "패스키로 로그인하세요. 서버에서 복구하려면 ./bridge admin --recovery를 실행하세요."
+                403, "패스키로 로그인하세요. 서버에서 복구하려면 kakaotalk-bridge admin --recovery를 실행하세요."
             )
         with session_lock:
             now = time.monotonic()
@@ -512,7 +512,7 @@ def create_app(
             ) from None
         except (OSError, ValueError):
             raise HTTPException(
-                503, "연결 서비스를 사용할 수 없습니다. ./bridge start로 서비스를 다시 시작하세요."
+                503, "연결 서비스를 사용할 수 없습니다. kakaotalk-bridge start로 서비스를 다시 시작하세요."
             ) from None
 
     @app.get("/admin/api/connections")
@@ -530,7 +530,7 @@ def create_app(
             if method == "GET":
                 return {
                     "available": False,
-                    "message": "웹 설정 서비스를 사용할 수 없습니다. 설치된 컴퓨터에서 Bridge를 업데이트하고 ./bridge up 또는 ./bridge setup-agent install을 실행하세요. CLI 설정은 계속 사용할 수 있습니다.",
+                    "message": "웹 설정 서비스를 사용할 수 없습니다. 설치된 컴퓨터에서 Bridge를 업데이트하고 kakaotalk-bridge up 또는 kakaotalk-bridge setup-agent install을 실행하세요. CLI 설정은 계속 사용할 수 있습니다.",
                 }
             raise HTTPException(
                 503,

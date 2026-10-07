@@ -51,6 +51,6 @@
 
 ## 기존 설치 갱신
 
-`./bridge update`는 없는 `send_token`을 만든 뒤 현재 설치를 백업하고 이미지를 갱신합니다. 기존 인증키는 유지합니다. 수동 배포에서는 `scripts/init-secrets.sh`로 키를 준비하고 API·MCP·관리 화면·기기 이미지를 함께 갱신하세요. 이미지 선택과 백업 절차는 [운영 안내](operations.md)를 따르세요.
+`kakaotalk-bridge update`는 없는 `send_token`을 만든 뒤 현재 설치를 백업하고 이미지를 갱신합니다. 기존 인증키는 유지합니다. 수동 배포에서는 `scripts/init-secrets.sh`로 키를 준비하고 API·MCP·관리 화면·기기 이미지를 함께 갱신하세요. 이미지 선택과 백업 절차는 [운영 안내](operations.md)를 따르세요.
 
 Iris 수집기는 기기 안의 APK를 이미지에 포함된 v6으로 자동 교체합니다. 기존 등록·승인·앱 데이터는 유지되며 업데이트 실패로 되돌리면 이전 이미지의 Iris도 자동 설치됩니다. [Iris 자동 갱신](mcp-queries.md#updating-the-iris-component)을 참고하세요. 전송 권한 승인 후 AI 클라이언트의 도구 목록을 새로고침하세요.

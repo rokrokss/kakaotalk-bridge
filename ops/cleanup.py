@@ -8,7 +8,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from ops import cli, expose
+from ops import cli, expose, launcher
 from ops.errors import BridgeError
 
 SYSTEMD = Path("/etc/systemd/system")
@@ -37,6 +37,8 @@ def confirm(args, mac):
         print("- 설치 폴더의 설정, 키, 백업 (소스 코드는 유지)")
     else:
         print(f"- 설치 폴더 전체: {cli.ROOT}")
+    if launcher.serves_this():
+        print(f"- {launcher.path()} 명령")
     print("Docker, Lima, Tailscale 같은 공용 도구는 지우지 않습니다.")
     if args.yes:
         return
@@ -48,7 +50,7 @@ def confirm(args, mac):
 
 
 def remove_funnel():
-    """Turn off Tailscale Funnel only while it still serves exactly what ./bridge expose set."""
+    """Turn off Tailscale Funnel only while it still serves exactly what kakaotalk-bridge expose set."""
     record = cli.ROOT / ".bridge/expose.json"
     tailscale = expose.tailscale_binary()
     if not record.exists() or not tailscale:
@@ -156,11 +158,12 @@ def cleanup(args):
         remove_setup_service()
         remove_docker()
         remove_binder_config()
+    launcher.remove()
     # Last: the folder records the project, VM and Funnel a rerun needs, and an error
     # after this would recreate .bridge/logs and block a fresh install here.
     remove_files()
     print(
         "KakaoTalk Bridge를 삭제했습니다.\n"
-        "Docker, Lima, Tailscale, uv 같은 공용 도구는 그대로 있습니다. "
+        "Docker, Lima, Tailscale, uv 같은 공용 도구와 셸 설정은 그대로 있습니다. "
         "AI 앱에 추가한 연결과 Tailscale 관리 콘솔의 기기는 직접 지우세요."
     )

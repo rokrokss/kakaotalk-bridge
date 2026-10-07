@@ -33,7 +33,7 @@ Iris 메시지는 `source=iris_db`입니다. `database_ref`의 DB 메시지·대
 <a id="stdio-mcp"></a>
 ## stdio MCP
 
-수집 API가 실행 중일 때 **AI 연결 → AI 연결 설정 → 내 컴퓨터의 AI 앱**을 여세요. `./bridge mcp` 설정을 **설정 복사**로 복사할 수 있습니다. 원격 서버는 **다른 컴퓨터에서 SSH로 실행하나요?** 항목에 SSH 호스트 별칭 또는 `user@host`를 입력하세요. 해당 계정에 비대화형 SSH 인증과 Docker 접근 권한이 필요합니다. Linux에서는 `docker` 그룹에 속한 계정이면 되며, `./bridge mcp`는 다른 명령과 달리 sudo로 다시 실행하지 않습니다. CLI에서는 `./bridge setup-connection --method stdio`를 사용하세요.
+수집 API가 실행 중일 때 **AI 연결 → AI 연결 설정 → 내 컴퓨터의 AI 앱**을 여세요. `kakaotalk-bridge mcp` 설정을 **설정 복사**로 복사할 수 있습니다. 원격 서버는 **다른 컴퓨터에서 SSH로 실행하나요?** 항목에 SSH 호스트 별칭 또는 `user@host`를 입력하세요. 해당 계정에 비대화형 SSH 인증과 Docker 접근 권한이 필요합니다. Linux에서는 `docker` 그룹에 속한 계정이면 되며, `kakaotalk-bridge mcp`는 다른 명령과 달리 sudo로 다시 실행하지 않습니다. CLI에서는 `kakaotalk-bridge setup-connection --method stdio`를 사용하세요.
 
 클라이언트가 필요할 때 어댑터를 시작합니다. 공개 HTTPS, OAuth, Tailscale, OpenAI 터널은 필요하지 않습니다. 수집 상태를 요청하고 테스트 메시지를 찾아 연결을 확인하세요. 로컬 stdio 호출은 관리 화면의 **원격 AI 사용 기록**에 표시되지 않습니다.
 

@@ -30,7 +30,7 @@ Apple Silicon Mac 또는 Linux 서버의 터미널에서 실행하세요. [실�
 curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/install.sh | bash
 ```
 
-끝나면 브라우저에 관리 화면이 열립니다. 이미 설치했다면 같은 명령이 최신 릴리스로 업데이트합니다. 화면 없는 서버는 [SSH 설치](docs/quickstart.md#local-and-ssh-admin-access)를 보세요.
+끝나면 브라우저에 관리 화면이 열립니다. 이후에는 어느 폴더에서나 `kakaotalk-bridge doctor`처럼 명령을 실행합니다. 이미 설치했다면 같은 설치 명령이 설치 형태에 맞게 최신 버전으로 업데이트합니다. 화면 없는 서버는 [SSH 설치](docs/quickstart.md#local-and-ssh-admin-access)를 보세요.
 
 <p align="center">
   <picture>

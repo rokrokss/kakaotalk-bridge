@@ -23,6 +23,7 @@ gh attestation verify release.json --repo rokrokss/kakaotalk-bridge
 ./bridge passkey-login
 ```
 
+- 이 절차는 `up`을 쓰지 않으므로 `kakaotalk-bridge` 명령을 만들지 않습니다. 이 폴더의 `./bridge`로 실행하세요.
 - 필요한 것: Mac은 Lima(`brew install lima`), Linux는 Docker Engine·Compose v2·Bash·OpenSSL·Android Binder. 호스트 CLI는 Python 3.12 이상만 있으면 됩니다.
 - 매니페스트는 Linux arm64·amd64의 서버·기기·게이트웨이 이미지 다이제스트를 고정합니다.
 - Mac은 Lima VM 안에서 빌드하며 Docker Desktop이 필요 없습니다. 기본 VM 이름은 `kakaotalk-bridge`이고 `--vm`으로 바꿉니다.
@@ -44,29 +45,29 @@ gh attestation verify release.json --repo rokrokss/kakaotalk-bridge
 | 준비 | 내용 |
 | --- | --- |
 | 호스트 | 전용 amd64·arm64 호스트 또는 VM. CPU 4개·메모리 8 GB로 시작 권장(측정된 최소 사양 아님) |
-| 도구 | Docker Engine, Compose v2, Bash, OpenSSL, Android Binder(`binder_linux` 모듈 또는 binderfs). `./bridge up`은 Ubuntu·Debian에서 설치까지 하고, `./bridge install`은 확인만 함 |
+| 도구 | Docker Engine, Compose v2, Bash, OpenSSL, Android Binder(`binder_linux` 모듈 또는 binderfs). `kakaotalk-bridge up`은 Ubuntu·Debian에서 설치까지 하고, `kakaotalk-bridge install`은 확인만 함 |
 
 - `install`: Docker·Binder 확인 → 없는 `.env`와 인증 키 생성 → 이미지 다운로드(`--manifest`) 또는 빌드(`--source`) → 서비스 시작. 이미 설치된 폴더에서는 키와 컨테이너를 유지하고 서비스만 시작합니다.
 - `passkey-login`은 [관리 화면 등록 링크](#register-a-passkey-and-open-admin)를 발급합니다. 관리 화면의 AI 연결 설정에는 [웹 연결 설정 서비스](operations.md#web-connection-setup)가 필요합니다.
-- Linux에서 `./bridge`는 sudo로 다시 실행되며 설치 폴더를 root로 관리합니다. 코드와 `.env`(비밀값 없음)는 다른 계정도 읽을 수 있고 `secrets/`는 비공개입니다. AI 앱이 SSH 계정으로 실행하는 `./bridge mcp`만 예외이며, 그 계정은 `docker` 그룹에 속해야 합니다.
+- Linux에서 `kakaotalk-bridge`는 sudo로 다시 실행되며 설치 폴더를 root로 관리합니다. 코드와 `.env`(비밀값 없음)는 다른 계정도 읽을 수 있고 `secrets/`는 비공개입니다. AI 앱이 SSH 계정으로 실행하는 `kakaotalk-bridge mcp`만 예외이며, 그 계정은 `docker` 그룹에 속해야 합니다.
 
 | 설정 | 방법 |
 | --- | --- |
 | Android 네트워크 | `DEVICE_SUBNET`(기본 `172.29.87.0/24`)이 LAN·VPN·다른 Docker 네트워크와 겹치면, 첫 설치 전에 `.env`에 `DEVICE_SUBNET`과 그 안의 `DEVICE_IP_RANGE`(기본 `172.29.87.128/25`)를 함께 지정. 다른 기본값은 `.env.example` |
 | arm64 Android 이미지 | `REDROID_IMAGE`를 지정하지 않으면 `install`이 64비트 전용 이미지를 고름 |
-| 카카오톡 APK | `./bridge import-apks /path/to/apk-folder`. 버전·서명이 같은 전체 분할 세트여야 하고 redroid ABI를 지원해야 함. 다른 세트가 이미 있으면 섞지 않고 중단 |
+| 카카오톡 APK | `kakaotalk-bridge import-apks /path/to/apk-folder`. 버전·서명이 같은 전체 분할 세트여야 하고 redroid ABI를 지원해야 함. 다른 세트가 이미 있으면 섞지 않고 중단 |
 | arm64에서 소스 빌드 | Android 빌드 도구가 amd64용이라 amd64 에뮬레이션이 필요. 없으면 `install --source`가 권한 있는 컨테이너로 QEMU를 등록 |
 
 ### 직접 만든 Lima VM (Mac)
 
-`./bridge`는 자신이 만든 전용 VM(기본 `kakaotalk-bridge`, 설치 경로 `/srv/kakaotalk-bridge`)만 관리합니다. `deploy/lima.yaml`(Ubuntu 24.04, CPU 6개, 메모리 8 GiB, 디스크 40 GiB, Mac 홈 폴더 미공유, 부팅 때 binderfs 준비)로 직접 만든 VM에서는 VM 안의 설치 폴더에서 위 Linux 명령을 쓰세요.
+`kakaotalk-bridge`는 자신이 만든 전용 VM(기본 `kakaotalk-bridge`, 설치 경로 `/srv/kakaotalk-bridge`)만 관리합니다. `deploy/lima.yaml`(Ubuntu 24.04, CPU 6개, 메모리 8 GiB, 디스크 40 GiB, Mac 홈 폴더 미공유, 부팅 때 binderfs 준비)로 직접 만든 VM에서는 VM 안의 설치 폴더에서 위 Linux 명령을 쓰세요.
 
 ```bash
 scripts/lima-compose.sh ps   # docker compose inside the VM (reads LIMA_INSTANCE, BRIDGE_DIR)
 scripts/dot-tunnel.sh        # Forward Mac 127.0.0.1:18788 to the VM's MCP ingress (18787)
 ```
 
-- `lima-compose.sh`는 `deploy/compose.lima.yaml`(Apple Silicon용 64비트 Android 14 이미지 고정, binderfs 기기 직접 연결)을 함께 적용합니다. `.bridge/`의 Compose 설정은 적용하지 않으므로 서비스 시작·중지는 VM 안의 `./bridge`로 하세요.
+- `lima-compose.sh`는 `deploy/compose.lima.yaml`(Apple Silicon용 64비트 Android 14 이미지 고정, binderfs 기기 직접 연결)을 함께 적용합니다. `.bridge/`의 Compose 설정은 적용하지 않으므로 서비스 시작·중지는 VM 안의 `kakaotalk-bridge`로 하세요.
 - 공개 HTTPS 구성은 [Mac의 Lima 배포](dot-plugin.md#deploy-in-lima-on-a-mac)를 보세요.
 
 > Mac이 잠들면 수집과 외부 접속이 멈출 수 있습니다. `limactl delete`와 `docker compose down -v`는 로그인 상태와 데이터를 지웁니다.
@@ -75,10 +76,10 @@ scripts/dot-tunnel.sh        # Forward Mac 127.0.0.1:18788 to the VM's MCP ingre
 ## 패스키와 관리 화면
 
 ```bash
-./bridge passkey-login            # One-time registration link
-./bridge admin                    # Open the saved admin address
-./bridge passkey-login --enroll   # Lost every passkey: new one-time enrollment link
-./bridge admin --recovery         # One-time link for a 30-minute emergency session
+kakaotalk-bridge passkey-login            # One-time registration link
+kakaotalk-bridge admin                    # Open the saved admin address
+kakaotalk-bridge passkey-login --enroll   # Lost every passkey: new one-time enrollment link
+kakaotalk-bridge admin --recovery         # One-time link for a 30-minute emergency session
 ```
 
 - 등록 링크는 localhost 주소이며, 기존 HTTPS 관리 주소가 있으면 그 주소를 씁니다. 원격 서버는 [SSH 포워딩](quickstart.md#local-and-ssh-admin-access)을 쓰세요. 링크는 비공개로 두고 **패스키 만들기**로 기기나 비밀번호 관리자에 저장하세요. [패스키 설정·복구](passkeys.md)
@@ -89,7 +90,7 @@ scripts/dot-tunnel.sh        # Forward Mac 127.0.0.1:18788 to the VM's MCP ingre
 **공용 HTTPS (Tailscale Funnel)**
 
 ```bash
-./bridge setup-connection --method tailscale   # Funnel with a trusted certificate
+kakaotalk-bridge setup-connection --method tailscale   # Funnel with a trusted certificate
 ```
 
 | 주소 | 접근 |
@@ -102,8 +103,8 @@ scripts/dot-tunnel.sh        # Forward Mac 127.0.0.1:18788 to the VM's MCP ingre
 - `expose`는 다른 앱의 Tailscale 경로를 덮어쓰지 않습니다. 직접 만든 경로라면 443 Funnel을 공용 `dot-ingress` HTTP 포트(기본 `127.0.0.1:18787`, 직접 만든 Lima VM은 18788)에 연결한 뒤 실행하세요.
 
 ```bash
-./bridge connect --url https://<node>.ts.net
-./bridge passkey-login --url https://<node>.ts.net --public-url https://<node>.ts.net
+kakaotalk-bridge connect --url https://<node>.ts.net
+kakaotalk-bridge passkey-login --url https://<node>.ts.net --public-url https://<node>.ts.net
 ```
 
 - 기존 8443 경로는 전체 구성이 Bridge 것인지 확인한 뒤에만 지웁니다.
@@ -129,7 +130,7 @@ scripts/dot-tunnel.sh        # Forward Mac 127.0.0.1:18788 to the VM's MCP ingre
 Aurora를 쓸 수 없다면 휴대폰의 공식 APK 전체 세트를 가져오세요.
 
 ```bash
-./bridge import-apks /path/to/apk-folder
+kakaotalk-bridge import-apks /path/to/apk-folder
 ```
 
 - 자동 준비나 **수집 구성 요소 설치**에서 검증하고 설치합니다. 이전 세트와 섞이지 않게 막습니다.
@@ -141,8 +142,8 @@ Aurora를 쓸 수 없다면 휴대폰의 공식 APK 전체 세트를 가져오�
 관리 화면의 **AI 연결 → AI 연결 설정**을 쓰거나 터미널에서 설정합니다.
 
 ```bash
-./bridge setup-connection                  # Choose interactively
-./bridge setup-connection --method stdio   # Local app: copy the ./bridge mcp client config
+kakaotalk-bridge setup-connection                  # Choose interactively
+kakaotalk-bridge setup-connection --method stdio   # Local app: copy the kakaotalk-bridge mcp client config
 ```
 
 | 방식 | 필요한 것 | 승인 |
@@ -162,10 +163,10 @@ Aurora를 쓸 수 없다면 휴대폰의 공식 APK 전체 세트를 가져오�
 ## 유지 관리와 복구
 
 ```bash
-./bridge doctor
-./bridge backup
-./bridge upgrade            # Release installs
-./bridge update --source    # Git checkouts, after git pull
+kakaotalk-bridge doctor
+kakaotalk-bridge backup
+kakaotalk-bridge upgrade            # Release installs
+kakaotalk-bridge update --source    # Git checkouts, after git pull
 ```
 
 > **`secrets/backup_key`는 백업과 따로 보관하세요.** 암호화된 백업 안의 키로는 그 백업을 열 수 없습니다.
@@ -181,10 +182,10 @@ limactl shell --workdir=/ kakaotalk-bridge sudo cat /srv/kakaotalk-bridge/secret
 복구 (같은 코드 릴리스로 초기화한 설치에서):
 
 ```bash
-./bridge stop
-./bridge restore /path/to/snapshot.kcs --key /path/to/backup_key
-./bridge start
-./bridge admin
+kakaotalk-bridge stop
+kakaotalk-bridge restore /path/to/snapshot.kcs --key /path/to/backup_key
+kakaotalk-bridge start
+kakaotalk-bridge admin
 ```
 
 - `backup`은 잠시 스택을 멈추고 AES-256-GCM으로 오프라인 백업한 뒤, 실행 중이던 서비스를 다시 시작합니다. 볼륨 7개, `.env`, `secrets/`와 Android 파일의 소유권·권한·링크·확장 속성을 보존합니다.

@@ -158,7 +158,7 @@ def restore(path, key):
     if not archive.is_file() or not key.is_file():
         raise BridgeError("백업 파일과 복구 키 파일을 모두 지정하세요.")
     if cli.compose("ps", "--status", "running", "--services", capture=True):
-        raise BridgeError("복구하기 전에 ./bridge stop으로 서비스를 중지하세요. 기존 데이터는 보존됩니다.")
+        raise BridgeError("복구하기 전에 kakaotalk-bridge stop으로 서비스를 중지하세요. 기존 데이터는 보존됩니다.")
     suffix = "restore-" + secrets.token_hex(6)
     names = {
         name: cli.read_env().get("COMPOSE_PROJECT_NAME", "kakaotalk-bridge")
@@ -196,7 +196,7 @@ def restore(path, key):
         else:
             (cli.ROOT / ".bridge/tunnel.json").unlink(missing_ok=True)
         cli.notice(
-            "새 볼륨으로 복구했습니다. 이전 볼륨과 설정은 유지됩니다. ./bridge start를 실행하고 두 기기의 로그인을 확인하세요. 외부 이벤트 구독은 다시 만들어야 합니다."
+            "새 볼륨으로 복구했습니다. 이전 볼륨과 설정은 유지됩니다. kakaotalk-bridge start를 실행하고 두 기기의 로그인을 확인하세요. 외부 이벤트 구독은 다시 만들어야 합니다."
         )
     finally:
         with contextlib.suppress(RuntimeError, OSError):

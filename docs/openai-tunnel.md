@@ -26,7 +26,7 @@ OpenAI ↔ 서버에서 연결한 터널 클라이언트 → 내부 MCP → 수�
 <a id="add-a-tunnel-to-an-existing-installation"></a>
 ## 기존 설치에 터널 추가
 
-기존 설치는 [업데이트](operations.md#update)한 뒤 관리 화면에서 추가하세요. 설치 명령, `./bridge upgrade`, `./bridge up`이 웹 설정 서비스를 준비하며 기존 관리 주소는 유지됩니다.
+기존 설치는 [업데이트](operations.md#update)한 뒤 관리 화면에서 추가하세요. 설치 명령, `kakaotalk-bridge upgrade`, `kakaotalk-bridge up`이 웹 설정 서비스를 준비하며 기존 관리 주소는 유지됩니다.
 
 1. **AI 연결 → AI 연결 설정**을 여세요.
 2. **ChatGPT**를 고르고 **개인 터널**(기본 선택)에 ID와 실행용 키를 입력하세요. 같은 ID의 저장된 키를 재사용하려면 비워 두고 교체하려면 새 키를 입력하세요.
@@ -39,10 +39,10 @@ OpenAI ↔ 서버에서 연결한 터널 클라이언트 → 내부 MCP → 수�
 <a id="terminal-alternative"></a>
 ### 터미널에서 설정
 
-설치 폴더에서 `./bridge setup-connection --method openai-tunnel`을 실행하세요. 인증 정보를 입력받고 서비스를 시작한 뒤 관리 화면을 엽니다. 웹 폼과 달리 CLI는 **AI 연결 → 개인 터널 허용**으로 별도 승인해야 합니다. 이후 같은 클라이언트 설정과 검증을 따르세요.
+`kakaotalk-bridge setup-connection --method openai-tunnel`을 실행하세요. 인증 정보를 입력받고 서비스를 시작한 뒤 관리 화면을 엽니다. 웹 폼과 달리 CLI는 **AI 연결 → 개인 터널 허용**으로 별도 승인해야 합니다. 이후 같은 클라이언트 설정과 검증을 따르세요.
 
 ```bash
-./bridge tunnel configure \
+kakaotalk-bridge tunnel configure \
   --tunnel-id tunnel_REPLACE_WITH_YOUR_32_CHARACTER_ID \
   --api-key-file /private/path/openai-runtime-key
 ```
@@ -62,20 +62,20 @@ OpenAI ↔ 서버에서 연결한 터널 클라이언트 → 내부 MCP → 수�
 ## 외부 연결 없이 새로 설치
 
 ```bash
-./bridge up
+kakaotalk-bridge up
 ```
 
-Tailscale·OpenAI 터널 없이 로컬 관리 화면과 수집을 준비합니다. 나중에 웹 화면이나 `./bridge setup-connection --method openai-tunnel`로 추가하세요. 원격 서버에서는 `--no-browser`와 [SSH 포워딩](quickstart.md#local-and-ssh-admin-access)을 사용하세요.
+Tailscale·OpenAI 터널 없이 로컬 관리 화면과 수집을 준비합니다. 나중에 웹 화면이나 `kakaotalk-bridge setup-connection --method openai-tunnel`로 추가하세요. 원격 서버에서는 `--no-browser`와 [SSH 포워딩](quickstart.md#local-and-ssh-admin-access)을 사용하세요.
 
 기존 인증 정보로 비대화형 설정을 하려면 다음을 실행하세요.
 
 ```bash
-./bridge up --connection openai-tunnel \
+kakaotalk-bridge up --connection openai-tunnel \
   --tunnel-id tunnel_REPLACE_WITH_YOUR_32_CHARACTER_ID \
   --api-key-file /private/path/openai-runtime-key
 ```
 
-신뢰할 수 있는 비공개 관리 프록시가 있다면 선택적으로 `--admin-url https://admin.example.com`을 지정하고 관리 게이트웨이나 기존 공용 진입점으로 전달하세요. 로컬 관리 구성의 터널은 공개 HTTP MCP 진입점을 시작하지 않습니다. 기존 HTTPS 관리 경로는 유지합니다. 이후 `./bridge up`은 저장된 인증 정보와 관리 주소를 재사용합니다. 공개 HTTPS/OAuth는 **AI 연결 설정**이나 `./bridge setup-connection`으로 별도 추가할 수 있습니다.
+신뢰할 수 있는 비공개 관리 프록시가 있다면 선택적으로 `--admin-url https://admin.example.com`을 지정하고 관리 게이트웨이나 기존 공용 진입점으로 전달하세요. 로컬 관리 구성의 터널은 공개 HTTP MCP 진입점을 시작하지 않습니다. 기존 HTTPS 관리 경로는 유지합니다. 이후 `kakaotalk-bridge up`은 저장된 인증 정보와 관리 주소를 재사용합니다. 공개 HTTPS/OAuth는 **AI 연결 설정**이나 `kakaotalk-bridge setup-connection`으로 별도 추가할 수 있습니다.
 
 <a id="check-revoke-and-restore"></a>
 ## 점검·취소·복구
@@ -83,9 +83,9 @@ Tailscale·OpenAI 터널 없이 로컬 관리 화면과 수집을 준비합니�
 **서버 연결 확인**은 서비스를 점검하고 **연결 새로고침**은 승인·활동을 가져옵니다. **마지막 도구 호출 성공**은 과거 기록이며 현재 연결 가능 여부를 뜻하지 않습니다. 목록 조회·실패 호출은 기록하지 않고 이전 버전의 호출은 소급하지 않습니다.
 
 ```bash
-./bridge tunnel status     # Configured ID and client readiness; no keys
-./bridge doctor            # Service health and missing secret files
-./bridge tunnel disable    # Revoke grant and stop tunnel services
+kakaotalk-bridge tunnel status     # Configured ID and client readiness; no keys
+kakaotalk-bridge doctor            # Service health and missing secret files
+kakaotalk-bridge tunnel disable    # Revoke grant and stop tunnel services
 ```
 
 **터널 연결 해제**는 데이터 접근을 즉시 취소하지만 연결 클라이언트는 계속 실행됩니다. 클라이언트 준비 완료가 소유자 승인을 뜻하지는 않습니다. 다시 허용하면 새 권한을 만듭니다. CLI 비활성화는 서비스도 중지하며 기존 공개 OAuth는 유지합니다. 어느 방법도 OpenAI의 터널 자체를 삭제하지 않습니다.

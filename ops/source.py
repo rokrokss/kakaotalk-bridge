@@ -75,27 +75,32 @@ def apply(root, archive_path):
     state = root / ".bridge"
     state.mkdir(mode=0o700, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="source-", dir=state))
-    incoming, previous = scratch / "incoming", scratch / "previous"
-    incoming.mkdir()
-    previous.mkdir()
-    with tarfile.open(archive_path, "r:gz") as archive:
-        for member in archive.getmembers():
-            parts = PurePosixPath(member.name).parts
-            if (
-                not parts
-                or parts[0] in PERSISTENT
-                or parts[0].startswith(".env")
-                or ".." in parts
-                or member.name.startswith("/")
-                or not (member.isfile() or member.isdir())
-            ):
-                raise BridgeError("설치 파일에 허용되지 않는 경로가 있어 중단했습니다.")
-        archive.extractall(incoming, filter="data")
-    names = {p.name for p in incoming.iterdir()} | {
-        name for name in CODE_DIRS if (root / name).exists()
-    }
-    if not (incoming / "ops/cli.py").exists() or not (incoming / "compose.yaml").exists():
-        raise BridgeError("설치 파일이 완전하지 않습니다.")
+    try:
+        incoming, previous = scratch / "incoming", scratch / "previous"
+        incoming.mkdir()
+        previous.mkdir()
+        with tarfile.open(archive_path, "r:gz") as archive:
+            for member in archive.getmembers():
+                parts = PurePosixPath(member.name).parts
+                if (
+                    not parts
+                    or parts[0] in PERSISTENT
+                    or parts[0].startswith(".env")
+                    or ".." in parts
+                    or member.name.startswith("/")
+                    or not (member.isfile() or member.isdir())
+                ):
+                    raise BridgeError("설치 파일에 허용되지 않는 경로가 있어 중단했습니다.")
+            archive.extractall(incoming, filter="data")
+        names = {p.name for p in incoming.iterdir()} | {
+            name for name in CODE_DIRS if (root / name).exists()
+        }
+        if not (incoming / "ops/cli.py").exists() or not (incoming / "compose.yaml").exists():
+            raise BridgeError("설치 파일이 완전하지 않습니다.")
+    except BaseException:
+        # Nothing was swapped yet; leave no scratch folder behind.
+        shutil.rmtree(scratch)
+        raise
     journal = state / "source-journal.json"
     descriptor, temporary = tempfile.mkstemp(dir=state)
     with os.fdopen(descriptor, "w") as output:

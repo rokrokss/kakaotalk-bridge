@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install or upgrade a release, then open setup. Source checkouts keep their own code.
+# Install or upgrade KakaoTalk Bridge, then open setup. Git checkouts keep their own code.
 set -euo pipefail
 umask 077
 
@@ -46,93 +46,18 @@ bridge_run() {
   fi
 }
 
-# This launcher lives in the downloaded installer so already-published releases
-# can upgrade too. Exec the new CLI after upgrade instead of reusing old imports.
-bridge_launch() {
-  local bridge_entry='
-import json
-import os
-import subprocess
-import sys
-from pathlib import Path
-
-root = Path(sys.argv[1]).resolve()
-version, arguments = sys.argv[2], sys.argv[3:]
-command = [sys.executable, str(root / "bridge")]
-marker = ".bridge/mac.json" if sys.platform == "darwin" else ".bridge/installed"
-installed = (root / marker).is_file()
-progress = root / ".bridge/onboarding.json"
-if progress.is_file():
-    try:
-        record = json.loads(progress.read_text())
-        installed = installed and isinstance(record, dict) and record.get("state") == "ready"
-    except (ValueError, OSError):
-        installed = False
-elif sys.platform == "darwin":
-    # mac.json is written before the VM finishes its first installation.
-    installed = False
-
-if (root / marker).is_file() and (root / "release.json").is_file() and not (root / ".git").exists():
-    sys.path.insert(0, str(root))
-    from ops.cli import KoreanArgumentParser
-    from ops.onboarding import add_arguments
-
-    parser = KoreanArgumentParser(prog="bridge up")
-    add_arguments(parser)
-    options = parser.parse_args(arguments)
-    if (installed or sys.platform == "darwin") and not (
-        options.plan or options.source or options.manifest
-    ):
-        try:
-            # Validate all setup options before changing the installed version.
-            subprocess.run([*command, "up", "--plan", *arguments],
-                           stdout=subprocess.DEVNULL, check=True)
-            if sys.platform == "darwin":
-                from ops.onboarding import prepare_mac
-                from ops.setup_output import SetupOutput
-
-                # Dependency installers write to the private log, not the terminal.
-                with SetupOutput():
-                    prepare_mac(options)
-                config = json.loads((root / marker).read_text())
-                instances = subprocess.run(
-                    ["limactl", "list", "--format", "{{.Name}}"],
-                    capture_output=True, text=True, check=True,
-                ).stdout.splitlines()
-                if config["vm"] not in instances:
-                    # Published versions of up can create a default Lima VM when
-                    # mac.json outlives the guest. Their install command already
-                    # uses our template and saved ports, so repair before up.
-                    print("기존 VM이 없어 Bridge 템플릿으로 다시 준비합니다.", flush=True)
-                    subprocess.run(
-                        [*command, "install", "--manifest", str(root / "release.json")],
-                        check=True,
-                    )
-                    installed = False
-            if installed:
-                print("릴리스 업데이트 확인 중…", flush=True)
-                subprocess.run([*command, "upgrade", "--version", version], check=True)
-        except subprocess.CalledProcessError as error:
-            sys.exit(error.returncode)
-        except Exception as error:
-            from ops.setup_output import report_error
-
-            report_error(error)
-            sys.exit(1)
-
-os.execv(sys.executable, [*command, "up", *arguments])
-'
-  # Never let a child consume the rest of a curl-piped installer. Use the terminal
-  # for sudo/interactive prompts when available, otherwise provide EOF.
-  # Linux installs are managed as root, so elevate once for the whole run.
+# Run a child with the terminal for sudo/interactive prompts when available, and never
+# let it consume the rest of a curl-piped installer. Linux installs are managed as root,
+# so elevate once for the whole run.
+bridge_attached() {
   local bridge_elevate=''
   if [[ "$(uname -s)" == Linux && "$(id -u)" != 0 ]]; then bridge_elevate=sudo; fi
   if [[ ! -t 0 && -r /dev/tty ]] && ( : </dev/tty ) 2>/dev/null; then
-    exec $bridge_elevate "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}" </dev/tty
+    $bridge_elevate "$@" </dev/tty
   elif [[ -t 0 ]]; then
-    exec $bridge_elevate "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}"
+    $bridge_elevate "$@"
   else
-    exec $bridge_elevate "$bridge_python" -c "$bridge_entry" "$1" "$bridge_version" "${@:2}" </dev/null
+    $bridge_elevate "$@" </dev/null
   fi
 }
 
@@ -160,30 +85,38 @@ if [[ -z "$bridge_python" ]]; then
   echo '설치 실행 환경 준비 완료'
 fi
 
+bridge_home="$bridge_install_home"
+bridge_helper=''
 if [[ -f "${BASH_SOURCE[0]:-}" ]]; then
   bridge_checkout="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  if [[ -f "$bridge_checkout/ops/onboarding.py" && -z "${BRIDGE_HOME:-}" ]]; then
-    bridge_launch "$bridge_checkout" "$@"
+  if [[ -f "$bridge_checkout/ops/releases.py" ]]; then
+    # A local installer uses its own helper and, without BRIDGE_HOME, manages its folder.
+    bridge_helper="$bridge_checkout/ops/releases.py"
+    if [[ -z "${BRIDGE_HOME:-}" ]]; then bridge_home="$bridge_checkout"; fi
   fi
 fi
 
-if [[ ! -f "$bridge_install_home/bridge" ]]; then
-  echo 'KakaoTalk Bridge 다운로드 및 설치 중…'
-  bridge_tmp="$(mktemp -d)"
-  trap 'rm -rf "$bridge_tmp"' EXIT
-  # The bootstrap helper, like this script, is trusted from the official HTTPS
-  # repository. It verifies the release bundle against GitHub's asset SHA-256.
+if [[ -z "$bridge_helper" ]]; then
+  bridge_helper_dir="$(mktemp -d)"
+  # Cleanup never changes the installer's result.
+  trap 'rm -rf "$bridge_helper_dir" || true' EXIT
+  # The helper, like this script, is trusted from the official HTTPS repository. It
+  # verifies release bundles against GitHub's asset SHA-256, and it upgrades existing
+  # installations with the new version's code before any installed code runs.
   bridge_run curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
     https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/ops/releases.py \
-    -o "$bridge_tmp/releases.py"
+    -o "$bridge_helper_dir/releases.py"
+  bridge_helper="$bridge_helper_dir/releases.py"
+fi
+
+if [[ ! -f "$bridge_home/bridge" ]]; then
+  echo 'KakaoTalk Bridge 다운로드 및 설치 중…'
   if [[ "$bridge_source" == 1 ]]; then
-    bridge_run "$bridge_python" "$bridge_tmp/releases.py" "$bridge_install_home" "$bridge_version" --source
+    bridge_run "$bridge_python" "$bridge_helper" download "$bridge_home" "$bridge_version" --source
   else
-    bridge_run "$bridge_python" "$bridge_tmp/releases.py" "$bridge_install_home" "$bridge_version"
+    bridge_run "$bridge_python" "$bridge_helper" download "$bridge_home" "$bridge_version"
   fi
-  rm -rf "$bridge_tmp"
-  trap - EXIT
   echo 'KakaoTalk Bridge 다운로드 완료'
 fi
-echo "Bridge 설치 위치: $bridge_install_home"
-bridge_launch "$bridge_install_home" "$@"
+echo "Bridge 설치 위치: $bridge_home"
+bridge_attached "$bridge_python" "$bridge_helper" launch "$bridge_home" "$bridge_version" -- "$@"

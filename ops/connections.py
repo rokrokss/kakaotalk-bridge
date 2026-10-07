@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ops import access, cli, onboarding, tunnel
+from ops import access, cli, launcher, onboarding, tunnel
 from ops.errors import BridgeError
 
 METHODS = ("none", "stdio", "https", "tailscale", "openai-tunnel")
@@ -51,15 +51,13 @@ def setup(args):
         print("연결을 변경하지 않았습니다. AI 연결 없이도 수집과 관리 화면을 사용할 수 있습니다.")
         return
     if method == "stdio":
+        executable, *arguments = launcher.client_command()
         print("로컬 AI 클라이언트의 MCP 설정에 아래 서버를 추가하세요:")
         print(
             json.dumps(
                 {
                     "mcpServers": {
-                        "kakaotalk": {
-                            "command": sys.executable,
-                            "args": [str(cli.ROOT / "bridge"), "mcp"],
-                        }
+                        "kakaotalk": {"command": executable, "args": [*arguments, "mcp"]}
                     }
                 },
                 indent=2,
@@ -67,7 +65,7 @@ def setup(args):
         )
         print(
             "클라이언트가 설치된 Docker Engine 또는 전용 Lima VM에 접근할 수 있어야 합니다.\n"
-            "원격 서버에서는 SSH로 같은 bridge mcp 명령을 실행하세요(TTY 없이 실행)."
+            "원격 서버에서는 SSH로 같은 kakaotalk-bridge mcp 명령을 실행하세요(TTY 없이 실행)."
         )
         return
     with tempfile.TemporaryDirectory(prefix="bridge-connection-") as folder:
@@ -99,7 +97,7 @@ def setup(args):
         with onboarding.installation_lock():
             runtime = onboarding.Runtime()
             if not runtime.installed():
-                raise BridgeError("AI 연결을 추가하기 전에 ./bridge up으로 Bridge를 먼저 설치하세요.")
+                raise BridgeError("AI 연결을 추가하기 전에 kakaotalk-bridge up으로 Bridge를 먼저 설치하세요.")
             runtime.call("start")
             if method == "tailscale":
                 prepare = (

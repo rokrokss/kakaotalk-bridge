@@ -2,12 +2,16 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import tarfile
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 
 from ops import cli, onboarding, releases, setup_output
+
+SOURCE = (Path(__file__).resolve().parents[1] / "ops/source.py").read_text()
 
 
 def manifest(version="v0.1.0"):
@@ -25,6 +29,7 @@ def bundle(files=None):
     files = files or {
         "bridge": "# release launcher",
         "ops/cli.py": "# release cli",
+        "ops/source.py": SOURCE,
         "compose.yaml": "services: {}",
         "release.json": json.dumps(manifest()),
     }
@@ -201,10 +206,12 @@ def test_headless_and_ssh_never_launch_a_host_browser(tmp_path, monkeypatch, ssh
 def test_upgrade_switches_source_and_restores_it_on_update_failure(tmp_path, monkeypatch, failed):
     monkeypatch.setattr(cli, "ROOT", tmp_path)
     monkeypatch.setattr(releases.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(releases, "vm_missing", lambda root: False)
     (tmp_path / "ops").mkdir()
     (tmp_path / "ops/cli.py").write_text("old code")
     (tmp_path / "bridge").write_text("old launcher")
     (tmp_path / "compose.yaml").write_text("old compose")
+    (tmp_path / "release.json").write_text("old release")
     (tmp_path / ".bridge").mkdir()
     (tmp_path / ".bridge/installed").write_text("1")
     (tmp_path / ".bridge/mac.json").write_text("{}")
@@ -227,7 +234,7 @@ def test_upgrade_switches_source_and_restores_it_on_update_failure(tmp_path, mon
         with pytest.raises(RuntimeError, match="health check"):
             releases.upgrade(argparse.Namespace(version="latest"))
         assert commands == ["update", "start"]
-        assert not (tmp_path / "release.json").exists()
+        assert (tmp_path / "release.json").read_text() == "old release"
     else:
         releases.upgrade(argparse.Namespace(version="latest"))
         assert commands == ["update", "setup-agent"]
@@ -256,3 +263,166 @@ def test_upgrade_current_release_preserves_code_and_never_redeploys(tmp_path, mo
     assert (tmp_path / ".env").read_text() == "existing settings"
     assert "이미 v0.1.0 릴리스를 사용하고 있습니다." in capsys.readouterr().out
     assert not (tmp_path / ".bridge/previous-source").exists()
+
+
+def source_bundle(top="kakaotalk-bridge-v0.1.0"):
+    return bundle(
+        {
+            f"{top}/bridge": "# source launcher",
+            f"{top}/ops/cli.py": "# source cli",
+            f"{top}/ops/source.py": SOURCE,
+            f"{top}/compose.yaml": "services: {}",
+            f"{top}/.env.example": "COMPOSE_PROJECT_NAME=kakaotalk-bridge",
+        }
+    )
+
+
+def test_source_download_follows_the_latest_release_tag_and_records_it(tmp_path, monkeypatch):
+    _, calls = fake_download(monkeypatch, source_bundle())
+    target = tmp_path / "source bridge"
+    assert releases.download(target, source=True) == "v0.1.0"
+    assert calls == [
+        f"https://api.github.com/repos/{releases.REPOSITORY}/releases/latest",
+        f"https://codeload.github.com/{releases.REPOSITORY}/tar.gz/v0.1.0",
+    ]
+    assert (target / "ops/cli.py").read_text() == "# source cli"
+    assert json.loads((target / releases.SOURCE_RECORD).read_text()) == {"version": "v0.1.0"}
+    assert not (target / "release.json").exists()
+
+
+def test_named_source_ref_skips_the_release_lookup(tmp_path, monkeypatch):
+    _, calls = fake_download(monkeypatch, source_bundle("kakaotalk-bridge-main"))
+    releases.download(tmp_path / "bridge", "main", source=True)
+    assert calls == [f"https://codeload.github.com/{releases.REPOSITORY}/tar.gz/main"]
+
+
+def test_installations_are_classified_by_their_own_markers(tmp_path):
+    assert releases.channel(tmp_path) == "source"
+    (tmp_path / "release.json").write_text("{}")
+    assert releases.channel(tmp_path) == "release"
+    (tmp_path / ".git").write_text("gitdir: elsewhere")
+    assert releases.channel(tmp_path) == "git"
+
+
+@pytest.mark.parametrize(
+    "arguments,expected",
+    [
+        (["--plan"], True),
+        (["--pla"], True),
+        (["--pl"], True),
+        (["--so"], True),
+        (["--manifest=release.json"], True),
+        (["--manifest", "release.json"], True),
+        (["-h"], True),
+        (["--hel"], True),
+        (["--p"], False),
+        ([], False),
+        (["--no-browser"], False),
+        (["--admin-port", "80"], False),
+        (["--apk-folder", "/a path/apks"], False),
+    ],
+)
+def test_setup_modes_and_help_run_the_installation_as_is(arguments, expected):
+    assert releases.as_is(arguments) is expected
+
+
+def installed_source(root):
+    (root / "bridge").write_text("old launcher")
+    (root / "ops").mkdir()
+    (root / "ops/cli.py").write_text("old code")
+    (root / "compose.yaml").write_text("old compose")
+    (root / ".bridge").mkdir()
+    (root / ".bridge/installed").write_text("1")
+    (root / "secrets").mkdir()
+    (root / "secrets/bridge.jks").write_text("personal key")
+
+
+def recorder(root, fail=None):
+    calls = []
+
+    def bridge(*arguments, quiet=False):
+        calls.append(arguments)
+        # Everything after the swap must run the new code, never the installed one.
+        assert (root / "ops/cli.py").read_text() != "old code" or arguments == ("start",)
+        if arguments[0] == fail:
+            raise RuntimeError(f"{fail} failed")
+
+    return bridge, calls
+
+
+def test_source_installation_rebuilds_the_latest_release_source_once(tmp_path, monkeypatch, capsys):
+    installed_source(tmp_path)
+    monkeypatch.setattr(releases, "vm_missing", lambda root: False)
+    fake_download(monkeypatch, source_bundle())
+    bridge, calls = recorder(tmp_path)
+
+    assert releases.upgrade_installation(tmp_path, bridge=bridge, plan=["--no-browser"])
+    assert calls == [
+        ("up", "--plan", "--no-browser"),
+        ("update", "--source"),
+        ("setup-agent", "install"),
+    ]
+    assert (tmp_path / "ops/cli.py").read_text() == "# source cli"
+    assert (tmp_path / "secrets/bridge.jks").read_text() == "personal key"
+    assert json.loads((tmp_path / releases.SOURCE_RECORD).read_text()) == {"version": "v0.1.0"}
+
+    calls.clear()
+    assert not releases.upgrade_installation(tmp_path, bridge=bridge)
+    assert calls == []
+    assert "이미 v0.1.0 소스를 사용하고 있습니다." in capsys.readouterr().out
+
+
+def test_named_branches_are_never_already_current(tmp_path):
+    releases.record_source(tmp_path, "main")
+    assert not releases.current(tmp_path, "source", tmp_path, "main")
+    releases.record_source(tmp_path, "v0.1.0")
+    assert releases.current(tmp_path, "source", tmp_path, "v0.1.0")
+
+
+def test_invalid_setup_options_restore_the_code_before_any_service_changes(tmp_path, monkeypatch):
+    installed_source(tmp_path)
+    monkeypatch.setattr(releases, "vm_missing", lambda root: False)
+    fake_download(monkeypatch, source_bundle())
+    bridge, calls = recorder(tmp_path, fail="up")
+    with pytest.raises(RuntimeError, match="up failed"):
+        releases.upgrade_installation(tmp_path, bridge=bridge, plan=["--admin-port", "80"])
+    assert calls == [("up", "--plan", "--admin-port", "80")]
+    assert (tmp_path / "ops/cli.py").read_text() == "old code"
+    assert not (tmp_path / releases.SOURCE_RECORD).exists()
+
+
+def test_missing_vm_takes_new_code_and_leaves_recreation_to_setup(tmp_path, monkeypatch):
+    installed_source(tmp_path)
+    monkeypatch.setattr(releases, "vm_missing", lambda root: True)
+    fake_download(monkeypatch, source_bundle())
+    bridge, calls = recorder(tmp_path)
+    assert releases.upgrade_installation(tmp_path, bridge=bridge, plan=[])
+    assert calls == [("up", "--plan")]
+    assert (tmp_path / "ops/cli.py").read_text() == "# source cli"
+    assert not (tmp_path / ".bridge/source-journal.json").exists()
+
+
+def test_git_checkouts_are_never_upgraded(tmp_path):
+    (tmp_path / ".git").mkdir()
+    with pytest.raises(RuntimeError, match="git pull"):
+        releases.upgrade_installation(tmp_path, bridge=Mock())
+
+
+@pytest.mark.parametrize("names,missing", [("bridge-vm\nother\n", False), ("other\n", True)])
+def test_vm_check_reads_the_configured_lima_instance(tmp_path, monkeypatch, names, missing):
+    monkeypatch.setenv("PATH", os.environ["PATH"])  # vm_missing extends PATH
+    (tmp_path / ".bridge").mkdir()
+    (tmp_path / ".bridge/mac.json").write_text('{"vm": "bridge-vm"}')
+    monkeypatch.setattr(releases.sys, "platform", "darwin")
+    monkeypatch.setattr(releases.subprocess, "run", Mock(return_value=Mock(stdout=names)))
+    assert releases.vm_missing(tmp_path) is missing
+
+
+def test_lima_failure_stops_instead_of_guessing_the_vm_is_gone(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", os.environ["PATH"])  # vm_missing extends PATH
+    (tmp_path / ".bridge").mkdir()
+    (tmp_path / ".bridge/mac.json").write_text('{"vm": "bridge-vm"}')
+    monkeypatch.setattr(releases.sys, "platform", "darwin")
+    monkeypatch.setattr(releases.subprocess, "run", Mock(side_effect=FileNotFoundError("limactl")))
+    with pytest.raises(RuntimeError, match="Lima VM 상태를 확인하지 못해"):
+        releases.vm_missing(tmp_path)

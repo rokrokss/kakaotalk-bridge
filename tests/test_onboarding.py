@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -81,6 +82,15 @@ def test_returning_user_starts_without_reinstall_or_new_registration(home, monke
     opened.assert_not_called()
 
 
+def test_downloaded_source_installation_rebuilds_its_own_images(home, monkeypatch):
+    runtime = fake_runtime(monkeypatch)
+    monkeypatch.setattr(onboarding.webbrowser, "open", Mock())
+    (home / ".bridge").mkdir()
+    (home / ".bridge/source.json").write_text('{"version": "v0.2.0"}')
+    onboarding.up(options("--no-browser"))
+    assert runtime.call.call_args_list[0].args[:2] == ("install", "--source")
+
+
 def test_missing_release_does_not_silently_build_source(home, monkeypatch):
     runtime = fake_runtime(monkeypatch)
     with pytest.raises(RuntimeError, match="--source를 지정"):
@@ -98,10 +108,14 @@ def test_fresh_shell_installer_passes_release_version_and_explicit_source(tmp_pa
     target = tmp_path / "new bridge"
     helper = tmp_path / "helper.py"
     helper.write_text(
-        "import pathlib,sys,json\n"
-        "p=pathlib.Path(sys.argv[1]); p.mkdir()\n"
-        "(p/'download-args.json').write_text(json.dumps(sys.argv[2:]))\n"
-        "(p/'bridge').write_text('import json,sys; print(json.dumps(sys.argv[1:]))')\n"
+        "import json,os,pathlib,sys\n"
+        "if sys.argv[1] == 'download':\n"
+        "    p=pathlib.Path(sys.argv[2]); p.mkdir()\n"
+        "    (p/'download-args.json').write_text(json.dumps(sys.argv[3:]))\n"
+        "    (p/'bridge').write_text('import json,sys; print(json.dumps(sys.argv[1:]))')\n"
+        "else:\n"
+        "    assert sys.argv[1:5] == ['launch', sys.argv[2], 'v0.1.0', '--'], sys.argv\n"
+        "    os.execv(sys.executable, [sys.executable, sys.argv[2] + '/bridge', 'up', *sys.argv[5:]])\n"
     )
     curl = binaries / "curl"
     curl.write_text(
@@ -285,6 +299,25 @@ def test_source_archive_without_git_excludes_state_builds_and_symlinks(home):
     lima.package_source(archive)
     with tarfile.open(archive) as bundle:
         assert set(bundle.getnames()) == {"ops/cli.py", "compose.yaml"}
+
+
+def test_source_archive_without_git_has_every_file_the_images_copy(home):
+    from pathlib import Path
+
+    repository = Path(__file__).resolve().parents[1]
+    copied = set()
+    for dockerfile in (repository / "docker").glob("*.Dockerfile"):
+        for line in dockerfile.read_text().splitlines():
+            parts = line.split()
+            if parts[:1] == ["COPY"] and not any(p.startswith("--from") for p in parts):
+                copied.update(p for p in parts[1:-1] if not p.startswith("--") and "/" not in p)
+    assert "LICENSE" in copied
+    for name in copied:
+        (home / name).write_text("test")
+    archive = home / "output.tar.gz"
+    lima.package_source(archive)
+    with tarfile.open(archive) as bundle:
+        assert copied <= set(bundle.getnames())
 
 
 def test_mac_start_wakes_vm_before_running_compose(home, monkeypatch):
@@ -471,9 +504,11 @@ def test_piped_installer_summarizes_bootstrap_and_preserves_failures(tmp_path, v
     target.mkdir()
     (target / "bridge").write_text("import json, sys; print(json.dumps(sys.argv[1:]))")
     # An isolated PATH forces Python preparation without downloading or installing anything.
-    for command in ("uname", "mktemp"):
-        (binaries / command).symlink_to("/usr/bin/" + command)
-    (binaries / "curl").write_text("#!/bin/sh\nexit 99\n")
+    for command in ("uname", "mktemp", "rm"):
+        (binaries / command).symlink_to(shutil.which(command))
+    (binaries / "curl").write_text(
+        f"#!{sys.executable}\nimport shutil,sys\nshutil.copyfile({str(Path(__file__).resolve().parents[1] / 'ops/releases.py')!r}, sys.argv[-1])\n"
+    )
     # Run as root so Linux does not re-run the installer through sudo.
     (binaries / "id").write_text("#!/bin/sh\necho 0\n")
     (binaries / "id").chmod(0o755)
@@ -530,11 +565,11 @@ def test_piped_installer_elevates_linux_users_once_through_sudo(tmp_path):
     target = tmp_path / "bridge home"
     target.mkdir()
     (target / "bridge").write_text("import json, sys; print(json.dumps(sys.argv[1:]))")
-    (binaries / "mktemp").symlink_to("/usr/bin/mktemp")
+    for command in ("mktemp", "rm"):
+        (binaries / command).symlink_to(shutil.which(command))
     stubs = {
         "uname": "echo Linux",
         "id": "echo 1000",
-        "curl": "exit 99",
         "uv": f'[ "$2" = install ] || printf "%s\\n" "{sys.executable}"',
         # Record the elevated command, then run it unchanged.
         "sudo": f'echo "$@" > "{tmp_path / "sudo.log"}"\nexec "$@"',
@@ -542,6 +577,10 @@ def test_piped_installer_elevates_linux_users_once_through_sudo(tmp_path):
     for name, body in stubs.items():
         (binaries / name).write_text(f"#!/bin/sh\n{body}\n")
         (binaries / name).chmod(0o755)
+    (binaries / "curl").write_text(
+        f"#!{sys.executable}\nimport shutil,sys\nshutil.copyfile({str(Path(__file__).resolve().parents[1] / 'ops/releases.py')!r}, sys.argv[-1])\n"
+    )
+    (binaries / "curl").chmod(0o755)
     result = subprocess.run(
         ["/bin/bash", "-s", "--", "--no-browser"],
         input=script.read_text(),
@@ -557,7 +596,8 @@ def test_piped_installer_elevates_linux_users_once_through_sudo(tmp_path):
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert (tmp_path / "sudo.log").read_text().startswith(f"{sys.executable} -c ")
+    elevated = (tmp_path / "sudo.log").read_text()
+    assert elevated.startswith(f"{sys.executable} ") and f" launch {target} " in elevated
     assert json.loads(result.stdout.splitlines()[-1]) == ["up", "--no-browser"]
 
 

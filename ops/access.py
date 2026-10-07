@@ -102,7 +102,7 @@ def passkey_setup(args):
         if public:
             validate_public_url(public)
             if public != cli.read_env().get("DOT_PUBLIC_URL"):
-                raise BridgeError("먼저 ./bridge connect --url <공개 주소>로 공개 HTTPS 주소를 설정하세요.")
+                raise BridgeError("먼저 kakaotalk-bridge connect --url <공개 주소>로 공개 HTTPS 주소를 설정하세요.")
         # A localhost passkey cannot authenticate a different public RP. Keep
         # the admin identity and use the existing code-confirmation consent flow.
         passkey_public = (
@@ -208,4 +208,4 @@ def connect(url):
     cli.env_update({"DOT_PUBLIC_URL": url, "DOT_APPROVAL_MODE": mode})
     cli.atomic(cli.ROOT / ".bridge/public-url", url)
     cli.compose("up", "-d", "--no-build", "dot-plugin", "dot-control", "dot-ingress")
-    print(url + "/mcp\n./bridge passkey-login으로 이 주소의 로그인을 설정하세요.")
+    print(url + "/mcp\nkakaotalk-bridge passkey-login으로 이 주소의 로그인을 설정하세요.")

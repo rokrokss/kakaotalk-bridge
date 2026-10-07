@@ -21,7 +21,7 @@ def tailscale_binary():
 def expose(args):
     tailscale = tailscale_binary()
     if not tailscale:
-        raise BridgeError("Tailscale을 설치하고 로그인한 뒤 ./bridge expose를 다시 실행하세요.")
+        raise BridgeError("Tailscale을 설치하고 로그인한 뒤 kakaotalk-bridge expose를 다시 실행하세요.")
     tailscale = (["sudo"] if platform.system() == "Linux" and os.geteuid() != 0 else []) + [
         tailscale
     ]
@@ -70,5 +70,5 @@ def expose(args):
     cli.atomic(saved_admin, admin_url)
     cli.atomic(cli.ROOT / ".bridge/public-url", "https://" + hostname)
     print(
-        f"관리 화면: {admin_url}/admin/\nMCP: https://{hostname}/mcp\n./bridge passkey-login으로 OAuth 승인을 설정하세요."
+        f"관리 화면: {admin_url}/admin/\nMCP: https://{hostname}/mcp\nkakaotalk-bridge passkey-login으로 OAuth 승인을 설정하세요."
     )

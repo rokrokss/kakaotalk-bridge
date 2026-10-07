@@ -30,7 +30,7 @@
           <label class="check"><input id="passkey-remember" type="checkbox">이 기기에서 7일 동안 로그인 유지</label>
         </form>
         <p id="passkey-status" role="status"></p>
-        <details class="recovery"><summary>로그인할 수 없나요?</summary><p>패스키를 저장한 휴대폰이나 비밀번호 관리자를 사용해 보세요. 최신 시스템 브라우저에서 설정한 서버 주소로 접속하세요.</p><p>패스키를 모두 잃어버렸다면 서버에서 <code>./bridge passkey-login --enroll</code>을 실행해 일회용 복구 링크를 여세요.</p></details>
+        <details class="recovery"><summary>로그인할 수 없나요?</summary><p>패스키를 저장한 휴대폰이나 비밀번호 관리자를 사용해 보세요. 최신 시스템 브라우저에서 설정한 서버 주소로 접속하세요.</p><p>패스키를 모두 잃어버렸다면 서버에서 <code>kakaotalk-bridge passkey-login --enroll</code>을 실행해 일회용 복구 링크를 여세요.</p></details>
       </div>
       <p id="pair-help" hidden></p>
       <form id="owner-form" hidden>
@@ -76,7 +76,7 @@
                     <button type="button" data-destination="desktop"><strong>내 컴퓨터의 AI 앱</strong><span>MCP 서버를 직접 실행하는 데스크톱 앱</span></button>
                     <button type="button" data-destination="remote"><strong>다른 원격 AI 서비스</strong><span>HTTPS 주소와 OAuth로 연결</span></button>
                   </div>
-                  <p class="hint">AI 없이도 수집은 계속되며, 새 방식을 추가해도 기존 연결은 유지됩니다. 터미널에서는 <code>./bridge setup-connection</code>을 사용할 수 있습니다.</p>
+                  <p class="hint">AI 없이도 수집은 계속되며, 새 방식을 추가해도 기존 연결은 유지됩니다. 터미널에서는 <code>kakaotalk-bridge setup-connection</code>을 사용할 수 있습니다.</p>
                 </div>
                 <form id="ai-setup-form" class="ai-step" autocomplete="off" hidden>
                   <fieldset id="ai-setup-fields" disabled>
@@ -301,7 +301,7 @@
               <button data-action="open-store" class="wide">Aurora 열기</button>
               <p class="hint">Aurora의 시작 안내와 익명 로그인을 마친 뒤 다시 열면 Kakao Corp.의 카카오톡 페이지가 열립니다. 로그인 전에 ‘다른 기기와 함께 사용’을 선택하세요.</p>
               <button id="install" class="wide">수집 구성 요소 설치…</button>
-              <details><summary>APK 파일로 설치하기</summary><p>서버에서 <code>./bridge import-apks /path/to/apk-folder</code>를 실행한 뒤 수집 구성 요소를 설치하세요. 기본 APK와 일치하는 모든 분할 APK를 포함해야 합니다. 배포자 서명도 검증합니다.</p></details>
+              <details><summary>APK 파일로 설치하기</summary><p>서버에서 <code>kakaotalk-bridge import-apks /path/to/apk-folder</code>를 실행한 뒤 수집 구성 요소를 설치하세요. 기본 APK와 일치하는 모든 분할 APK를 포함해야 합니다. 배포자 서명도 검증합니다.</p></details>
               <p class="hint">기존 기기 등록과 수집 승인은 유지됩니다. 이 작업으로 자동 로그인되지는 않습니다.</p>
             </div>
           </details>
@@ -323,7 +323,7 @@
             <div class="section-body">
               <button id="test-collection" class="wide">수집 테스트 시작</button>
               <p id="test-result" role="status">테스트를 시작한 뒤 휴대폰에서 나에게 메시지를 보내세요.</p>
-              <p>서버 명령어:</p><code>./bridge doctor<br>./bridge backup<br>./bridge upgrade</code>
+              <p>서버 명령어:</p><code>kakaotalk-bridge doctor<br>kakaotalk-bridge backup<br>kakaotalk-bridge upgrade</code>
               <p class="hint">백업에는 Android 로그인 정보와 키가 포함됩니다. 안전하게 보관하세요. 진단 결과에는 메시지와 인증 정보가 포함되지 않습니다.</p>
             </div>
           </details>

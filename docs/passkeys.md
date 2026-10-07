@@ -7,7 +7,7 @@
 
 신규 설치는 `http://localhost:18789`를 사용합니다(Mac에서는 다른 빈 포트를 선택할 수 있습니다). 원격 서버는 [SSH 포워딩](quickstart.md#local-and-ssh-admin-access)을 사용하세요. localhost에는 인증서나 Tailscale 계정이 필요하지 않으며 기존 HTTPS 주소는 유지됩니다.
 
-관리 화면과 MCP를 같은 HTTPS 주소로 사용하려면 등록 전에 고정할 호스트 이름을 정하세요. 예를 들어 Funnel의 443 포트에서 `https://your-node.ts.net/admin/`과 `https://your-node.ts.net/mcp`를 사용합니다. `./bridge expose` 또는 직접 구성한 프록시를 사용하되 관리 게이트웨이를 Funnel에 공개하지 마세요.
+관리 화면과 MCP를 같은 HTTPS 주소로 사용하려면 등록 전에 고정할 호스트 이름을 정하세요. 예를 들어 Funnel의 443 포트에서 `https://your-node.ts.net/admin/`과 `https://your-node.ts.net/mcp`를 사용합니다. `kakaotalk-bridge expose` 또는 직접 구성한 프록시를 사용하되 관리 게이트웨이를 Funnel에 공개하지 마세요.
 
 신뢰할 수 있는 인증서와 같은 호스트 이름을 사용하면 포트가 달라도 같은 패스키를 사용할 수 있습니다. `localhost`에 등록한 패스키는 공개 호스트 이름에서 사용할 수 없습니다. IP 주소와 localhost 이외의 HTTP는 허용하지 않습니다. 관리 화면과 MCP의 호스트가 다르면 웹·CLI 연결 설정이 기존 관리자 패스키를 유지하고 관리 화면의 코드 승인 방식을 설정합니다.
 
@@ -16,7 +16,7 @@
 공용 HTTPS 호스트로 설정하려면 다음을 실행하세요.
 
 ```bash
-./bridge passkey-login --url https://your-node.ts.net --public-url https://your-node.ts.net
+kakaotalk-bridge passkey-login --url https://your-node.ts.net --public-url https://your-node.ts.net
 ```
 
 비공개 인증 서비스를 시작하고 패스키 모드로 전환합니다. 등록된 패스키가 없으면 10분 후 만료되는 일회용 등록 링크를 엽니다. 화면 없는 서버에서는 링크를 출력합니다. 링크를 비공개로 보관하고 컴퓨터나 휴대폰에서 열어 **패스키 만들기**를 누르세요. 기기나 비밀번호 관리자가 잠금 해제를 요청하며 서버는 공개 키만 받습니다.
@@ -40,7 +40,7 @@ MCP 클라이언트에 공개 `/mcp` URL을 추가하고 OAuth를 선택하세�
 패스키를 모두 사용할 수 없다면 서버에서 실행하세요.
 
 ```bash
-./bridge passkey-login --enroll
+kakaotalk-bridge passkey-login --enroll
 ```
 
 새 일회용 링크로 대체 패스키를 등록하세요. 복구에 성공하면 이전 세션과 연결 권한이 무효화됩니다. 분실한 기기의 패스키는 직접 삭제하기 전까지 등록되어 있으므로 이후 삭제하세요.

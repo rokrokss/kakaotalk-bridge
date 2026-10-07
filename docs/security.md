@@ -35,13 +35,13 @@
 - 패스키 DB: 암호화한 공개 인증 정보, RP·출처 설정, 단기 등록·검증 상태. 개인 키는 인증 장치에 남습니다.
 - 연결한 AI: 도구가 반환한 메시지는 ChatGPT 등 연결한 AI 서비스에도 전달됩니다.
 
-Compose 자체가 Android 볼륨이나 수집 DB를 암호화하지는 않습니다. 호스트 디스크 암호화를 사용하세요. `./bridge backup`의 전체 스냅샷은 `secrets/backup_key`로 암호화합니다.
+Compose 자체가 Android 볼륨이나 수집 DB를 암호화하지는 않습니다. 호스트 디스크 암호화를 사용하세요. `kakaotalk-bridge backup`의 전체 스냅샷은 `secrets/backup_key`로 암호화합니다.
 
 <a id="key-management"></a>
 
 ## 키 관리
 
-`./bridge install`(`./bridge up`이 실행)은 없는 키만 만들고 기존 키는 유지합니다. 터널의 두 키는 터널 설정(`./bridge tunnel configure` 또는 관리 화면)이 저장합니다.
+`kakaotalk-bridge install`(`kakaotalk-bridge up`이 실행)은 없는 키만 만들고 기존 키는 유지합니다. 터널의 두 키는 터널 설정(`kakaotalk-bridge tunnel configure` 또는 관리 화면)이 저장합니다.
 
 | 파일 | 용도 | 사용하는 서비스 |
 | --- | --- | --- |

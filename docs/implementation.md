@@ -35,7 +35,7 @@ Apple Silicon Mac의 Lima VM(Ubuntu 24.04 arm64)에서 0.1.0 수집기로 확인
 - Iris v5 빌드와 페이지 조회, 일괄 저장과 건너뛰기 기록.
 - 0.1.0 승인 기록의 자동 이전.
 - Linux(Ubuntu) 테스트 VM에서 0.1.0 설치를 현재 버전으로 업데이트.
-- 한국어 설치 출력, `./bridge doctor`, `backup`, `update`, `up`.
+- 한국어 설치 출력, `kakaotalk-bridge doctor`, `backup`, `update`, `up`.
 - docker 그룹 계정의 SSH `bridge mcp`.
 - 0.1.0 릴리스: 새 Ubuntu 24.04 arm64 VM과 Apple Silicon Mac의 새 Lima VM에서 공개 설치 번들로 설치(소스 빌드 없음), 재시작, 같은 릴리스 재적용. 릴리스 이미지는 amd64·arm64 모두 공개 다운로드를 확인했습니다.
 

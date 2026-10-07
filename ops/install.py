@@ -54,7 +54,7 @@ def init_secrets(source):
 
 def host_check():
     if platform.system() != "Linux":
-        raise BridgeError("실행 환경에는 Linux가 필요합니다. macOS에서는 ./bridge up으로 Lima VM을 사용하세요.")
+        raise BridgeError("실행 환경에는 Linux가 필요합니다. macOS에서는 kakaotalk-bridge up으로 Lima VM을 사용하세요.")
     cli.run(["docker", "info"], capture=True)
     if (
         not Path("/sys/module/binder_linux").exists()
@@ -229,8 +229,8 @@ def install(args):
     cli.atomic(cli.ROOT / ".bridge/installed", "1\n")
     cli.share_code()
     print(
-        "컨테이너를 시작했습니다. ./bridge passkey-login으로 패스키를 등록하세요.\n"
-        "AI 연결은 선택 사항입니다. 나중에 ./bridge setup-connection으로 설정할 수 있습니다."
+        "컨테이너를 시작했습니다. kakaotalk-bridge passkey-login으로 패스키를 등록하세요.\n"
+        "AI 연결은 선택 사항입니다. 나중에 kakaotalk-bridge setup-connection으로 설정할 수 있습니다."
     )
 
 
@@ -256,7 +256,7 @@ def update(args):
                 cli.share_code()
                 print("업데이트를 완료했습니다. 기존 Android 앱 데이터와 기기 등록은 유지됩니다.")
                 return
-        raise BridgeError("업데이트 후 서비스가 정상적으로 시작되지 않아 이전 버전으로 되돌렸습니다. ./bridge doctor로 상태를 확인하세요.")
+        raise BridgeError("업데이트 후 서비스가 정상적으로 시작되지 않아 이전 버전으로 되돌렸습니다. kakaotalk-bridge doctor로 상태를 확인하세요.")
     except BaseException:
         cli.progress("이전 버전으로 되돌리는 중…")
         cli.atomic(cli.ROOT / ".env", old)

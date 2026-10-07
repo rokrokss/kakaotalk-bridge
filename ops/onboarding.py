@@ -14,7 +14,7 @@ import webbrowser
 from pathlib import Path
 from urllib.request import urlopen
 
-from ops import access, cli, expose
+from ops import access, cli, expose, launcher, releases
 from ops.errors import BridgeError
 from ops.setup_output import SetupOutput, progress, provider_line, run
 
@@ -365,7 +365,7 @@ class Runtime:
         # Keep the failing checks in the run log for diagnosis.
         with contextlib.suppress(RuntimeError, OSError):
             self.call("doctor")
-        raise BridgeError("서비스 시작이 예상보다 오래 걸립니다. ./bridge up을 다시 실행하거나 ./bridge doctor로 상태를 확인하세요.")
+        raise BridgeError("서비스 시작이 예상보다 오래 걸립니다. kakaotalk-bridge up을 다시 실행하거나 kakaotalk-bridge doctor로 상태를 확인하세요.")
 
 
 def network_status(command):
@@ -400,14 +400,14 @@ def connect_network(args, runtime):
         return
     tailscale = expose.tailscale_binary()
     if not tailscale:
-        raise BridgeError("보안 연결 도구(Tailscale)가 설치되지 않았습니다. ./bridge up을 다시 실행하세요.")
+        raise BridgeError("보안 연결 도구(Tailscale)가 설치되지 않았습니다. kakaotalk-bridge up을 다시 실행하세요.")
     prefix = ["sudo"] if platform.system() == "Linux" and os.geteuid() != 0 else []
     try:
         status = network_status([*prefix, tailscale, "status", "--json"])
     except (RuntimeError, subprocess.TimeoutExpired):
         if platform.system() == "Darwin" and "/Applications/" in tailscale:
             run(["open", "-a", "Tailscale"])
-            raise BridgeError("macOS에서 Tailscale 활성화를 마친 뒤 ./bridge up을 다시 실행하세요.") from None
+            raise BridgeError("macOS에서 Tailscale 활성화를 마친 뒤 kakaotalk-bridge up을 다시 실행하세요.") from None
         if platform.system() == "Darwin":
             privileged(["brew", "services", "start", "tailscale"])
         else:
@@ -429,7 +429,7 @@ def connect_network(args, runtime):
                         if not args.no_browser:
                             webbrowser.open(link)
                 if proc.wait():
-                    raise BridgeError("Tailscale 로그인이 끝나지 않았습니다. ./bridge up을 다시 실행해 이어서 진행하세요.")
+                    raise BridgeError("Tailscale 로그인이 끝나지 않았습니다. kakaotalk-bridge up을 다시 실행해 이어서 진행하세요.")
             except BaseException:
                 proc.terminate()
                 proc.wait()
@@ -448,7 +448,7 @@ def open_setup(args, runtime):
     base, _, fragment = link.partition("#")
     access.private_url(base)
     if fragment and not re.fullmatch(r"passkey-setup=[A-Za-z0-9_-]{43}", fragment):
-        raise BridgeError("패스키 등록 링크를 받지 못했습니다. ./bridge passkey-login을 실행하세요.")
+        raise BridgeError("패스키 등록 링크를 받지 못했습니다. kakaotalk-bridge passkey-login을 실행하세요.")
     if base.startswith("http://localhost:") and (
         args.no_browser or os.environ.get("SSH_CONNECTION")
     ):
@@ -480,18 +480,20 @@ def up(args):
         )
         for index, (_, label) in enumerate(STEPS, 1):
             print(f"{index}. {label}")
-        print("기존 설치와 로그인 정보를 재사용합니다. 릴리스 업데이트는 bridge upgrade로 실행합니다.")
+        print("기존 설치와 로그인 정보를 재사용합니다. 업데이트는 kakaotalk-bridge upgrade로 실행합니다.")
         print(
             "연결: "
             + (args.connection or ("https" if args.public_url else "추가 없음 (기존 연결 유지)"))
         )
         print("관리 화면: 로컬 브라우저 또는 SSH 포워딩 사용, 기존 HTTPS 주소 유지")
         print(
-            "AI: 나중에 bridge setup-connection으로 stdio, 공개 HTTPS/OAuth 또는 OpenAI 터널 추가"
+            "AI: 나중에 kakaotalk-bridge setup-connection으로 stdio, 공개 HTTPS/OAuth 또는 OpenAI 터널 추가"
         )
         print("처음 사용하면 관리자 패스키 등록과 카카오톡 설치·로그인이 필요합니다.")
         return
     with installation_lock(), SetupOutput(verbose=args.verbose) as output:
+        # First, so commands in later guidance and error messages already work.
+        launcher.install()
         current = "environment"
 
         @contextlib.contextmanager
@@ -521,6 +523,9 @@ def up(args):
                     elif release.is_file():
                         cli.manifest(release)
                         selection = ["--manifest", str(release.resolve())]
+                    elif (cli.ROOT / releases.SOURCE_RECORD).is_file():
+                        # A downloaded source installation keeps building its own images.
+                        selection = ["--source"]
                     else:
                         raise BridgeError("릴리스 정보(release.json)가 없습니다. 공식 설치 명령을 사용하거나, 소스 빌드라면 --source를 지정하세요.")
                     ports = []

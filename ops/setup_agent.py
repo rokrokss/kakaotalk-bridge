@@ -19,7 +19,7 @@ import time
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-from ops import access, cli, expose, onboarding, tunnel
+from ops import access, cli, expose, launcher, onboarding, tunnel
 from ops.errors import BridgeError
 from server.connection_setup import validate
 
@@ -76,13 +76,18 @@ def socket_dir():
     return cli.ROOT / ".bridge/setup-agent"
 
 
+def server_stdio():
+    executable, *arguments = launcher.client_command()
+    return {"command": executable, "args": [*arguments, "mcp"]}
+
+
 def context():
     values = cli.read_env()
     saved = cli.ROOT / ".bridge/stdio-client.json"
     stdio = (
         json.loads(saved.read_text())
         if saved.exists()
-        else {"command": sys.executable, "args": [str(cli.ROOT / "bridge"), "mcp"]}
+        else server_stdio()
     )
     public = values.get("DOT_PUBLIC_URL", "")
     preferences = cli.ROOT / ".bridge/connection-preferences.json"
@@ -94,7 +99,7 @@ def context():
         "tunnel_configured": values.get("OPENAI_TUNNEL_ENABLED") == "1",
         "runtime_key_saved": (cli.ROOT / "secrets/openai_tunnel_api_key").is_file(),
         "stdio": {"mcpServers": {"kakaotalk": stdio}},
-        "server_stdio": {"command": sys.executable, "args": [str(cli.ROOT / "bridge"), "mcp"]},
+        "server_stdio": server_stdio(),
         "managed_vm": saved.exists(),
         "preferred_method": preferred
         or (
@@ -416,7 +421,7 @@ def install():
         return
     if not shutil.which("systemctl") or not Path("/run/systemd/system").is_dir():
         print(
-            "웹 연결 설정에는 설정 에이전트가 필요합니다. 서비스 관리자에서 bridge setup-agent serve를 실행하세요."
+            "웹 연결 설정에는 설정 에이전트가 필요합니다. 서비스 관리자에서 kakaotalk-bridge setup-agent serve를 실행하세요."
         )
         return
     folder = socket_dir()

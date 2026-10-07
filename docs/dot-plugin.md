@@ -43,18 +43,18 @@
 설치된 서버에서 공개 HTTPS 출처를 지정하세요. 끝에 `/`나 `/mcp`를 붙이지 않습니다.
 
 ```bash
-./bridge connect --url https://bridge.example.com
-./bridge passkey-login
+kakaotalk-bridge connect --url https://bridge.example.com
+kakaotalk-bridge passkey-login
 ```
 
-`connect`는 `.env`의 `DOT_PUBLIC_URL`을 저장하고 `dot-plugin`, `dot-control`, `dot-ingress`를 시작합니다. 필요한 키는 `./bridge install`이 이미 만들었습니다. `passkey-login`은 이 주소의 OAuth 승인 방식을 설정합니다. 관리 화면의 **기존 HTTPS 주소 사용**이나 `./bridge setup-connection --method https --url https://bridge.example.com`도 같은 설정을 합니다.
+`connect`는 `.env`의 `DOT_PUBLIC_URL`을 저장하고 `dot-plugin`, `dot-control`, `dot-ingress`를 시작합니다. 필요한 키는 `kakaotalk-bridge install`이 이미 만들었습니다. `passkey-login`은 이 주소의 OAuth 승인 방식을 설정합니다. 관리 화면의 **기존 HTTPS 주소 사용**이나 `kakaotalk-bridge setup-connection --method https --url https://bridge.example.com`도 같은 설정을 합니다.
 
 공개 프록시는 기본 `127.0.0.1:18787`의 `dot-ingress`로 전달합니다. **이 포트만 공개하세요.** API·관리 게이트웨이나 dot-plugin을 직접 공개하지 마세요. 진입점이 내부 경로를 차단하고 MCP 경로의 관리자 쿠키를 제거합니다. 기기·API·제어망이 아닌 전용 관리 진입망에 연결됩니다. 관리 화면을 비공개로 유지하려면 공개 프록시에서 `/admin`, `/admin/*`를 거부하세요. 그렇지 않으면 해당 호스트에 인증된 관리 화면을 제공합니다. dot-plugin은 별도 API 읽기·전송 토큰을 사용하며 Android 볼륨이나 관리자 토큰을 받지 않습니다.
 
 <a id="deploy-in-lima-on-a-mac"></a>
 ## Mac의 Lima 배포
 
-Mac의 `./bridge`가 만든 VM은 MCP 진입점을 Mac의 `127.0.0.1:18787`(첫 설치 때 사용 중이면 다른 빈 포트)로 전달합니다. Mac에서 실행한 `./bridge expose`는 Mac의 Tailscale Funnel을 이 포트에 연결하고, 관리 화면의 **Tailscale로 HTTPS 주소 만들기**는 VM 안의 Tailscale을 사용합니다. 어느 쪽도 별도 터널이 필요하지 않습니다.
+Mac의 `kakaotalk-bridge`가 만든 VM은 MCP 진입점을 Mac의 `127.0.0.1:18787`(첫 설치 때 사용 중이면 다른 빈 포트)로 전달합니다. Mac에서 실행한 `kakaotalk-bridge expose`는 Mac의 Tailscale Funnel을 이 포트에 연결하고, 관리 화면의 **Tailscale로 HTTPS 주소 만들기**는 VM 안의 Tailscale을 사용합니다. 어느 쪽도 별도 터널이 필요하지 않습니다.
 
 [직접 만든 Lima VM](onboarding.md#manual-deployment)은 이 포트를 전달하지 않으므로 SSH 터널을 사용합니다.
 
@@ -72,7 +72,7 @@ Mac 잠자기·종료, Lima·Tailscale 중지는 공개 연결을 끊습니다. 
 ## 검증과 문제 해결
 
 ```bash
-./bridge doctor
+kakaotalk-bridge doctor
 docker compose --profile dot ps
 docker compose logs --tail 30 dot-plugin
 tailscale funnel status
@@ -88,7 +88,7 @@ uv run python scripts/smoke-dot.py https://your-host.example
 | 다른 주소에서 보낸 요청(`invalid_origin`) | `DOT_PUBLIC_URL`의 스킴·호스트·포트가 브라우저와 일치하고 승인 HTML의 Referrer-Policy가 `same-origin`인지 확인 |
 | 승인 요청 만료·처리됨(`invalid_approval`) | 10분이 지났거나 쿠키가 없으면 ChatGPT에서 다시 연결 |
 | 서버 소유자 승인 필요(`approval_required`) | 비공개 관리 화면의 **AI 연결**에서 일치하는 코드 승인 |
-| 패스키 설정 필요 | 서버에서 `./bridge passkey-login` 실행 후 비공개 관리 호스트에서 등록 |
+| 패스키 설정 필요 | 서버에서 `kakaotalk-bridge passkey-login` 실행 후 비공개 관리 호스트에서 등록 |
 | 패스키를 찾을 수 없음 | 저장한 기기·비밀번호 관리자와 호스트를 확인하고 시스템 브라우저에서 다시 시작 |
 | 코드 불일치·만료 | 연결을 시작한 브라우저 확인. 10분 이상 지났으면 새 요청 시작 |
 | 연결 후 도구 오류 | 수집 API 상태·읽기 토큰·수집 승인 확인 |

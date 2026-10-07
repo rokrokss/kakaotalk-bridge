@@ -19,6 +19,8 @@ docker compose --profile dot config --quiet
 
 Caddy 실행 파일이 없으면 로컬 프록시 테스트는 건너뜁니다.
 
+체크아웃에서는 `./bridge`가 `kakaotalk-bridge`와 같은 명령입니다. `kakaotalk-bridge` 명령은 `up`이 처음 실행한 설치를 가리키며, 이미 다른 설치를 가리키고 있으면 바꾸지 않습니다.
+
 설정 화면 브라우저 검사는 Playwright와 Chrome·Chromium이 필요합니다. 한 터미널에서 가상 스토어·기기를 띄우고 다른 터미널에서 검사를 실행하세요.
 
 ```bash
@@ -48,9 +50,9 @@ uv export --frozen --no-dev --no-emit-project --output-file requirements.lock
 | `dot_plugin/` | OAuth, 원격 MCP, 선택적 이벤트 |
 | `bridge`, `ops/cli.py` | 호스트 CLI 진입점과 명령 파서, Compose 호출. Linux에서는 `bridge mcp`를 제외하고 sudo로 다시 실행 |
 | `ops/install.py`, `ops/releases.py`, `ops/source.py` | 설치·업데이트, 검증된 릴리스 다운로드, 소스 교체와 롤백 |
-| `ops/onboarding.py`, `ops/lima.py` | `./bridge up` 단계, Mac의 Lima VM |
+| `ops/onboarding.py`, `ops/lima.py` | `kakaotalk-bridge up` 단계, Mac의 Lima VM |
 | `ops/doctor.py`, `ops/backup.py`, `ops/snapshot.py` | 상태 점검, 암호화 전체 백업·복구 |
-| `ops/cleanup.py` | `./bridge cleanup`: 이 설치가 만든 VM·컨테이너·볼륨·이미지·서비스와 설치 폴더 삭제. 공용 도구는 유지 |
+| `ops/cleanup.py` | `kakaotalk-bridge cleanup`: 이 설치가 만든 VM·컨테이너·볼륨·이미지·서비스와 설치 폴더 삭제. 공용 도구는 유지 |
 | `ops/access.py`, `ops/connections.py`, `ops/expose.py`, `ops/tunnel.py` | 관리 화면 링크와 패스키 설정, AI 연결 선택, Tailscale HTTPS, OpenAI 터널 |
 | `ops/setup_output.py`, `ops/errors.py` | 한국어 진행 표시, 비공개 진단 로그, 하위 명령 보고, `BridgeError` |
 | `ops/setup_agent.py`, `server/connection_setup.py`, `webui/setup.py` | 비공개 호스트 설정 작업, 공유 입력 검증, 인증된 관리 프록시 |
@@ -63,13 +65,13 @@ uv export --frozen --no-dev --no-emit-project --output-file requirements.lock
 
 ## 설치·관리 명령 출력
 
-`./bridge up`과 설치·업데이트·백업 같은 관리 명령은 화면에 한국어 단계와 짧은 하위 단계(`  · …`)만 표시합니다. 규칙은 `ops/setup_output.py`에 있습니다.
+`kakaotalk-bridge up`과 설치·업데이트·백업 같은 관리 명령은 화면에 한국어 단계와 짧은 하위 단계(`  · …`)만 표시합니다. 규칙은 `ops/setup_output.py`에 있습니다.
 
 - 진행은 `cli.progress()`, 사용자가 반드시 볼 안내는 `cli.notice()`로 출력합니다.
 - 보여 줄 실패는 한국어 문구의 `BridgeError`(`ops/errors.py`)로 올립니다. 그 밖의 예외는 일반 안내만 표시하고 상세 내용은 로그에 남깁니다. 화면에 traceback을 출력하지 않습니다.
 - Lima·Docker·패키지 관리자 출력은 실행마다 하나인 비공개 로그 `.bridge/logs/setup-*.log`에 저장하고, 실패하면 로그 경로를 한 번 표시합니다. 캡처한 명령 출력은 화면에 그대로 출력하지 않습니다.
 - 하위 Bridge 명령(Lima VM 안 포함)은 `bridge_command()`로 실행합니다. 하위 명령은 진행·안내·오류를 `@@kakaotalk-bridge@@ {JSON}` 형식의 stdout 줄로 부모에게 보내고, 나머지 출력은 부모의 로그로 갑니다. 오류는 가장 안쪽 명령의 문구를 표시합니다.
-- `--verbose`는 `./bridge up`과 설치 명령에서만 받습니다. 하위 명령을 포함한 원문 출력을 화면에 보여 주며 설치 로그(`setup-*.log`)는 만들지 않습니다.
+- `--verbose`는 `kakaotalk-bridge up`과 설치 명령에서만 받습니다. 하위 명령을 포함한 원문 출력을 화면에 보여 주며 설치 로그(`setup-*.log`)는 만들지 않습니다.
 - 기기 CLI와 관리 화면의 기기 오류는 `device/messages.py`의 한국어 문구로 바꿉니다. 알 수 없는 예외 내용은 개인 정보가 있을 수 있으므로 그대로 표시하지 않습니다.
 
 <a id="preview-the-web-console"></a>

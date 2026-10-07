@@ -341,6 +341,23 @@ def test_source_refresh_removes_stale_code_and_rolls_back_without_touching_keys(
     assert (root / "secrets/key").read_text() == "keep"
 
 
+def test_rejected_source_archive_changes_nothing_and_leaves_no_scratch(tmp_path):
+    from ops import source
+
+    root = tmp_path / "runtime"
+    (root / "ops").mkdir(parents=True)
+    (root / "ops/cli.py").write_text("old")
+    unsafe = tmp_path / ".env.example"
+    unsafe.write_text("X=1")
+    path = tmp_path / "source.tar.gz"
+    with tarfile.open(path, "w:gz") as archive:
+        archive.add(unsafe, arcname=".env.example")
+    with pytest.raises(RuntimeError, match="허용되지 않는 경로"):
+        source.apply(root, path)
+    assert (root / "ops/cli.py").read_text() == "old"
+    assert list((root / ".bridge").iterdir()) == []
+
+
 def test_source_image_identity_changes_for_dependencies_and_renames(tmp_path, monkeypatch):
     from argparse import Namespace
 
