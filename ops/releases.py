@@ -314,7 +314,7 @@ def upgrade_installation(root, version="latest", *, bridge, plan=None, say=print
         installed = declared(root / "pyproject.toml", "version")
         if floor and version_tuple(installed) < version_tuple(floor):
             raise BridgeError(
-                f"{installed or '버전을 알 수 없는'} 설치는 {version}으로 업데이트할 수 없습니다. "
+                f"{installed or '버전을 알 수 없는'} 설치는 {version} 버전으로 업데이트할 수 없습니다. "
                 f"{root}에서 ./bridge cleanup으로 삭제한 뒤(명령이 없으면 Lima VM과 설치 폴더를 직접 삭제) "
                 "설치 명령을 다시 실행하세요. 카카오톡 로그인과 수집한 데이터도 삭제됩니다."
             )
