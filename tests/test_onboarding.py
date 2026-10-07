@@ -474,6 +474,9 @@ def test_piped_installer_summarizes_bootstrap_and_preserves_failures(tmp_path, v
     for command in ("uname", "mktemp"):
         (binaries / command).symlink_to("/usr/bin/" + command)
     (binaries / "curl").write_text("#!/bin/sh\nexit 99\n")
+    # Run as root so Linux does not re-run the installer through sudo.
+    (binaries / "id").write_text("#!/bin/sh\necho 0\n")
+    (binaries / "id").chmod(0o755)
     uv = binaries / "uv"
     uv.write_text(
         "#!/bin/sh\n"
@@ -516,6 +519,46 @@ def test_piped_installer_summarizes_bootstrap_and_preserves_failures(tmp_path, v
     if not failed:
         assert "설치 실행 환경 준비 완료" in result.stdout
         assert json.loads(result.stdout.splitlines()[-1]) == ["up", *flags]
+
+
+def test_piped_installer_elevates_linux_users_once_through_sudo(tmp_path):
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "install.sh"
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    target = tmp_path / "bridge home"
+    target.mkdir()
+    (target / "bridge").write_text("import json, sys; print(json.dumps(sys.argv[1:]))")
+    (binaries / "mktemp").symlink_to("/usr/bin/mktemp")
+    stubs = {
+        "uname": "echo Linux",
+        "id": "echo 1000",
+        "curl": "exit 99",
+        "uv": f'[ "$2" = install ] || printf "%s\\n" "{sys.executable}"',
+        # Record the elevated command, then run it unchanged.
+        "sudo": f'echo "$@" > "{tmp_path / "sudo.log"}"\nexec "$@"',
+    }
+    for name, body in stubs.items():
+        (binaries / name).write_text(f"#!/bin/sh\n{body}\n")
+        (binaries / name).chmod(0o755)
+    result = subprocess.run(
+        ["/bin/bash", "-s", "--", "--no-browser"],
+        input=script.read_text(),
+        env={
+            **os.environ,
+            "PATH": str(binaries),
+            "BRIDGE_HOME": str(target),
+            "TMPDIR": str(tmp_path),
+        },
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "sudo.log").read_text().startswith(f"{sys.executable} -c ")
+    assert json.loads(result.stdout.splitlines()[-1]) == ["up", "--no-browser"]
 
 
 def test_signed_out_network_status_is_not_treated_as_a_daemon_failure(monkeypatch):

@@ -40,6 +40,11 @@ def installation(tmp_path):
     qemu = binaries / "qemu-system-x86_64"
     qemu.write_text("#!/bin/sh\nexit 1\n")
     qemu.chmod(0o755)
+    # Linux installs re-run through sudo, which resets the test environment. Run as
+    # root here; test_onboarding covers the elevation itself.
+    user = binaries / "id"
+    user.write_text("#!/bin/sh\necho 0\n")
+    user.chmod(0o755)
     # A stand-in for the installed CLI: record subprocess boundaries and replace
     # the entry point on upgrade, so the final up must execute the new version.
     (root / "bridge").write_text('''\
