@@ -11,7 +11,7 @@
 | 백업·복구 | `kakaotalk-bridge backup`, `kakaotalk-bridge restore` · [유지 관리와 복구](onboarding.md#maintain-and-recover) |
 | 삭제 | `kakaotalk-bridge cleanup` · [삭제](#uninstall) |
 
-`kakaotalk-bridge`는 어느 폴더에서나 실행할 수 있으며 설치 폴더 안의 `./bridge`와 같은 명령입니다. 0.2.2 이하 버전의 설치에는 이 명령이 없으니 설치 명령을 다시 실행해 업데이트하세요. 아래 `docker compose` 명령은 Linux 설치 폴더에서 실행하고, Docker 권한이 없으면 `sudo`를 붙이세요. Mac은 VM 안에서 실행합니다.
+`kakaotalk-bridge`는 어느 폴더에서나 실행할 수 있으며 설치 폴더 안의 `./bridge`와 같은 명령입니다. 아래 `docker compose` 명령은 Linux 설치 폴더에서 실행하고, Docker 권한이 없으면 `sudo`를 붙이세요. Mac은 VM 안에서 실행합니다.
 
 ```bash
 # Mac: enter the VM, then run docker compose with sudo
@@ -78,14 +78,14 @@ kakaotalk-bridge upgrade
 git pull && kakaotalk-bridge update --source
 ```
 
-- 설치 명령은 설치 형태를 알아보고 새 버전의 코드로 업데이트하며, 업데이트 중에는 이전 버전의 코드를 실행하지 않습니다. 릴리스 설치는 검증된 릴리스 번들과 이미지로 바꿉니다. `release.json` 없이 소스로 받은 설치(첫 릴리스 전에 받은 설치 포함)는 최신 릴리스 태그의 소스를 받아 같은 서명 키로 이미지를 다시 빌드합니다. Git 작업 폴더는 자동으로 업데이트하지 않습니다.
+- 설치 명령은 설치 형태를 알아보고 새 버전의 코드로 업데이트하며, 업데이트 중에는 이전 버전의 코드를 실행하지 않습니다. 릴리스 설치는 검증된 릴리스 번들과 이미지로 바꿉니다. `release.json` 없이 소스로 받은 설치는 최신 릴리스 태그의 소스를 받아 같은 서명 키로 이미지를 다시 빌드합니다. Git 작업 폴더는 자동으로 업데이트하지 않습니다.
 - 옵션이 잘못되었거나 업데이트가 실패하면 이전 코드로 되돌립니다. 설정을 마치지 못한 설치는 업데이트하지 않고 이어서 진행합니다.
+- 0.3.0 이하 버전에서 올리는 업데이트는 지원하지 않습니다. 그 설치는 삭제한 뒤 새로 설치하세요.
 - 순서: 새 이미지 다운로드 → 전체 암호화 백업(`backups/*.kcs`, Mac은 VM 안) → 서비스 교체 → 상태 확인. 실패하면 이전 버전으로 되돌립니다.
-- 설정, Android 데이터, 카카오톡 로그인, 수집 승인은 유지됩니다. 0.1.0의 승인은 태블릿에 로그인된 계정으로 이어지며, 계정을 읽지 못하면 다시 승인해야 합니다.
+- 설정, Android 데이터, 카카오톡 로그인, 수집 승인은 유지됩니다.
 - Iris는 수집기가 시작할 때 자동으로 교체합니다. [Iris 구성 요소 업데이트](mcp-queries.md#updating-the-iris-component)
 - 설치 명령은 같은 버전이면 업데이트 없이 관리 화면을 엽니다. 업데이트가 실패하면 관리 화면을 열지 않습니다.
-- Linux는 전체 과정을 root로 실행합니다. 0.1.0을 설치한 Linux 서버는 설치 명령으로 업데이트하세요. sudo 때문에 root 전용이 된 코드 폴더 권한도 함께 정리합니다.
-- `.env`에 `COMPOSE_PROJECT_NAME`이 없는 기존 설치는 `kakaotalk-collector` 볼륨이 있으면 그 이름을 `.env`에 고정해 같은 데이터를 계속 씁니다. [저장 위치](#storage-locations)
+- Linux는 전체 과정을 root로 실행합니다.
 
 <a id="stop-and-restart"></a>
 ## 중지와 재시작
@@ -107,7 +107,7 @@ kakaotalk-bridge start   # Applies the saved connection and the .bridge/ Compose
 
 | 항목 | 값 |
 | --- | --- |
-| Compose 프로젝트·로컬 이미지 | `kakaotalk-bridge`. 기존 설치는 `.env`에 고정된 프로젝트 이름을 유지해야 같은 볼륨을 씀 |
+| Compose 프로젝트·로컬 이미지 | `kakaotalk-bridge`. `.env`의 `COMPOSE_PROJECT_NAME`을 바꾸면 다른 볼륨을 씀 |
 | 릴리스 이미지 | `ghcr.io/rokrokss/kakaotalk-bridge-*` |
 | Mac VM 설치 경로 | `/srv/kakaotalk-bridge` |
 | 태블릿의 Bridge 파일 | `/data/kakaotalk-bridge/` (root 전용) |
@@ -124,7 +124,6 @@ kakaotalk-bridge start   # Applies the saved connection and the .bridge/ Compose
 | `dot-state` | OAuth·터널 승인, 원격 호출 성공 시각, 대화 이벤트 권한·구독·처리 커서·웹훅 대기열 |
 
 - 태블릿의 Bridge 파일: `enrollment.json`(수집 승인, 0600), `iris.apk`, `iris.pid`, `iris-auth.json`, `native/`(이름 조회용 라이브러리). 등록 정보에는 수집 토큰·게이트웨이 주소·인증서가 없습니다.
-- 0.1.0이 쓰던 기기 내부 파일은 업데이트를 되돌릴 때 필요하므로, 새 수집기가 10분 넘게 동작한 뒤 정리합니다.
 - 메시지는 매시간 기본 30일 이전 것을 정리합니다. `RETENTION_DAYS`로 바꾸며, 재전송 중복 제거도 이 기간 안에서 합니다. Android DB와 백업 파일은 정리하지 않습니다.
 - 컨테이너 로그는 서비스마다 10 MB 파일 3개로 제한합니다.
 

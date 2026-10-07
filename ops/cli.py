@@ -2,7 +2,6 @@
 
 import argparse
 import contextlib
-import functools
 import hashlib
 import json
 import os
@@ -144,24 +143,7 @@ def atomic(path, data):
         Path(scratch).unlink(missing_ok=True)
 
 
-# Default Compose project before 0.2. Its volumes keep this prefix on existing installs.
-LEGACY_PROJECT = "kakaotalk-collector"
-
-
-@functools.cache
-def pin_project_name():
-    """Keep an install whose .env predates the project name on its existing volumes."""
-    if not (ROOT / ".env").exists() or "COMPOSE_PROJECT_NAME" in read_env():
-        return
-    existing = run(
-        ["docker", "volume", "ls", "-q", "--filter", f"name=^{LEGACY_PROJECT}_android-data$"],
-        capture=True,
-    )
-    env_update({"COMPOSE_PROJECT_NAME": LEGACY_PROJECT if existing.strip() else "kakaotalk-bridge"})
-
-
 def compose(*args, capture=False, **kwargs):
-    pin_project_name()
     files = ["-f", str(ROOT / "compose.yaml")]
     for file in ("host.yaml", "volumes.yaml"):
         if (ROOT / ".bridge" / file).exists():
@@ -198,8 +180,8 @@ def services():
         selected += ["dot-plugin", "dot-control", "dot-tunnel", "openai-tunnel"]
         saved = ROOT / ".bridge/admin-url"
         if saved.exists() and saved.read_text().strip().startswith("https://"):
-            # Older tunnel installs can route private HTTPS admin through this
-            # listener without a public MCP URL. Preserve their access.
+            # A private HTTPS admin address (--admin-url) is served by this listener
+            # even without a public MCP URL.
             selected += ["dot-ingress"]
     if read_env().get("ADMIN_LOCAL_ORIGIN"):
         selected += ["admin-local"]
@@ -410,9 +392,6 @@ def execute(args):
     elif args.command == "stop":
         compose("stop")
     elif args.command == "start":
-        # Older encrypted snapshots predate this verifier-only service credential.
-        install.ensure_passkey_verifier_secret()
-        install.migrate_auth_modes()
         pending = ROOT / ".bridge/restored-pending"
         compose(
             "up",

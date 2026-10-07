@@ -51,7 +51,7 @@ def match(row, args):
             not args.get("conversation_ref")
             or row.get("conversation_ref") == args["conversation_ref"]
         )
-        and (args["include_mine"] or not row.get("database_ref", {}).get("is_mine"))
+        and (args["include_mine"] or not row["database_ref"]["is_mine"])
     )
 
 

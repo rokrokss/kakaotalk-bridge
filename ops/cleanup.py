@@ -21,7 +21,7 @@ BINDER_CONFIG = {
 }
 # Install-folder state; a Git checkout keeps its source code.
 STATE = (".env", "secrets", ".bridge", "backups", "inputs", "artifacts")
-IMAGE_PREFIXES = ("ghcr.io/rokrokss/kakaotalk-bridge-", "kakaotalk-bridge/", "kakaotalk-collector/")
+IMAGE_PREFIXES = ("ghcr.io/rokrokss/kakaotalk-bridge-", "kakaotalk-bridge/")
 IMAGES = {"redroid/redroid", "ghcr.io/openai/tunnel-client"}
 
 
@@ -93,7 +93,6 @@ def remove_setup_service():
 def remove_docker():
     if not shutil.which("docker"):
         return
-    cli.pin_project_name()
     project = cli.read_env().get("COMPOSE_PROJECT_NAME", "kakaotalk-bridge")
     label = "label=com.docker.compose.project=" + project
     cli.progress("컨테이너와 데이터 삭제 중…")

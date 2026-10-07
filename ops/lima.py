@@ -126,7 +126,7 @@ def mac(args):
                 or not 1024 <= config["admin_port"] <= 65535
             ):
                 raise BridgeError("VM 이름 또는 관리 포트가 올바르지 않습니다.")
-            for port in (config["admin_port"], config.get("mcp_port", 18787)):
+            for port in (config["admin_port"], config["mcp_port"]):
                 with socket.socket() as probe:
                     probe.settimeout(0.2)
                     if probe.connect_ex(("127.0.0.1", port)) == 0:
@@ -140,13 +140,12 @@ def mac(args):
             )
             template = template.replace(
                 "  - guestPortRange:",
-                f"  - guestPort: 18787\n    hostPort: {config.get('mcp_port', 18787)}\n    hostIP: 127.0.0.1\n  - guestPortRange:",
+                f"  - guestPort: 18787\n    hostPort: {config['mcp_port']}\n    hostIP: 127.0.0.1\n  - guestPortRange:",
             )
-            if config.get("local_admin_port"):
-                template = template.replace(
-                    "  - guestPortRange:",
-                    f"  - guestPort: 18789\n    hostPort: {config['local_admin_port']}\n    hostIP: 127.0.0.1\n  - guestPortRange:",
-                )
+            template = template.replace(
+                "  - guestPortRange:",
+                f"  - guestPort: 18789\n    hostPort: {config['local_admin_port']}\n    hostIP: 127.0.0.1\n  - guestPortRange:",
+            )
             if platform.machine() == "x86_64":
                 template = template.replace("arch: aarch64", "arch: x86_64").replace(
                     "vmType: vz", "vmType: qemu"

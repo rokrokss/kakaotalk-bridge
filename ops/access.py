@@ -6,7 +6,7 @@ import re
 import webbrowser
 from urllib.parse import urlsplit
 
-from ops import cli, install
+from ops import cli
 from ops.errors import BridgeError
 
 
@@ -29,7 +29,7 @@ def admin_url(override=None):
     if platform.system() == "Darwin":
         path = cli.ROOT / ".bridge/mac.json"
         port = (
-            str(json.loads(path.read_text()).get("local_admin_port", 18789))
+            str(json.loads(path.read_text())["local_admin_port"])
             if path.exists()
             else "18789"
         )
@@ -61,7 +61,7 @@ def passkey_setup(args):
         saved_origin = cli.ROOT / ".bridge/admin-url"
         if args.url or saved_origin.exists():
             command += ["--url", args.url or saved_origin.read_text().strip()]
-        elif config.get("local_admin_port"):
+        else:
             command += ["--url", "http://localhost:" + str(config["local_admin_port"])]
         if args.public_url:
             command += ["--public-url", args.public_url]
@@ -70,9 +70,6 @@ def passkey_setup(args):
         link = cli.run(command, capture=True)
         cli.atomic(saved_origin, private_url(link.partition("#")[0]))
     else:
-        # A new limited verifier credential can be added without rotating existing identities.
-        install.ensure_passkey_verifier_secret()
-        install.migrate_auth_modes()
         cli.compose("up", "-d", "--no-build", "--no-deps", "dot-control", capture=True)
 
         def helper(operation, payload=None):

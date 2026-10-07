@@ -79,7 +79,6 @@ class FakeAndroid:
     def snapshot(self):
         return Snapshot(
             config=dict(self.config),
-            legacy=False,
             characteristics="tablet",
             fingerprint="test",
             width=1200,

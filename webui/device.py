@@ -166,7 +166,7 @@ class Android:
                 result["screen"]["state"] = "not_installed"
                 return result
             try:
-                result.update(session_status.evidence(enrollment.current()))
+                result.update(session_status.evidence(enrollment.snapshot()))
             except (
                 OSError,
                 ValueError,

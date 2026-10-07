@@ -12,10 +12,8 @@ from cryptography.exceptions import InvalidTag
 from ops import access, backup, cli, doctor, expose, install, lima, snapshot
 
 
-@pytest.mark.parametrize("system,legacy", [("Linux", False), ("Linux", True), ("Darwin", True)])
-def test_expose_uses_shared_https_and_migrates_only_owned_routes(
-    tmp_path, monkeypatch, system, legacy
-):
+@pytest.mark.parametrize("system", ["Linux", "Darwin"])
+def test_expose_uses_shared_https_and_changes_only_owned_routes(tmp_path, monkeypatch, system):
     monkeypatch.setattr(cli, "ROOT", tmp_path)
     monkeypatch.setattr(cli.platform, "system", lambda: system)
     monkeypatch.setattr(cli.os, "geteuid", lambda: 0)
@@ -25,15 +23,7 @@ def test_expose_uses_shared_https_and_migrates_only_owned_routes(
     (tmp_path / ".bridge").mkdir()
     (tmp_path / ".bridge/mac.json").write_text(json.dumps({"mcp_port": 28787}))
     host = "bridge.example.ts.net"
-    config = (
-        {"Web": {host + ":8443": {"Handlers": {"/": {"Proxy": "https://localhost:8443"}}}}}
-        if legacy
-        else {}
-    )
-    if legacy:
-        (tmp_path / ".bridge/expose.json").write_text(
-            json.dumps({"hostname": host, "config": config})
-        )
+    config = {}
     calls = []
 
     def run(command, **kwargs):
@@ -46,8 +36,6 @@ def test_expose_uses_shared_https_and_migrates_only_owned_routes(
             config.setdefault("Web", {})[host + ":443"] = {
                 "Handlers": {"/": {"Proxy": command[-1]}}
             }
-        if command[1:] == ["serve", "--https=8443", "off"]:
-            del config["Web"][host + ":8443"]
         return ""
 
     monkeypatch.setattr(cli, "run", run)
@@ -156,24 +144,6 @@ def test_existing_keys_are_not_regenerated_when_incomplete(tmp_path, monkeypatch
     run.assert_not_called()
 
 
-def test_legacy_mode_migration_preserves_installation_and_explicit_fallback(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
-    path = tmp_path / ".env"
-    path.write_text("ADMIN_AUTH_MODE=kakao\nDOT_APPROVAL_MODE=kakao\nDEVICE_ID=existing\n")
-    install.migrate_auth_modes()
-    assert cli.read_env() == {
-        "ADMIN_AUTH_MODE": "passkey",
-        "DOT_APPROVAL_MODE": "passkey",
-        "DEVICE_ID": "existing",
-    }
-    unchanged = path.read_bytes()
-    install.migrate_auth_modes()
-    assert path.read_bytes() == unchanged
-    path.write_text("ADMIN_AUTH_MODE=local\nDOT_APPROVAL_MODE=admin\n")
-    install.migrate_auth_modes()
-    assert cli.read_env() == {"ADMIN_AUTH_MODE": "local", "DOT_APPROVAL_MODE": "admin"}
-
-
 def source_tree(root):
     volumes = root / "snapshot"
     project = root / "project"
@@ -193,9 +163,6 @@ def source_tree(root):
         db = sqlite3.connect(volumes / name)
         db.executescript(
             "CREATE TABLE records(kind TEXT,id TEXT,value BLOB); INSERT INTO records VALUES('session','old','secret'); INSERT INTO records VALUES('settings','profile','same'); INSERT INTO records VALUES('owner','password','keep');"
-        )
-        db.executescript(
-            "INSERT INTO records VALUES('kakao-flow','old','pending'); INSERT INTO records VALUES('kakao-enroll','old','pending'); INSERT INTO records VALUES('kakao','config','retire provider config');"
         )
         if name.startswith("passkey"):
             db.executescript(
@@ -254,9 +221,6 @@ def test_full_snapshot_roundtrip_and_authentication_before_restore(tmp_path):
     with sqlite3.connect(destination / "admin-state/admin.db") as db:
         assert not db.execute("SELECT 1 FROM records WHERE kind='session'").fetchall()
         assert db.execute("SELECT 1 FROM records WHERE kind='owner'").fetchone()
-        assert not db.execute("SELECT 1 FROM records WHERE kind='kakao'").fetchone()
-        assert not db.execute("SELECT 1 FROM records WHERE kind='kakao-flow'").fetchone()
-        assert not db.execute("SELECT 1 FROM records WHERE kind='kakao-enroll'").fetchone()
     with sqlite3.connect(destination / "dot-state/dot.db") as db:
         assert {row[0] for row in db.execute("SELECT kind FROM records")} == {"settings"}
     with sqlite3.connect(destination / "passkey-state/passkeys.db") as db:
@@ -408,38 +372,6 @@ def test_android_builder_preserves_working_emulation_and_skips_intel(monkeypatch
     assert execute.call_count == 1
 
 
-@pytest.mark.parametrize(
-    "volume, expected",
-    [("kakaotalk-collector_android-data\n", "kakaotalk-collector"), ("", "kakaotalk-bridge")],
-)
-def test_install_without_project_name_keeps_existing_volumes(
-    tmp_path, monkeypatch, volume, expected
-):
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
-    (tmp_path / ".env").write_text("HTTPS_PORT=8443\n")
-    calls = []
-    monkeypatch.setattr(cli, "run", lambda args, **kwargs: calls.append(args) or volume)
-    cli.pin_project_name.cache_clear()
-    try:
-        cli.pin_project_name()
-    finally:
-        cli.pin_project_name.cache_clear()
-    assert cli.read_env()["COMPOSE_PROJECT_NAME"] == expected
-    assert calls[0][:3] == ["docker", "volume", "ls"]
-
-
-def test_project_name_already_set_is_never_changed(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
-    (tmp_path / ".env").write_text("COMPOSE_PROJECT_NAME=custom\n")
-    monkeypatch.setattr(cli, "run", lambda *a, **k: pytest.fail("no Docker call expected"))
-    cli.pin_project_name.cache_clear()
-    try:
-        cli.pin_project_name()
-    finally:
-        cli.pin_project_name.cache_clear()
-    assert cli.read_env()["COMPOSE_PROJECT_NAME"] == "custom"
-
-
 def test_doctor_prints_a_korean_summary_and_json_on_request(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "ROOT", tmp_path)
     (tmp_path / ".env").write_text("COMPOSE_PROJECT_NAME=kakaotalk-bridge\n")
@@ -505,7 +437,7 @@ def test_doctor_reports_certificate_expiry(tmp_path, monkeypatch, days, ok, text
 
 
 @pytest.mark.parametrize("healthy", [True, False])
-def test_update_provisions_send_key_before_compose_and_preserves_rollback(
+def test_update_backs_up_under_the_old_images_and_rolls_back_when_unhealthy(
     tmp_path, monkeypatch, healthy
 ):
     monkeypatch.setattr(cli, "ROOT", tmp_path)
@@ -519,13 +451,11 @@ def test_update_provisions_send_key_before_compose_and_preserves_rollback(
     calls = []
 
     def prepare(args):
-        assert len((tmp_path / "secrets/send_token").read_text().strip()) >= 32
         env.write_text(new)
         return old
 
     def backup_old(**kwargs):
         assert env.read_text() == old
-        assert (tmp_path / "secrets/send_token").exists()
 
     monkeypatch.setattr(install, "prepare_images", prepare)
     monkeypatch.setattr(install, "image_config", lambda args: {"COLLECTOR_IMAGE": "helper"})
@@ -544,25 +474,4 @@ def test_update_provisions_send_key_before_compose_and_preserves_rollback(
             install.update(argparse.Namespace())
         assert calls == [new, old]
         assert env.read_text() == old
-    path = tmp_path / "secrets/send_token"
-    first = path.read_bytes()
-    install.ensure_send_secret()
-    assert path.read_bytes() == first
-    assert path.stat().st_mode & 0o777 == 0o444
     assert {name: (tmp_path / "secrets" / name).read_bytes() for name in before} == before
-
-
-@pytest.mark.parametrize("value", ["short", "read_token" * 8])
-def test_invalid_send_key_stops_update_without_replacing_credentials(tmp_path, monkeypatch, value):
-    monkeypatch.setattr(cli, "ROOT", tmp_path)
-    (tmp_path / "secrets").mkdir()
-    for name in ("read_token", "ingest_token", "device_token"):
-        (tmp_path / "secrets" / name).write_text(name * 8)
-    path = tmp_path / "secrets/send_token"
-    path.write_text(value)
-    prepare = Mock()
-    monkeypatch.setattr(install, "prepare_images", prepare)
-    with pytest.raises(RuntimeError, match="send_token"):
-        install.update(argparse.Namespace())
-    prepare.assert_not_called()
-    assert path.read_text() == value

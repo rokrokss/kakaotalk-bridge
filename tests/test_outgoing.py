@@ -321,17 +321,13 @@ def test_transport_authentication_and_sanitized_errors(monkeypatch):
     assert json.loads(calls[0].data) == {"text": "한글"}
 
 
-@pytest.mark.parametrize("legacy", [False, True])
-def test_account_change_with_same_epoch_and_database_cancels_old_requests(sending, legacy):
+def test_account_change_with_same_epoch_and_database_cancels_old_requests(sending):
     collector, client, _, body = sending
     enqueue(client, body)
     old_account = collector.account_ref
     new_account = iris.account_identity({**CONFIG, "approved_user_id": "456"})
     outgoing = client.app.state.outgoing
     with outgoing.store.connect() as db:
-        if legacy:
-            # A persisted queue created before account-bound approval was integrated.
-            db.execute("ALTER TABLE outgoing DROP COLUMN account_ref")
         data = json.loads(db.execute("SELECT body FROM statuses WHERE kind='bridge'").fetchone()[0])
         db.execute(
             "UPDATE statuses SET body=? WHERE kind='bridge'",

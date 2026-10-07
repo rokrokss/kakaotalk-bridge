@@ -18,14 +18,12 @@ def root(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "ROOT", root)
     monkeypatch.setattr(cleanup.shutil, "which", lambda name: "/usr/bin/" + name)
     monkeypatch.setattr(expose, "tailscale_binary", lambda: None)
-    cli.pin_project_name.cache_clear()
-    yield root
-    cli.pin_project_name.cache_clear()
+    return root
 
 
 def test_linux_removes_only_this_installation(root, tmp_path, monkeypatch):
     monkeypatch.setattr(cli.platform, "system", lambda: "Linux")
-    (root / ".env").write_text("COMPOSE_PROJECT_NAME=kakaotalk-collector\n")
+    (root / ".env").write_text("COMPOSE_PROJECT_NAME=kakaotalk-bridge\n")
     systemd = tmp_path / "systemd"
     systemd.mkdir()
     unit = "kakaotalk-setup-" + hashlib.sha256(str(root).encode()).hexdigest()[:12] + ".service"
@@ -48,8 +46,8 @@ def test_linux_removes_only_this_installation(root, tmp_path, monkeypatch):
             return "c1\nc2"
         if command[:3] == ["docker", "volume", "ls"]:
             return (
-                "kakaotalk-collector_android-data\n"
-                "kakaotalk-collector_restore-0123456789ab_android-data\n"
+                "kakaotalk-bridge_android-data\n"
+                "kakaotalk-bridge_restore-0123456789ab_android-data\n"
                 "restore-0123456789ab-scratch\n"
                 "kakaotalk-bridge-smoke-1_android-data\n"
                 "other_data"
@@ -61,7 +59,7 @@ def test_linux_removes_only_this_installation(root, tmp_path, monkeypatch):
             assert "--digests" in command
             return (
                 "ghcr.io/rokrokss/kakaotalk-bridge-server <none> sha256:aaa\n"
-                "kakaotalk-collector/server 0.1.0 <none>\n"
+                "kakaotalk-bridge/server local-0123 <none>\n"
                 "redroid/redroid <none> sha256:bbb\n"
                 "ghcr.io/openai/tunnel-client v0.0.15 sha256:ccc\n"
                 "python 3.12-slim-bookworm sha256:ddd"
@@ -73,7 +71,7 @@ def test_linux_removes_only_this_installation(root, tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "run", run)
     cleanup.cleanup(argparse.Namespace(local=False, yes=True))
     disable = ["systemctl", "disable", "--now", unit]
-    project = ["docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=kakaotalk-collector"]
+    project = ["docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=kakaotalk-bridge"]
     assert calls.index(disable) < calls.index(project)
     assert [path.name for path in systemd.iterdir()] == ["kakaotalk-setup-000000000000.service"]
     assert ["docker", "rm", "-f", "c1", "c2"] in calls
@@ -81,14 +79,14 @@ def test_linux_removes_only_this_installation(root, tmp_path, monkeypatch):
         "docker",
         "volume",
         "rm",
-        "kakaotalk-collector_android-data",
-        "kakaotalk-collector_restore-0123456789ab_android-data",
+        "kakaotalk-bridge_android-data",
+        "kakaotalk-bridge_restore-0123456789ab_android-data",
         "restore-0123456789ab-scratch",
     ] in calls
     assert ["docker", "network", "rm", "n1"] in calls
     assert [command[-1] for command in calls if command[:3] == ["docker", "image", "rm"]] == [
         "ghcr.io/rokrokss/kakaotalk-bridge-server@sha256:aaa",
-        "kakaotalk-collector/server:0.1.0",
+        "kakaotalk-bridge/server:local-0123",
         "redroid/redroid@sha256:bbb",
         "ghcr.io/openai/tunnel-client:v0.0.15",
     ]

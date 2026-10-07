@@ -85,7 +85,7 @@ def test_evidence_is_scoped_dated_and_never_returns_account_ids():
 
 def test_device_inspection_cleans_private_xml_and_does_not_click_or_launch(monkeypatch):
     monkeypatch.setattr(cli, "sample", lambda: {"state": "android_ready", "kakao_installed": True})
-    monkeypatch.setattr(enrollment, "current", lambda adb=None: snap())
+    monkeypatch.setattr(enrollment, "snapshot", lambda adb=None: snap())
     calls = []
 
     def adb(*args, **kwargs):

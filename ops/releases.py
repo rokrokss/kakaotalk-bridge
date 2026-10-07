@@ -1,9 +1,9 @@
 """Verified release downloads and upgrades. This module also runs as a standalone bootstrap.
 
-The installer fetches this file from main and runs it before any installed code, so an
-installation of any age can be upgraded. An upgrade never executes the installation's
-previous code: the downloaded version's own source.py swaps the code, and the new CLI
-then validates the setup options and updates the services.
+The installer fetches this file from main and runs it before any installed code. An
+upgrade never executes the installation's previous code: the downloaded version's own
+source.py swaps the code, and the new CLI then validates the setup options and updates
+the services.
 """
 
 import argparse

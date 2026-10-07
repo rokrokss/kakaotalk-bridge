@@ -84,7 +84,6 @@ git pull && kakaotalk-bridge update --source
 ```
 
 - 설정, Android 데이터, 카카오톡 로그인, 수집 승인은 유지됩니다. 업데이트 전에 암호화 백업을 만들고, 실패하면 이전 버전으로 되돌립니다.
-- 0.2.2 이하 버전이나 첫 릴리스 전에 받은 설치에는 `kakaotalk-bridge` 명령이 없습니다. 첫 줄의 설치 명령으로 업데이트하면 명령이 생깁니다.
 - `kakaotalk-bridge up`은 업데이트하지 않습니다.
 
 [업데이트 상세](operations.md#update)
@@ -156,9 +155,9 @@ bash install.sh --source   # Builds the images and Android components locally
 
 | 환경 | 실행 방식 | 검증 |
 | --- | --- | --- |
-| Apple Silicon Mac | 전용 Lima VM 자동 준비. Docker Desktop 불필요 | 0.1.0 새 설치 확인. 이번 버전의 설치 전체 과정은 미검증 |
+| Apple Silicon Mac | 전용 Lima VM 자동 준비. Docker Desktop 불필요 | 계정 없는 테스트 VM에서 업데이트 확인. 현재 버전 새 설치는 미검증 |
 | Intel Mac | QEMU 기반 Lima | 미검증 |
-| Ubuntu·Debian Linux | Docker Engine과 Binder 모듈 자동 준비 | 0.1.0 새 설치·재부팅·업데이트 확인. 0.1.0 → 이번 버전 업데이트는 계정 없는 테스트 VM에서 확인 |
+| Ubuntu·Debian Linux | Docker Engine과 Binder 모듈 자동 준비 | 계정 없는 테스트 VM에서 설치·재부팅·업데이트 확인. 이번 버전의 업데이트는 미검증 |
 | 기타 Linux | 기존 Docker·Binder 사용 | 필수 도구가 없으면 안내 후 중단 |
 | Windows + Linux 서버 | `install.ps1 -Remote`로 SSH 설치 | 미검증 |
 | Windows WSL2 | Binder가 로드된 기존 배포판 | 동작 보장 없음 |

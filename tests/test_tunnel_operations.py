@@ -221,7 +221,7 @@ def test_tunnel_admin_decision_requires_session_csrf_and_origin():
         connections.call.assert_called_once_with("POST", "/tunnel/decision", body)
 
 
-def test_tunnel_only_needs_no_public_ingress_but_keeps_old_https_admin(home):
+def test_tunnel_only_needs_no_public_ingress_but_serves_a_private_https_admin(home):
     cli.env_update({"OPENAI_TUNNEL_ENABLED": "1", "DOT_PUBLIC_URL": "https://a.invalid"})
     assert "dot-ingress" not in cli.services()
     cli.atomic(home / ".bridge/admin-url", "https://private-admin.test/admin/")

@@ -13,10 +13,8 @@ INDEX_SQL = """
 INSERT OR IGNORE INTO message_lookup
 SELECT c.id, o.device_id, o.epoch,
  json_extract(o.body,'$.database_ref.database_id'),
- CASE WHEN json_extract(o.body,'$.database_ref') IS NOT NULL
- THEN o.device_id || ':' || o.epoch || ':' || json_extract(o.body,'$.database_ref.chat_id') END,
- CASE WHEN json_extract(o.body,'$.database_ref') IS NOT NULL
- THEN o.device_id || ':' || o.epoch || ':' || json_extract(o.body,'$.database_ref.sender_id') END,
+ o.device_id || ':' || o.epoch || ':' || json_extract(o.body,'$.database_ref.chat_id'),
+ o.device_id || ':' || o.epoch || ':' || json_extract(o.body,'$.database_ref.sender_id'),
  json_extract(o.body,'$.database_ref.chat_id'), json_extract(o.body,'$.database_ref.sender_id'),
  CASE WHEN c.source_time > 0 THEN c.source_time END,
  json_extract(o.body,'$.database_ref.is_mine'), json_extract(o.body,'$.database_ref.message_type'),
@@ -48,7 +46,6 @@ def initialize(db):
     db.execute(
         "INSERT OR IGNORE INTO metadata VALUES('query_cursor_key',?)", (secrets.token_hex(32),)
     )
-    db.execute(INDEX_SQL + " WHERE c.id > (SELECT COALESCE(MAX(message_id),0) FROM message_lookup)")
     db.execute("INSERT OR IGNORE INTO metadata VALUES('identity_revision','0')")
     name_history.initialize(db)
 

@@ -578,14 +578,8 @@ async function refreshConnections() {
       card.append(paragraph('OpenAI 개인 터널'), paragraph(tunnel.tunnel_id));
       card.append(paragraph(tunnel.last_tool_at && tunnel.approved ? `마지막 도구 호출 성공: ${localTime(tunnel.last_tool_at)}` : '이 승인 이후 성공한 도구 호출 기록이 없습니다.'));
       card.append(paragraph(tunnel.approved
-        ? tunnel.expires === null ? '자동 만료 없이 접근이 허용됩니다.' : `${localTime(tunnel.expires)}까지 접근이 허용됩니다.`
+        ? '자동 만료 없이 접근이 허용됩니다.'
         : '이 개인 터널이 수집된 메시지를 읽고 요청한 이벤트 구독을 관리하도록 허용합니다. 본인만 접근할 수 있는 터널을 사용하세요. 승인은 자동 만료되지 않으며 여기에서 연결을 해제할 수 있습니다.'));
-      if (tunnel.approved && tunnel.expires !== null) {
-        card.append(button('승인 만료 기한 없애기', async () => {
-          await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: true});
-          connectionSignature = ''; await refreshConnections();
-        }));
-      }
       if (tunnel.approved) {
         card.append(paragraph(tunnel.allow_send
           ? '이 터널의 AI가 내 계정으로 기존 카카오톡 대화방에 텍스트를 보낼 수 있습니다.'

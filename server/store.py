@@ -19,24 +19,9 @@ class Conflict(Exception):
     pass
 
 
-# Fields that earlier releases always serialized. Keeping them in the digest lets a row
-# committed by an older collector be replayed after an upgrade without a false conflict.
-LEGACY_PAYLOAD = {
-    "title": None,
-    "text": None,
-    "big_text": None,
-    "text_lines": [],
-    "is_group_summary": False,
-}
-
-
 def digest(event: Observation):
     canonical = event.model_dump(mode="json")
     canonical.pop("observed_at")  # Replay keeps the first receipt; row identity is stable.
-    canonical["notification_posted_at"] = None
-    canonical["payload"] = {**LEGACY_PAYLOAD, **canonical["payload"]}
-    if canonical["database_ref"]["skip_reason"] is None:
-        del canonical["database_ref"]["skip_reason"]
     return hashlib.sha256(
         json.dumps(canonical, sort_keys=True, ensure_ascii=False).encode()
     ).hexdigest()
@@ -145,7 +130,7 @@ class Store:
                 db.execute(INDEX_SQL + " WHERE c.observation_id=?", (row,))
                 name_history.index_new(db, observation_id=row)
             else:
-                progress["skipped"] = progress.get("skipped", 0) + 1
+                progress["skipped"] += 1
             progress.update(
                 after=max(event.source_seq, progress["after"]),
                 database_id=event.database_ref.database_id,
@@ -237,7 +222,7 @@ class Store:
                 "SELECT value FROM metadata WHERE key='cursor_epoch'"
             ).fetchone()[0]
             skipped = sum(
-                json.loads(value).get("skipped", 0)
+                json.loads(value)["skipped"]
                 for (value,) in db.execute("SELECT value FROM metadata WHERE key LIKE 'iris:%'")
             )
         bridge = self.bridge_status(timeout)
@@ -311,22 +296,14 @@ class Store:
             observation = json.loads(item.pop("observation_body"))
             epoch = item.pop("observation_epoch")
             device_id = item.pop("device_id")
-            ref = observation.get("database_ref")
-            # Rows stored by the retired notification collector stay readable until pruned.
+            ref = observation["database_ref"]
             item.update(
-                source="notification",
-                completeness="notification_only",
-                ambiguity=True,
-                conversation_ref=None,
+                source="iris_db",
+                completeness="local_database_row",
+                ambiguity=False,
+                conversation_ref=f"{device_id}:{epoch}:{ref['chat_id']}",
+                database_ref=ref,
             )
-            if ref:
-                item.update(
-                    source="iris_db",
-                    completeness="local_database_row",
-                    ambiguity=False,
-                    conversation_ref=f"{device_id}:{epoch}:{ref['chat_id']}",
-                    database_ref=ref,
-                )
             item["truncated"] = bool(item["truncated"])
         return {
             "items": items,

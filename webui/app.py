@@ -151,7 +151,7 @@ def create_app(
     auth_mode = auth_mode or os.getenv("ADMIN_AUTH_MODE", "passkey")
     if auth_mode not in {"local", "passkey"}:
         raise ValueError(
-            "ADMIN_AUTH_MODE must be passkey or local; use kakaotalk-bridge passkey-login to migrate"
+            "ADMIN_AUTH_MODE must be passkey or local"
         )
     token = admin_token or secret("ADMIN_TOKEN")
     if len(token) < 32:
@@ -228,10 +228,10 @@ def create_app(
             stored = owner.session(key)
             if stored and stored.get("cookie_scope") != "admin-v2":
                 stored = None
-            if stored and stored.get("origin", "") != (local_origin if is_local(request) else ""):
+            if stored and stored["origin"] != (local_origin if is_local(request) else ""):
                 stored = None
             policy = current_policy()
-            if stored and stored.get("policy", "local") != policy:
+            if stored and stored["policy"] != policy:
                 stored = None
             session = sessions.get(key)
             if stored and session is None:

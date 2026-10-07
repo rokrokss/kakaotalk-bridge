@@ -57,27 +57,20 @@ def initialize(db):
     )""")
     db.execute("""CREATE INDEX IF NOT EXISTS history_sender_latest ON historical_sender_names
       (conversation_ref,sender_ref,observed_ms DESC,message_id DESC)""")
-    index_new(db)
 
 
 def changed(db):
     db.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='identity_revision'")
 
 
-def index_new(db, observation_id=None):
-    """Backfill once, then index new rows inside the ingestion transaction."""
-    after = db.execute("SELECT value FROM metadata WHERE key='name_history_index_v1'").fetchone()
-    high = db.execute("SELECT COALESCE(MAX(message_id),0) FROM message_lookup").fetchone()[0]
-    floor = int(after[0]) if after and int(after[0]) <= high else 0
-    selection = (
-        "m.message_id>? AND m.message_id<=?" if observation_id is None else "c.observation_id=?"
-    )
+def index_new(db, observation_id):
+    """Index a new row inside its ingestion transaction."""
     rows = db.execute(
-        f"""SELECT m.*,c.body FROM message_lookup m JOIN candidates c ON c.id=m.message_id
-        WHERE {selection} AND m.source='iris_db'
+        """SELECT m.*,c.body FROM message_lookup m JOIN candidates c ON c.id=m.message_id
+        WHERE c.observation_id=? AND m.source='iris_db'
           AND m.message_type='0' AND c.truncated=0
           AND m.sent_ms BETWEEN 1 AND 253402300799999 ORDER BY m.message_id""",
-        (floor, high) if observation_id is None else (observation_id,),
+        (observation_id,),
     )
     inserted = False
     for row in rows:
@@ -94,10 +87,6 @@ def index_new(db, observation_id=None):
                 ),
             )
             inserted = True
-    db.execute(
-        "INSERT INTO metadata VALUES('name_history_index_v1',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        (str(high),),
-    )
     if inserted:
         changed(db)
 

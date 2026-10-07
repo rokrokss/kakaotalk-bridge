@@ -17,9 +17,9 @@ KAKAO_SIGNER = "2b06cc3d47782d7c497c07f17cb5f859cd6bbcb66829f3e67b96b7a44820d2ce
 
 
 def enrolled():
-    from device.enrollment import ENROLLMENT, LEGACY_ENROLLMENT
+    from device.enrollment import ENROLLMENT
 
-    found = f"'(test -f {ENROLLMENT} || test -f {LEGACY_ENROLLMENT}) && echo present'"
+    found = f"'test -f {ENROLLMENT} && echo present'"
     return cli.adb("shell", "sh", "-c", found, check=False) == "present"
 
 

@@ -58,7 +58,6 @@ docker compose logs --tail 30 iris-collector
 - `adb-init`이 Android 시작 전에 기존 기기·Iris 수집기 공개 키를 등록합니다. `ro.adb.secure=1`은 미등록 ADB 클라이언트를 거부하고, 승인된 수집기는 Iris에 필요한 root 권한을 사용합니다. 개인 키는 상태 볼륨에 남으므로 Android 데이터와 함께 백업·복구하세요.
 - Iris는 요청마다 등록 세대, Android 지문, 휴대폰 로그아웃 기록과 LocalUser DataStore의 계정 ID(하나이며 승인한 ID와 같아야 함)를 검사하고 응답 직전에 다시 확인합니다. 카카오톡 버전은 검사하지 않습니다.
 - APK는 앱 설치용 서명 패키지가 아니라 `app_process` 빌드 산출물입니다. 수집기는 Iris를 시작할 때 기기의 APK를 이미지 안 APK와 SHA-256으로 비교하고, 다르면 업로드한 파일의 SHA-256을 다시 확인한 뒤 교체합니다. 업데이트·되돌리기 모두 실행 중인 이미지의 Iris를 사용하며 별도 이전 작업이 필요하지 않습니다.
-- 0.1.0이 쓰던 기기 파일(`/data/local/tmp/kakaocollector-*`, `/data/kakaocollector-iris`, 키보드 앱 폴더의 등록 정보)은 업데이트가 실패해 이전 버전으로 되돌아갈 때 필요하므로, 새 수집기가 10분 넘게 동작한 뒤 지웁니다.
 - GPL·MIT 고지와 대응 소스는 이미지의 `/opt/iris-overlay/`(수정 코드와 `NOTICE.md`), `/opt/iris-source.tar.gz`(원본), `/opt/iris-build.Dockerfile`(빌드 절차)에 포함됩니다. 배포 시 소스와 고지를 함께 제공하세요.
 - Netty는 `4.1.138.Final`로 맞췄으며 `/opt/iris-dependencies.txt`에 실제 의존성 그래프를 보관합니다. 오래된 Android 보안 패치는 [남은 위험](security.md#remaining-risks)을 참고하세요.
 

@@ -62,4 +62,4 @@ MCP는 본문과 함께 확인된 발신자·대화방 이름, 본인 메시지 
 
 ## Iris 구성 요소 업데이트
 
-Iris는 자동으로 업데이트됩니다. 실행 중인 Iris가 이미지의 빌드가 아니면 수집기가 프로세스를 멈추고, 기기의 APK를 이미지 안 APK와 SHA-256으로 비교해 다르면 검증한 업로드로 교체한 뒤 다시 시작합니다. `kakaotalk-bridge upgrade`·`kakaotalk-bridge update`의 이미지 변경과 되돌리기 모두 별도 명령이 필요하지 않으며 카카오톡 재설치, 재로그인, 승인 변경은 하지 않습니다. 0.1.0이 쓰던 기기 내부 파일은 업데이트가 실패해 이전 버전으로 되돌아갈 때 필요하므로 새 수집기가 10분 넘게 동작한 뒤 정리합니다. 이름 조회 상태는 `get_collector_status`로 확인하세요. 자세한 경계는 [Iris](iris.md#iris-build-and-runtime-boundaries)를 참고하세요.
+Iris는 자동으로 업데이트됩니다. 실행 중인 Iris가 이미지의 빌드가 아니면 수집기가 프로세스를 멈추고, 기기의 APK를 이미지 안 APK와 SHA-256으로 비교해 다르면 검증한 업로드로 교체한 뒤 다시 시작합니다. `kakaotalk-bridge upgrade`·`kakaotalk-bridge update`의 이미지 변경과 되돌리기 모두 별도 명령이 필요하지 않으며 카카오톡 재설치, 재로그인, 승인 변경은 하지 않습니다. 이름 조회 상태는 `get_collector_status`로 확인하세요. 자세한 경계는 [Iris](iris.md#iris-build-and-runtime-boundaries)를 참고하세요.

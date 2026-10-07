@@ -18,16 +18,12 @@ from device import cli
 
 HOME = "/data/kakaotalk-bridge"
 ENROLLMENT = HOME + "/enrollment.json"
-# Written by releases before 0.2 inside the keyboard app's private directory.
-LEGACY_ENROLLMENT = f"/data/user/0/{cli.PKG}/files/enrollment.json"
 ACCOUNT_STORE = "/data/data/com.kakao.talk/files/datastore/LocalUser_DataStore.pref.preferences_pb"
 # KakaoTalk keeps the signed-in user's ID under these LocalUser DataStore keys.
 ACCOUNT_KEYS = ("memochat_user_id", "old_user_id")
 MARK = "@@kakaotalk-bridge@@"
 SNAPSHOT = f"""
-for f in {ENROLLMENT} {LEGACY_ENROLLMENT}; do
-  if [ -f "$f" ]; then echo "$f"; cat "$f"; break; fi
-done
+cat {ENROLLMENT} 2>/dev/null
 echo; echo {MARK}
 getprop ro.build.characteristics; getprop ro.build.fingerprint
 echo {MARK}
@@ -43,7 +39,6 @@ echo; echo {MARK}
 @dataclass(frozen=True)
 class Snapshot:
     config: dict | None
-    legacy: bool
     characteristics: str
     fingerprint: str
     width: int | None
@@ -112,11 +107,8 @@ def snapshot(adb=None) -> Snapshot:
     parts = adb("shell", SNAPSHOT).split(MARK)
     if len(parts) < 6:
         raise RuntimeError("device_state_unavailable")
-    config, legacy = None, False
     stored = parts[0].strip()
-    if stored:
-        location, _, body = stored.partition("\n")
-        config, legacy = json.loads(body), location.strip() == LEGACY_ENROLLMENT
+    config = json.loads(stored) if stored else None
     props = parts[1].strip().splitlines() + ["", ""]
     sizes = re.findall(r"(\d+)x(\d+)", parts[2])
     densities = re.findall(r"density:\s*(\d+)", parts[2])
@@ -124,7 +116,6 @@ def snapshot(adb=None) -> Snapshot:
     store = parts[4].strip()
     return Snapshot(
         config=config,
-        legacy=legacy,
         characteristics=props[0].strip(),
         fingerprint=props[1].strip(),
         width=int(sizes[-1][0]) if sizes else None,
@@ -177,30 +168,6 @@ def approval(snap: Snapshot):
     return "approved", None
 
 
-def migrated(snap: Snapshot):
-    """Convert an enrollment written by an earlier release, carrying its approval over."""
-    old = snap.config
-    config = {
-        key: old[key]
-        for key in (
-            "device_id",
-            "enrollment_epoch",
-            "device_fingerprint",
-            "phone_session_confirmed_at",
-            "phone_session_report",
-            "phone_session_reported_at",
-        )
-        if key in old
-    }
-    user, _ = account(snap)
-    # Earlier releases tied approval to the KakaoTalk version. The confirmed account is
-    # the one still signed in, so the confirmation carries over to it.
-    if old.get("secondary_login_version", 0) > 0 and user:
-        config["approved_user_id"] = user
-        config["approved_at"] = old.get("tablet_session_confirmed_at") or time.time()
-    return config
-
-
 def write(config, adb=None):
     adb = adb or cli.adb
     staged = ENROLLMENT + ".next"
@@ -211,20 +178,11 @@ def write(config, adb=None):
         local.chmod(0o600)
         adb("shell", f"mkdir -p {HOME} && chown 0:0 {HOME} && chmod 700 {HOME}")
         adb("push", str(local), staged)
-    # The earlier release's copy stays until the new Iris runs, so a rollback still finds it.
     adb("shell", f"chown 0:0 {staged} && chmod 600 {staged} && mv {staged} {ENROLLMENT}")
 
 
-def current(adb=None) -> Snapshot:
-    snap = snapshot(adb)
-    if snap.legacy:
-        write(migrated(snap), adb)
-        snap = snapshot(adb)
-    return snap
-
-
 def require_approved(adb=None) -> Snapshot:
-    snap = current(adb)
+    snap = snapshot(adb)
     state, reason = approval(snap)
     if state != "approved":
         raise RuntimeError(reason)
@@ -237,7 +195,7 @@ def approve(phone_active, adb=None):
     """Record the operator's check that the phone stayed signed in after the tablet login."""
     if not phone_active:
         raise RuntimeError("phone_confirmation_required")
-    snap = current(adb)
+    snap = snapshot(adb)
     if not snap.config:
         raise RuntimeError("not_enrolled")
     problem = device_problem(snap)
@@ -262,7 +220,7 @@ def approve(phone_active, adb=None):
 
 
 def record_phone(active, adb=None):
-    snap = current(adb)
+    snap = snapshot(adb)
     config = dict(snap.config or {})
     now = time.time()
     if active:

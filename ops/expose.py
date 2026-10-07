@@ -50,17 +50,12 @@ def expose(args):
         cli.atomic(record_path, json.dumps({"hostname": hostname, "config": current}))
 
     mcp_port = (
-        config.get("mcp_port", 18787)
+        config["mcp_port"]
         if platform.system() == "Darwin" and not args.local
         else int(cli.read_env().get("DOT_HTTP_PORT", "18787"))
     )
     cli.run([*tailscale, "funnel", "--bg", "--https=443", f"http://127.0.0.1:{mcp_port}"])
     record_routes()
-    # Migrate only the old route whose complete configuration we verified above.
-    # Record each successful step so a failed migration can be retried safely.
-    if existing.get("Web", {}).get(hostname + ":8443"):
-        cli.run([*tailscale, "serve", "--https=8443", "off"])
-        record_routes()
     saved_admin = cli.ROOT / ".bridge/admin-url"
     admin_url = (
         saved_admin.read_text().strip().removesuffix("/admin/")

@@ -129,7 +129,7 @@ def test_preserve_bootstrap_keeps_identity_and_approval(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "sample", lambda: {"state": "android_ready"})
     monkeypatch.setattr(cli, "connect", Mock())
     monkeypatch.setattr(
-        enrollment, "current", lambda adb=None: snap({**identity, "approved_user_id": "123"})
+        enrollment, "snapshot", lambda adb=None: snap({**identity, "approved_user_id": "123"})
     )
     write = Mock()
     monkeypatch.setattr(enrollment, "write", write)
@@ -155,7 +155,7 @@ def test_new_enrollment_starts_locked_without_secrets_on_the_device(monkeypatch,
     monkeypatch.setattr(cli, "sample", lambda: {"state": "android_ready"})
     monkeypatch.setattr(cli, "connect", Mock())
     monkeypatch.setattr(cli, "is_installed", lambda package: True)
-    monkeypatch.setattr(enrollment, "current", lambda adb=None: snap(None))
+    monkeypatch.setattr(enrollment, "snapshot", lambda adb=None: snap(None))
     monkeypatch.setattr(iris, "stop", Mock())
     write = Mock()
     monkeypatch.setattr(enrollment, "write", write)

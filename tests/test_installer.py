@@ -237,8 +237,8 @@ def test_current_release_opens_setup_without_redeploying(installation):
     assert "이미 v0.2.0 릴리스를 사용하고 있습니다." in result.stdout
 
 
-def test_pre_release_source_snapshot_upgrades_and_keeps_building_its_own_images(installation):
-    # The shape of curl installs before the first release: main's source, no release.json.
+def test_source_download_upgrades_and_keeps_building_its_own_images(installation):
+    # Downloaded source: no release.json, no .git, and no recorded version yet.
     (installation / "release.json").unlink()
     result, calls = run_installer(installation, "--no-browser")
     assert result.returncode == 0, result.stderr

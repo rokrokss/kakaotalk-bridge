@@ -35,13 +35,13 @@ def test_anonymous_registration_cannot_fill_persistent_client_quota(tmp_path, mo
         assert auth.client(client["client_id"])["redirect_uris"] == [REDIRECT]
     with pytest.raises(AuthError):
         auth.client(clients[0]["client_id"][:-8] + "tampered")
-    # Previously approved legacy clients remain usable, including after pending expiry.
-    state.put("client", "client_legacy", {"client_id": "client_legacy", **meta})
+    # Owner-approved stored clients remain usable, including after pending expiry.
+    state.put("client", "client_stored", {"client_id": "client_stored", **meta})
     now = time.time()
     monkeypatch.setattr(time, "time", lambda: now + 601)
     with pytest.raises(AuthError):
         auth.client(clients[0]["client_id"])
-    assert auth.client("client_legacy")["redirect_uris"] == [REDIRECT]
+    assert auth.client("client_stored")["redirect_uris"] == [REDIRECT]
 
 
 def test_approved_registration_survives_pending_expiry(plugin, monkeypatch):

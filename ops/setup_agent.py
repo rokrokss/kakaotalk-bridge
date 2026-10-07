@@ -143,7 +143,7 @@ def configure_oauth(url):
             argparse.Namespace(local=True, url=None, public_url=url, enroll=False, link_only=True)
         )
     else:
-        # Preserve explicit legacy local admin login instead of changing its identity.
+        # Keep an explicit local admin login instead of changing its identity.
         cli.env_update({"DOT_APPROVAL_MODE": "admin"})
         cli.compose("up", "-d", "--no-build", "--no-deps", "dot-control", "dot-plugin")
 

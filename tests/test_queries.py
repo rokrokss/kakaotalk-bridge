@@ -11,7 +11,6 @@ from server.app import create_app
 from server.config import Settings
 from server.models import Observation
 from server.queries import Queries
-from server.store import Store
 from tests.test_api import DEVICE, INGEST, READ, auth
 from tests.test_dot_plugin import BASE, call, link, rpc
 from tests.test_iris import CONFIG, row
@@ -194,14 +193,12 @@ def test_query_rejects_bad_bounds_and_ambiguous_timezone(api, params):
     assert api.get("/v2/messages", params={}, headers=auth(INGEST)).status_code == 401
 
 
-def test_additive_index_backfill_and_unknown_timestamp(api):
+def test_unknown_timestamp_has_no_sent_at(api):
     add(api, 1, time=0)
-    with api.app.state.store.connect() as db:
-        db.execute("DELETE FROM message_lookup")
-    restarted = Store(api.app.state.store.path)
-    item = Queries(restarted).messages()["items"][0]
+    queries = Queries(api.app.state.store)
+    item = queries.messages()["items"][0]
     assert item["sent_at"] is None and item["collected_at"]
-    assert not Queries(restarted).messages(since="2026-01-01T00:00:00Z")["items"]
+    assert not queries.messages(since="2026-01-01T00:00:00Z")["items"]
 
 
 def test_metadata_refresh_resolves_existing_messages_without_advancing_event_cursor(

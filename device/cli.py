@@ -110,7 +110,7 @@ def bootstrap(rotate_epoch=False, *, preserve=False):
         raise RuntimeError("root_adb_required")
     state = Path("/state/enrollment.json")
     device = os.getenv("DEVICE_ID", "personal-tablet")
-    current = enrollment.current().config
+    current = enrollment.snapshot().config
     if current and not state.exists() and not rotate_epoch:
         raise RuntimeError("host_state_missing")
     if preserve and current:

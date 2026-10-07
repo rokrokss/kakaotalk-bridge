@@ -5,6 +5,7 @@ from cryptography.exceptions import InvalidTag
 
 from server.maintenance import backup, restore
 from server.models import Observation
+from server.outgoing import Outgoing
 from server.store import Store
 from tests.test_api import event
 
@@ -14,6 +15,7 @@ def test_encrypted_backup_restore_and_tamper_preserves_live_db(tmp_path, monkeyp
     secret.write_text(os.urandom(32).hex())
     monkeypatch.setenv("BACKUP_KEY_FILE", str(secret))
     original = Store(str(tmp_path / "original.db"))
+    Outgoing(original, None)  # The API creates the send queue in every collector DB.
     original.ingest(Observation.model_validate(event()))
     file = tmp_path / "backup.kcb"
     backup(original.path, str(file))

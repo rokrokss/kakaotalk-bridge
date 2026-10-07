@@ -235,8 +235,6 @@ def install(args):
 
 
 def update(args):
-    ensure_passkey_verifier_secret()
-    ensure_send_secret()
     old = prepare_images(args)
     try:
         # The Iris collector replaces the Android-side reader with this image's build when it
@@ -246,7 +244,6 @@ def update(args):
         cli.atomic(cli.ROOT / ".env", old)
         backup.backup(helper_image=image_config(args)["COLLECTOR_IMAGE"])
         cli.atomic(cli.ROOT / ".env", new)
-        migrate_auth_modes()
         cli.progress("새 버전으로 서비스 시작 중…")
         cli.compose("up", "-d", "--no-build", *cli.services())
         cli.progress("서비스 응답 확인 중…")
@@ -262,36 +259,3 @@ def update(args):
         cli.atomic(cli.ROOT / ".env", old)
         cli.compose("up", "-d", "--no-build", *cli.services())
         raise
-
-
-def ensure_passkey_verifier_secret():
-    path = cli.ROOT / "secrets/mcp_passkey_token"
-    if not path.exists():
-        cli.atomic(path, secrets.token_urlsafe(32) + "\n")
-        path.chmod(0o444)
-    if path.stat().st_size < 32:
-        raise BridgeError("secrets/mcp_passkey_token이 올바르지 않습니다. 백업에서 복구한 뒤 계속하세요.")
-
-
-def ensure_send_secret():
-    path = cli.ROOT / "secrets/send_token"
-    if not path.exists():
-        cli.atomic(path, secrets.token_urlsafe(32) + "\n")
-        path.chmod(0o444)
-    value = path.read_text().strip()
-    if len(value) < 32 or any(
-        value == (cli.ROOT / "secrets" / name).read_text().strip()
-        for name in ("read_token", "ingest_token", "device_token")
-    ):
-        raise BridgeError("secrets/send_token이 올바르지 않습니다. 다른 인증 키와 구분되는 전송 키를 준비하세요.")
-
-
-def migrate_auth_modes():
-    values = cli.read_env()
-    changes = {
-        name: "passkey"
-        for name in ("ADMIN_AUTH_MODE", "DOT_APPROVAL_MODE")
-        if values.get(name) == "kakao"
-    }
-    if changes:
-        cli.env_update(changes)

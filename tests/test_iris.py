@@ -11,8 +11,7 @@ from device.enrollment import Snapshot
 from server.app import create_app
 from server.config import Settings
 from server.maintenance import backup, restore
-from server.models import Observation
-from server.store import Store, digest
+from server.store import Store
 from tests.test_api import DEVICE, INGEST, READ, auth, event
 
 CONFIG = {
@@ -26,7 +25,6 @@ CONFIG = {
 def snapshot(config=CONFIG):
     return Snapshot(
         config=deepcopy(config),
-        legacy=False,
         characteristics="tablet",
         fingerprint="test-build",
         width=1200,
@@ -232,17 +230,6 @@ def test_replay_uses_row_identity_not_poll_timestamp(pipeline):
     assert result["results"][0]["reason"] == "event_id_conflict"
 
 
-def test_digest_matches_rows_committed_by_the_previous_release():
-    # Digests computed by v0.1.0, which serialized the retired notification fields.
-    expected = {
-        "10": "14bdd2600896cf3492e1e560489c5abe6ce08d6e5485838ce47439414f61d6da",
-        "11": "2304942c55cc20addc15fb3a865bf8f8915d40021a61b7d20ead77b5d98da268",
-    }
-    for record in (row(), row(11, is_mine=True, truncated=True, origin="", message="")):
-        event = Observation.model_validate(iris.make_event(CONFIG, "1:100", record))
-        assert digest(event) == expected[record["log_id"]]
-
-
 @pytest.mark.parametrize("change", [{"database_id": "1:200"}, {"high_water": "9"}])
 def test_database_replacement_or_rollback_is_blocked(pipeline, change):
     collector, _client, page = pipeline
@@ -359,26 +346,7 @@ def test_older_or_stopped_iris_is_replaced_with_this_images_build(monkeypatch):
     started = [c for c in calls if "app_process" in " ".join(c)]
     assert len(started) == 1 and iris.REMOTE_APK in started[0][1]
     stop = next(c for c in calls if "kill" in " ".join(c))
-    assert iris.PID_FILE in stop[1] and iris.LEGACY_PID_FILE in stop[1]
-    # A rollback to the previous release still needs its files.
-    assert not any("rm -rf" in " ".join(c) for c in calls)
-
-
-def test_previous_release_files_outlive_the_update_rollback_window(monkeypatch):
-    calls = []
-    monkeypatch.setattr(iris.cli, "adb", lambda *args, **kwargs: calls.append(args) or "")
-    clock = [1000.0]
-    monkeypatch.setattr(iris.time, "monotonic", lambda: clock[0])
-    collector = iris.Collector(api=Mock())
-    clock[0] += iris.LEGACY_GRACE_SECONDS - 1
-    collector.remove_legacy()
-    assert calls == []
-    clock[0] += 1
-    collector.remove_legacy()
-    collector.remove_legacy()
-    assert len(calls) == 1
-    assert calls[0][1].startswith("rm -rf /data/local/tmp/kakaocollector-iris.apk*")
-    assert iris.enrollment.LEGACY_ENROLLMENT in calls[0][1]
+    assert iris.PID_FILE in stop[1]
 
 
 def test_same_build_already_on_device_is_not_uploaded_again(monkeypatch):

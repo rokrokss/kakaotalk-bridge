@@ -193,7 +193,7 @@ def test_oauth_still_works_and_all_tools_are_shared(bridge):
     assert "result" in call(public, "get_recent_messages")
 
 
-@pytest.mark.parametrize("reason", ["revoke", "legacy_expiry", "policy", "tunnel_change"])
+@pytest.mark.parametrize("reason", ["revoke", "expired", "policy", "tunnel_change"])
 def test_connection_lifecycle_fails_closed(bridge, reason):
     private, _, control, state, keys, _, _, config = bridge
     approve(control)
@@ -201,7 +201,7 @@ def test_connection_lifecycle_fails_closed(bridge, reason):
     assert "result" in call(private, "get_profile")
     if reason == "revoke":
         approve(control, False)
-    elif reason == "legacy_expiry":
+    elif reason == "expired":
         row = state.get("grant", identity)
         row["expires"] = time.time() - 1
         state.put("grant", identity, row)
@@ -294,14 +294,10 @@ def test_permanent_approval_survives_time_cleanup_and_restart(bridge, monkeypatc
     )
 
 
-def test_explicit_approval_removes_legacy_expiry_without_replacing_subscriptions(bridge):
+def test_repeated_approval_keeps_the_grant_and_its_subscriptions(bridge):
     private, _, control, state, *_ = bridge
     approve(control)
     identity = state.get("settings", "tunnel_grant")
-    row = state.get("grant", identity)
-    row["expires"] = time.time() + 86400
-    state.put("grant", identity, row)
-    assert control.get("/connections").json()["tunnel"]["expires"] == row["expires"]
     assert "result" in rpc(private, "events/subscribe", subscription())
     subscriptions = state.all("subscription")
     approve(control)
@@ -414,7 +410,7 @@ def test_status_contains_only_metadata_and_wrong_tunnel_cannot_be_approved(bridg
 
 
 @pytest.mark.parametrize("version", ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"])
-def test_sidecar_probe_before_approval_and_legacy_tool_calls(bridge, version):
+def test_sidecar_probe_before_approval_and_tool_calls_on_every_protocol(bridge, version):
     private, public, control, *_ = bridge
     private.headers["MCP-Protocol-Version"] = version
     # Connector OAuth headers cannot replace local service authentication.

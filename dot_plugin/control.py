@@ -109,10 +109,8 @@ def create_app(config=None, state=None, control_token=None, passkeys=None, verif
                 else bool(reusable and "kakao.send" in row["scope"].split())
             )
             scope = SCOPES if allow_send else "kakao.read kakao.events"
-            # Repeated approval preserves the grant and its subscriptions. Explicit
-            # approval also removes the expiry from an existing 30-day grant.
+            # Repeated approval preserves the grant and its subscriptions.
             if body.approve and reusable:
-                row["expires"] = None
                 row["scope"] = scope
                 state.put("grant", previous, row, db=db)
                 return {"ok": True}

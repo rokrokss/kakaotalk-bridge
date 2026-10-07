@@ -70,10 +70,6 @@ class Outgoing:
                 CREATE INDEX IF NOT EXISTS outgoing_pending ON outgoing(status, created_at);
                 CREATE INDEX IF NOT EXISTS outgoing_created ON outgoing(created_at);
             """)
-            if "account_ref" not in {
-                row["name"] for row in db.execute("PRAGMA table_info(outgoing)")
-            }:
-                db.execute("ALTER TABLE outgoing ADD COLUMN account_ref TEXT")
 
     @staticmethod
     def expire(db):
@@ -205,7 +201,7 @@ class Outgoing:
             db.execute(
                 "UPDATE outgoing SET status='failed',reason='enrollment_changed',text=NULL "
                 "WHERE status='queued' AND (device_id!=? OR epoch!=? OR database_id!=? "
-                "OR account_ref IS NULL OR account_ref!=?)",
+                "OR account_ref!=?)",
                 (
                     self.config.device_id,
                     str(body.enrollment_epoch),

@@ -7,7 +7,6 @@ from device import iris
 from server.models import Observation
 from server.name_history import members
 from server.queries import Queries
-from server.store import Store
 from tests import test_queries
 from tests.test_api import INGEST, auth
 from tests.test_iris import CONFIG, row
@@ -73,7 +72,7 @@ def test_historical_name_latest_source_time_current_profile_precedence_and_refre
     assert got["updated_at"] != got["name_observed_at"]
     store = api.app.state.store
     checkpoint = store.checkpoint()
-    legacy = store.messages()
+    pending = store.messages()
     assert store.ingest(event) == "duplicate"
     missing(api, status="unavailable")
     assert sender(api, message)["name"] == "Later"
@@ -87,7 +86,7 @@ def test_historical_name_latest_source_time_current_profile_precedence_and_refre
     current = sender(api, message)
     assert current["name"] == "Current" and current["name_status"] == "resolved"
     assert current["name_evidence_message_id"] is None and current["name_observed_at"] is None
-    assert store.checkpoint() == checkpoint and store.messages() == legacy
+    assert store.checkpoint() == checkpoint and store.messages() == pending
 
 
 @pytest.mark.parametrize("kind", ["OM", "OD"])
@@ -172,21 +171,14 @@ def test_join_parsing_preserves_large_integer_ids_and_deduplicates():
     ]
 
 
-def test_backfill_restart_preserves_event_cursor_and_retention_deletes_evidence(api):
+def test_retention_deletes_name_evidence(api):
     target = add(api, 1)
     missing(api)
     old, _ = feed(api, 2, name="Old", created_at=1791071000)
     newer, _ = feed(api, 3, name="New", created_at=1791072000)
     store = api.app.state.store
-    checkpoint, legacy = store.checkpoint(), store.messages()
-    with store.connect() as db:
-        db.execute("DROP TABLE historical_sender_names")
-        db.execute("DELETE FROM metadata WHERE key='name_history_index_v1'")
-    for _ in range(2):
-        restarted = Store(store.path)
-        got = Queries(restarted).context(target, 0, 0)["items"][0]["sender"]
-        assert got["name"] == "New" and got["name_evidence_message_id"] == newer
-        assert restarted.checkpoint() == checkpoint and restarted.messages() == legacy
+    got = Queries(store).context(target, 0, 0)["items"][0]["sender"]
+    assert got["name"] == "New" and got["name_evidence_message_id"] == newer
     with store.connect() as db:
         db.execute(
             "UPDATE observations SET received_at='2000-01-01' WHERE id=(SELECT observation_id FROM candidates WHERE id=?)",

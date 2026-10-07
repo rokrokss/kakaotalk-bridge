@@ -43,7 +43,7 @@ class OwnerAuth:
             if (
                 not record
                 or record["expires"] <= time.time()
-                or record.get("policy", "local") != policy
+                or record["policy"] != policy
             ):
                 return False
             owner = self.state.get("owner", "password", db=db)
@@ -121,7 +121,7 @@ def main():
     auth = OwnerAuth(os.getenv("ADMIN_AUTH_DB", "/auth/admin.db"), secret("ADMIN_TOKEN"))
     mode = os.getenv("ADMIN_AUTH_MODE", "passkey")
     if mode not in {"local", "passkey"}:
-        raise SystemExit("ADMIN_AUTH_MODE must be passkey or local; run kakaotalk-bridge passkey-login")
+        raise SystemExit("ADMIN_AUTH_MODE must be passkey or local")
     from server.passkey_client import PasskeyClient
 
     passkeys = PasskeyClient("admin")

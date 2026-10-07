@@ -84,12 +84,11 @@ class OAuth:
         if self.config.approval_mode == "admin":
             info = self.passkey_call("info")
             # Local admin consent must be revoked on passkey recovery/removal too.
-            # Keep the legacy policy only for an unconfigured password/key owner.
-            return "admin:" + info["policy"] if info["configured"] else "legacy:admin"
+            return "admin:" + info["policy"] if info["configured"] else "local:admin"
         return (
             self.passkey_call("info")["policy"]
             if self.config.approval_mode == "passkey"
-            else "legacy:" + self.config.approval_mode
+            else self.config.approval_mode
         )
 
     def rate(self, operation, count, period=60):
@@ -240,7 +239,7 @@ class OAuth:
         if (
             not record
             or record["expires"] <= time.time()
-            or record.get("mode", self.config.approval_mode) != self.config.approval_mode
+            or record["mode"] != self.config.approval_mode
             or not hmac.compare_digest(record["cookie"], digest(cookie or ""))
         ):
             raise AuthError("invalid_approval", 403)
@@ -409,7 +408,7 @@ class OAuth:
             or not hmac.compare_digest(record["cookie"], digest(cookie or ""))
         ):
             raise AuthError("invalid_approval", 403)
-        return {"status": record.get("status", "pending")}
+        return {"status": record["status"]}
 
     def authenticate_client(self, form, authorization):
         client_id, secret, method = form.get("client_id"), form.get("client_secret"), "none"
