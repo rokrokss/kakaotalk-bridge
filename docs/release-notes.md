@@ -38,6 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 - 실제로 로그인된 카카오톡 DB에서 새 Iris의 수집
 - 로그아웃이나 계정 전환 후 카카오톡이 남기는 정보. 계정 확인은 변경 감지용이며 보안 경계가 아닙니다.
 - 실제 기기에서 휴대폰 로그아웃을 기록했을 때의 수집 중지
+- 실제 Aurora에서 익명 로그인 감지 후 카카오톡 페이지 자동 열기
 - 새 출력을 포함한 Mac 설치 전체 과정
 - Windows·WSL2 실행
 
