@@ -121,8 +121,6 @@ AI 앱이 내 컴퓨터 또는 SSH를 통해 Bridge 어댑터를 실행합니다
 | Linux amd64 / arm64 | 전용 호스트 또는 VM에 Docker Engine, Compose v2, Android Binder가 필요합니다. 검증된 Mac/Lima 환경 밖의 카카오톡·redroid 호환성은 아직 확인하지 않았습니다. |
 | Windows | 기존 Linux 서버 또는 Binder를 지원하는 WSL2가 필요합니다. Windows에서의 실행은 아직 검증하지 않았습니다. |
 
-이번 버전의 계정 기반 승인과 새 Iris 수집 등 일부 동작은 아직 실제 계정으로 확인하지 않았습니다. [미검증 범위](docs/implementation.md#not-yet-verified)
-
 Mac VM에는 CPU 6개와 메모리 8 GiB가 설정됩니다. 측정된 최소 사양은 아닙니다.
 [환경별 설치 안내](docs/quickstart.md#platforms) · [검증 내역](docs/implementation.md)
 
