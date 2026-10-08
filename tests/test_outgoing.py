@@ -120,7 +120,16 @@ def test_stale_login_or_changed_database_cannot_send(sending, change):
     assert enqueue(client, body).status_code in (409, 423)
 
 
-def test_send_waits_until_kakaotalk_has_shown_a_notification(sending, monkeypatch):
+@pytest.mark.parametrize(
+    "recheck",
+    [
+        # The first notification opens sending on the next check.
+        {"return_value": True},
+        # An unreadable check does not block: Iris still verifies the referer before sending.
+        {"side_effect": subprocess.TimeoutExpired("adb", 5)},
+    ],
+)
+def test_send_waits_until_kakaotalk_has_shown_a_notification(sending, monkeypatch, recheck):
     collector, client, _, body = sending
     monkeypatch.setattr(iris, "notification_reply_ready", Mock(return_value=False))
     collector.send_checked = 0
@@ -128,12 +137,10 @@ def test_send_waits_until_kakaotalk_has_shown_a_notification(sending, monkeypatc
     response = enqueue(client, body)
     assert response.status_code == 423
     assert response.json() == {"error": "sending_unavailable_until_kakaotalk_notification"}
-    # An unreadable check does not block: Iris still verifies the referer before sending.
-    timeout = subprocess.TimeoutExpired("adb", 25)
-    monkeypatch.setattr(iris, "notification_reply_ready", Mock(side_effect=timeout))
+    monkeypatch.setattr(iris, "notification_reply_ready", Mock(**recheck))
     collector.send_checked = 0
     collector.tick()
-    assert collector.send_ready is None
+    assert collector.send_ready is recheck.get("return_value")
     assert enqueue(client, body).json()["status"] == "queued"
 
 
