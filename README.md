@@ -59,7 +59,7 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
   </picture>
 </p>
 
-**대화 요약**, **키워드·날짜별 메시지 검색**, **수집 상태 확인**도 요청할 수 있습니다. 전송 권한을 설정하면 **“이 방에 7시에 도착한다고 보내줘”**처럼 기존 대화방에 텍스트를 보낼 수 있습니다. [메시지 전송 안내](docs/sending.md)
+**대화 요약**, **키워드·날짜별 메시지 검색**, **수집 상태 확인**도 요청할 수 있습니다. 전송 권한을 설정하면 "이 방에 7시에 도착한다고 보내줘"처럼 기존 대화방에 텍스트를 보낼 수 있습니다. [메시지 전송 안내](docs/sending.md)
 
 <a id="connect-your-ai"></a>
 ## AI 연결하기
