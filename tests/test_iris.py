@@ -370,8 +370,10 @@ def test_notification_reply_check_blocks_only_on_a_confirmed_absence(
     monkeypatch.setattr(iris, "KAKAO_PREFS", str(path))
     monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{os.environ['PATH']}")
 
-    def device_shell(shell, command, check):
-        result = subprocess.run(["sh", "-c", command], capture_output=True, text=True, check=check)
+    def device_shell(shell, command, check, timeout):
+        result = subprocess.run(
+            ["sh", "-c", command], capture_output=True, text=True, check=check, timeout=timeout
+        )
         return result.stdout.strip()
 
     monkeypatch.setattr(iris.cli, "adb", device_shell)

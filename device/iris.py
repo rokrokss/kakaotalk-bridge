@@ -132,6 +132,7 @@ def notification_reply_ready():
         "grep -qE '<string name=\"NotificationReferer\">[^<]*[^<[:space:]]' "
         f"{KAKAO_PREFS} 2>/dev/null; echo $?",
         check=False,
+        timeout=5,  # Polled between page reads; a hung shell must not stall collection.
     )
     # grep exits 1 when the value is absent and 2 when it cannot read the file.
     return {"0": True, "1": False}.get(answer)
