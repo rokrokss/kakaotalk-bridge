@@ -109,9 +109,11 @@ def collector_status():
         data = json.load(response)
         # Status only: this service does not proxy arbitrary API paths or messages.
         bridge = data.get("bridge") or {}
+        # A stopped collector blocks sends for another reason; its last check is not the cause.
+        waiting = data["state"] == "collecting_partial"
         return {
             k: data[k] for k in ("state", "warnings", "coverage", "last_observation_received_at")
-        } | {"send_needs_notification": bridge.get("notification_reply_ready") is False}
+        } | {"send_needs_notification": waiting and bridge.get("notification_reply_ready") is False}
 
 
 def create_app(

@@ -236,18 +236,22 @@ def test_long_job_blocks_device_controls_and_sanitizes_failures(console):
 
 
 @pytest.mark.parametrize(
-    ("bridge", "needed"),
+    ("state", "bridge", "needed"),
     [
-        ({"notification_reply_ready": False}, True),
-        ({"notification_reply_ready": None}, False),
-        (None, False),
+        ("collecting_partial", {"notification_reply_ready": False}, True),
+        ("collecting_partial", {"notification_reply_ready": None}, False),
+        ("collecting_partial", None, False),
+        # A stale or disconnected collector reports its last check; the gate fails earlier.
+        ("needs_attention", {"notification_reply_ready": False}, False),
     ],
 )
-def test_collector_status_flags_sending_before_first_notification(monkeypatch, bridge, needed):
+def test_collector_status_flags_sending_before_first_notification(
+    monkeypatch, state, bridge, needed
+):
     from webui import app as webui
 
     status = {
-        "state": "collecting_partial",
+        "state": state,
         "warnings": [],
         "coverage": {},
         "last_observation_received_at": None,
