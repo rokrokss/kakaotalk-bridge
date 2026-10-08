@@ -582,13 +582,18 @@ async function refreshConnections() {
         ? '자동 만료 없이 접근이 허용됩니다.'
         : '이 개인 터널이 수집된 메시지를 읽고 요청한 이벤트 구독을 관리하도록 허용합니다. 본인만 접근할 수 있는 터널을 사용하세요. 승인은 자동 만료되지 않으며 여기에서 연결을 해제할 수 있습니다.'));
       if (tunnel.approved) {
+        // Offer sending only after a request has succeeded, so setup never starts with it.
+        const connected = !!tunnel.last_tool_at;
         card.append(paragraph(tunnel.allow_send
           ? '이 터널의 AI가 내 계정으로 기존 카카오톡 대화방에 텍스트를 보낼 수 있습니다.'
-          : '메시지 전송을 허용하면 이 터널의 AI가 내 계정으로 기존 대화방에 텍스트를 보낼 수 있습니다.'));
-        card.append(button(tunnel.allow_send ? '메시지 전송 권한 해제' : '메시지 전송 허용', async () => {
+          : connected ? '메시지 전송을 허용하면 이 터널의 AI가 내 계정으로 기존 대화방에 텍스트를 보낼 수 있습니다.'
+          : '연결을 마친 뒤 메시지 전송을 허용할 수 있습니다. ChatGPT에 추가하고 “카카오톡 수집 상태 알려줘”라고 요청해 첫 요청이 성공하면 버튼이 켜집니다.'));
+        const send = button(tunnel.allow_send ? '메시지 전송 권한 해제' : '메시지 전송 허용', async () => {
           await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: true, allow_send: !tunnel.allow_send});
           connectionSignature = ''; await refreshConnections();
-        }));
+        });
+        send.disabled = !tunnel.allow_send && !connected;
+        card.append(send);
       }
       card.append(button(tunnel.approved ? '터널 연결 해제' : '개인 터널 허용', async () => {
         await api('tunnel/decision', {tunnel_id: tunnel.tunnel_id, approve: !tunnel.approved});
