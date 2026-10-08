@@ -145,10 +145,14 @@
             </div>
           </details>
           <details id="events-panel" class="management-panel">
-            <summary>대화 이벤트</summary>
+            <summary>대화 이벤트 <span>새 메시지를 AI에 바로 알리기</span></summary>
             <div class="section-body">
-              <p>연결된 AI에 새 메시지 이벤트를 보낼 대화를 선택하세요. 기본값은 모든 대화에서 꺼짐입니다. 메시지 수집과 검색에는 영향을 주지 않습니다.</p>
-              <p class="hint">켜면 그 시점부터 새로 수집된 메시지의 이벤트를 허용합니다. AI 클라이언트에서도 MCP 이벤트를 구독해야 합니다. 끄면 대기 중인 이벤트가 취소되지만 이미 전송 중인 이벤트는 전달될 수 있습니다.</p>
+              <p>켜 둔 대화에 새 카카오톡 메시지가 오면 연결된 AI에 바로 알립니다. 매번 AI에 물어보지 않아도 새 메시지를 읽고 요약하거나 정리하게 하려면 사용하세요. 꺼 두어도 메시지 수집과 AI의 조회·검색은 그대로 됩니다.</p>
+              <ol class="setup-steps">
+                <li>아래에서 알릴 대화를 찾아 <strong>꺼짐</strong>을 눌러 <strong>허용</strong>으로 바꾸세요. 모든 대화는 처음에 꺼져 있습니다.</li>
+                <li>연결된 AI에 “카카오톡 새 메시지 이벤트를 구독해 줘”라고 요청하세요. 대화에 <strong>등록된 구독</strong>이 보이면 준비된 것입니다.</li>
+              </ol>
+              <p class="hint">켠 뒤에 수집된 메시지부터 알리며 이전 메시지는 보내지 않습니다. 끄면 아직 보내지 않은 알림을 취소하지만 이미 보내는 중인 알림은 전달될 수 있습니다. AI 앱이 MCP 이벤트 구독을 지원해야 동작합니다.</p>
               <form id="event-search-form">
                 <label for="event-search">대화 찾기</label>
                 <div class="input-row">
