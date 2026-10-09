@@ -10,6 +10,8 @@
 
 [가상 태블릿을 쓰는 이유](#why-a-virtual-tablet) · [시작하기](#getting-started) · [첫 질문 해보기](#try-your-first-question) · [AI 연결하기](#connect-your-ai) · [사용 안내](#documentation)
 
+한국어 · [English](README.en.md)
+
 </div>
 
 <a id="why-a-virtual-tablet"></a>
