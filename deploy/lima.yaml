@@ -12,10 +12,8 @@ mounts: []
 containerd:
   system: false
   user: false
+# Bridge forwards its own ports over SSH (ops/lima.py forward), so Lima forwards none.
 portForwards:
-  - guestPort: 8443
-    hostPort: 18443
-    hostIP: 127.0.0.1
   - guestPortRange: [1, 65535]
     proto: any
     ignore: true

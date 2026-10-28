@@ -54,7 +54,7 @@ kakaotalk-bridge passkey-login
 <a id="deploy-in-lima-on-a-mac"></a>
 ## Mac의 Lima 배포
 
-Mac의 `kakaotalk-bridge`가 만든 VM은 MCP 진입점을 Mac의 `127.0.0.1:18787`(첫 설치 때 사용 중이면 다른 빈 포트)로 전달합니다. Mac에서 실행한 `kakaotalk-bridge expose`는 Mac의 Tailscale Funnel을 이 포트에 연결하고, 관리 화면의 **Tailscale로 HTTPS 주소 만들기**는 VM 안의 Tailscale을 사용합니다. 어느 쪽도 별도 터널이 필요하지 않습니다.
+Mac의 `kakaotalk-bridge`는 자신이 만든 VM의 MCP 진입점을 포트 연결 LaunchAgent로 Mac의 `127.0.0.1:18787`(첫 설치 때 사용 중이면 다른 빈 포트)에 전달합니다. Mac에서 실행한 `kakaotalk-bridge expose`는 Mac의 Tailscale Funnel을 이 포트에 연결하고, 관리 화면의 **Tailscale로 HTTPS 주소 만들기**는 VM 안의 Tailscale을 사용합니다. 어느 쪽도 별도 터널이 필요하지 않습니다.
 
 [직접 만든 Lima VM](onboarding.md#manual-deployment)은 이 포트를 전달하지 않으므로 SSH 터널을 사용합니다.
 

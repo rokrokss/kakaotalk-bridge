@@ -8,7 +8,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from ops import cli, expose, launcher
+from ops import cli, expose, launcher, lima
 from ops.errors import BridgeError
 
 SYSTEMD = Path("/etc/systemd/system")
@@ -33,6 +33,7 @@ def confirm(args, mac):
     elif config.exists():
         vm = json.loads(config.read_text())["vm"]
         print(f"- Lima VM({vm})과 그 안의 서비스, 카카오톡 로그인, 수집한 메시지, 패스키, 백업")
+        print("- 관리 화면·MCP 포트를 연결하는 LaunchAgent")
     if (cli.ROOT / ".git").exists():
         print("- 설치 폴더의 설정, 키, 백업 (소스 코드는 유지)")
     else:
@@ -75,6 +76,7 @@ def remove_vm():
     if not shutil.which("limactl"):
         raise BridgeError("Lima를 찾을 수 없어 VM을 지우지 못했습니다. brew install lima로 설치한 뒤 다시 실행하세요.")
     vm = json.loads(config.read_text())["vm"]
+    lima.stop_forwarding(vm)
     if vm in cli.run(["limactl", "list", "--format", "{{.Name}}"], capture=True).splitlines():
         cli.progress("가상 머신 삭제 중…")
         cli.run(["limactl", "delete", "--force", vm], capture=True)

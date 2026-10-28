@@ -14,7 +14,7 @@ import webbrowser
 from pathlib import Path
 from urllib.request import urlopen
 
-from ops import access, cli, expose, launcher, releases
+from ops import access, cli, expose, launcher, lima, releases
 from ops.errors import BridgeError
 from ops.setup_output import SetupOutput, progress, provider_line, run
 
@@ -333,8 +333,7 @@ class Runtime:
         instances = run(["limactl", "list", "--format", "{{.Name}}"], capture=True).splitlines()
         if config["vm"] not in instances:
             return False
-        progress("가상 머신 시작 중…")
-        run(["limactl", "start", "--tty=false", config["vm"]])
+        lima.boot(config["vm"])
         try:
             run(
                 [

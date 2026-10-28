@@ -320,18 +320,115 @@ def test_source_archive_without_git_has_every_file_the_images_copy(home):
         assert copied <= set(bundle.getnames())
 
 
-def test_mac_start_wakes_vm_before_running_compose(home, monkeypatch):
-    (home / ".bridge").mkdir()
-    (home / ".bridge/mac.json").write_text(
-        json.dumps({"vm": "existing", "directory": "/srv/bridge", "admin_port": 18443})
+def lima_instance(status="Running", rules=({"guestPortRange": [1, 65535], "ignore": True},)):
+    return json.dumps(
+        {
+            "status": status,
+            "sshConfigFile": "/lima/vm/ssh.config",
+            "config": {"portForwards": list(rules)},
+        }
     )
+
+
+def test_mac_start_wakes_vm_and_its_ports_before_running_compose(home, monkeypatch):
+    (home / ".bridge").mkdir()
+    config = {"vm": "existing", "directory": "/srv/bridge", "admin_port": 18443}
+    (home / ".bridge/mac.json").write_text(json.dumps(config))
     monkeypatch.setattr(cli.shutil, "which", lambda _: "/usr/bin/limactl")
-    execute = Mock(side_effect=["existing\n", "", ""])
+    calls = []
+    outputs = iter(["existing\n", lima_instance(), "", ""])
+
+    def execute(command, **kwargs):
+        calls.append(command)
+        return next(outputs)
+
     monkeypatch.setattr(cli, "run", execute)
+    monkeypatch.setattr(lima, "forward", lambda saved: calls.append(["forward", saved]))
     lima.mac(argparse.Namespace(command="start"))
-    assert execute.call_args_list[0].args[0] == ["limactl", "list", "--format", "{{.Name}}"]
-    assert execute.call_args_list[1].args[0] == ["limactl", "start", "--tty=false", "existing"]
-    assert execute.call_args_list[2].args[0][-2:] == ["--local", "start"]
+    assert calls[:4] == [
+        ["limactl", "list", "--format", "{{.Name}}"],
+        ["limactl", "list", "--json", "existing"],
+        ["limactl", "start", "--tty=false", "existing"],
+        ["forward", config],
+    ]
+    assert calls[4][-2:] == ["--local", "start"]
+
+
+@pytest.mark.parametrize("status", ["Running", "Stopped"])
+def test_vm_from_older_release_stops_once_to_take_its_ports_from_lima(home, monkeypatch, status):
+    rules = [
+        {"guestPort": 8443, "hostPort": 18443},
+        {"guestPort": 18789, "hostPort": 54333},
+        {"guestPortRange": [1, 65535], "ignore": True},
+    ]
+    calls = []
+
+    def execute(command, **kwargs):
+        calls.append(command)
+        return lima_instance(status, rules) if command[1] == "list" else ""
+
+    monkeypatch.setattr(cli, "run", execute)
+    lima.boot("old-vm")
+    assert calls == [
+        ["limactl", "list", "--json", "old-vm"],
+        *([["limactl", "stop", "old-vm"]] if status == "Running" else []),
+        [
+            "limactl", "edit", "--tty=false", "--set",
+            '.portForwards |= map(select(has("guestPort") | not))', "old-vm",
+        ],
+        ["limactl", "start", "--tty=false", "old-vm"],
+    ]
+
+
+def test_launch_agent_forwards_saved_ports_over_its_own_ssh_connection(home, monkeypatch):
+    import plistlib
+    from pathlib import Path
+
+    config = {
+        "vm": "bridge-vm", "directory": "/srv/bridge", "admin_port": 39443,
+        "mcp_port": 39787, "local_admin_port": 39789,
+    }
+    calls = []
+
+    def execute(command, **kwargs):
+        calls.append(command)
+        return lima_instance() if command[1] == "list" else ""
+
+    monkeypatch.setattr(cli, "run", execute)
+    monkeypatch.setattr(lima.subprocess, "run", lambda command, **kwargs: calls.append(command))
+    monkeypatch.setattr(lima, "listening", lambda port: True)
+    lima.forward(config)
+
+    label = "dev.kakaocollector.bridge.ports.bridge-vm"
+    plist = Path.home() / "Library/LaunchAgents" / (label + ".plist")
+    domain = f"gui/{os.getuid()}"
+    assert calls[1:] == [
+        ["launchctl", "bootout", f"{domain}/{label}"],
+        ["launchctl", "bootstrap", domain, str(plist)],
+    ]
+    job = plistlib.loads(plist.read_bytes())
+    assert job["Label"] == label and job["KeepAlive"] and job["RunAtLoad"]
+    command = job["ProgramArguments"]
+    assert command[:3] == ["/usr/bin/ssh", "-F", "/lima/vm/ssh.config"]
+    assert command[-1] == "lima-bridge-vm"
+    for option in ("ControlPath=none", "ExitOnForwardFailure=yes", "ServerAliveInterval=5"):
+        assert option in command
+    assert [command[i + 1] for i, part in enumerate(command) if part == "-L"] == [
+        "127.0.0.1:39443:127.0.0.1:8443",
+        "127.0.0.1:39787:127.0.0.1:18787",
+        "127.0.0.1:39789:127.0.0.1:18789",
+    ]
+
+
+def test_ports_that_never_listen_fail_setup_instead_of_opening_a_dead_page(home, monkeypatch):
+    monkeypatch.setattr(cli, "run", lambda command, **kwargs: lima_instance())
+    monkeypatch.setattr(lima.subprocess, "run", Mock())
+    monkeypatch.setattr(lima, "listening", lambda port: port != 39789)
+    monkeypatch.setattr(lima.time, "monotonic", Mock(side_effect=[0, 0, 31]))
+    monkeypatch.setattr(lima.time, "sleep", Mock())
+
+    with pytest.raises(RuntimeError, match="39789"):
+        lima.forward({"vm": "bridge-vm", "admin_port": 39443, "local_admin_port": 39789})
 
 
 def test_mac_start_never_creates_a_missing_vm_by_name(home, monkeypatch):
@@ -354,16 +451,24 @@ def test_mac_installed_checks_vm_exists_before_starting(home, monkeypatch, guest
         home / ".bridge/mac.json",
         json.dumps({"vm": "existing", "directory": "/srv/bridge"}),
     )
-    execute = Mock(
-        side_effect=["existing\nunrelated-vm\n", "", "" if guest_installed else RuntimeError()]
-    )
+    calls = []
+    outputs = iter(["existing\nunrelated-vm\n", "" if guest_installed else RuntimeError()])
+
+    def execute(command, **kwargs):
+        calls.append(command)
+        output = next(outputs)
+        if isinstance(output, Exception):
+            raise output
+        return output
+
     monkeypatch.setattr(onboarding, "run", execute)
+    monkeypatch.setattr(lima, "boot", lambda vm: calls.append(["boot", vm]))
 
     assert onboarding.Runtime().installed() is guest_installed
 
-    assert [call.args[0] for call in execute.call_args_list] == [
+    assert calls == [
         ["limactl", "list", "--format", "{{.Name}}"],
-        ["limactl", "start", "--tty=false", "existing"],
+        ["boot", "existing"],
         ["limactl", "shell", "--workdir=/", "existing", "sudo", "test", "-f",
          "/srv/bridge/.bridge/installed"],
     ]
@@ -403,6 +508,8 @@ def test_deleted_vm_reuses_project_template_and_saved_ports(home, monkeypatch):
     socket_factory.return_value.__exit__ = Mock(return_value=False)
     monkeypatch.setattr(lima.socket, "socket", socket_factory)
     monkeypatch.setattr(lima, "package_source", lambda path: path.write_bytes(b"fixture"))
+    forward = Mock()
+    monkeypatch.setattr(lima, "forward", forward)
     calls = []
     rendered = []
 
@@ -429,8 +536,9 @@ def test_deleted_vm_reuses_project_template_and_saved_ports(home, monkeypatch):
     assert "template:_images/ubuntu-24.04" in rendered[0]
     assert "cpus: 6" in rendered[0] and "memory: 8GiB" in rendered[0]
     assert "docker.io docker-compose-v2" in rendered[0]
-    for port in (39443, 39787, 39789):
-        assert f"hostPort: {port}" in rendered[0]
+    # Lima forwards nothing; the LaunchAgent connects the saved ports.
+    assert "guestPort:" not in rendered[0]
+    forward.assert_called_once_with(config)
     assert json.loads(saved.read_text()) == config
     assert (home / ".env").read_text() == "HOST_SETTING=keep\n"
     assert any(command[-3:] == ["--local", "install", "--source"] for command in calls)

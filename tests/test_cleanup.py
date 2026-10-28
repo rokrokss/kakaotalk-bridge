@@ -1,11 +1,13 @@
 import argparse
 import hashlib
 import json
+import os
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 
-from ops import cleanup, cli, expose
+from ops import cleanup, cli, expose, lima
 
 
 @pytest.fixture
@@ -124,9 +126,16 @@ def test_mac_deletes_vm_and_only_the_funnel_it_set(root, monkeypatch, capsys, ow
         return ""
 
     monkeypatch.setattr(cli, "run", run)
+    monkeypatch.setattr(lima.subprocess, "run", lambda command, **kwargs: calls.append(command))
+    label = "dev.kakaocollector.bridge.ports.bridge-vm"
+    agent = Path.home() / "Library/LaunchAgents" / (label + ".plist")
+    agent.parent.mkdir(parents=True)
+    agent.write_text("")
     cleanup.cleanup(argparse.Namespace(local=False, yes=True))
     assert "Lima VM(bridge-vm)" in capsys.readouterr().out
     assert (["tailscale", "serve", "reset"] in calls) is owned
+    assert ["launchctl", "bootout", f"gui/{os.getuid()}/{label}"] in calls
+    assert not agent.exists()
     assert ["limactl", "delete", "--force", "bridge-vm"] in calls
     assert not any(command[0] in {"docker", "systemctl"} for command in calls)
     assert not root.exists()

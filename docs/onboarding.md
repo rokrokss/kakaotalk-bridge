@@ -68,6 +68,7 @@ scripts/dot-tunnel.sh        # Forward Mac 127.0.0.1:18788 to the VM's MCP ingre
 ```
 
 - `lima-compose.sh`는 `deploy/compose.lima.yaml`(Apple Silicon용 64비트 Android 14 이미지 고정, binderfs 기기 직접 연결)을 함께 적용합니다. `.bridge/`의 Compose 설정은 적용하지 않으므로 서비스 시작·중지는 VM 안의 `kakaotalk-bridge`로 하세요.
+- `deploy/lima.yaml`은 Lima에 포트를 전달하게 하지 않습니다. 관리 화면 등은 `dot-tunnel.sh`처럼 `ssh -F ~/.lima/<VM>/ssh.config -N -L 127.0.0.1:<Mac 포트>:127.0.0.1:<VM 포트> lima-<VM>`으로 전달하세요(관리 화면 HTTPS는 VM의 8443).
 - 공개 HTTPS 구성은 [Mac의 Lima 배포](dot-plugin.md#deploy-in-lima-on-a-mac)를 보세요.
 
 > Mac이 잠들면 수집과 외부 접속이 멈출 수 있습니다. `limactl delete`와 `docker compose down -v`는 로그인 상태와 데이터를 지웁니다.

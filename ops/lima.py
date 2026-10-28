@@ -3,6 +3,7 @@
 import json
 import os
 import platform
+import plistlib
 import re
 import secrets
 import shutil
@@ -86,6 +87,105 @@ def available_port(preferred, requested=None, exclude=()):
         return probe.getsockname()[1]
 
 
+def listening(port):
+    with socket.socket() as probe:
+        probe.settimeout(0.2)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
+
+
+# Bridge, not Lima, forwards these guest ports to the Mac. Lima forwards a port only after
+# its guest agent reports the listener, and with Lima 2.2.1 on macOS 27 that event stream
+# can stay silent for a whole boot while every service is healthy. Lima's static forwards
+# skip the guest agent but ride its SSH ControlMaster, which dies unnoticed when the Mac
+# sleeps. A LaunchAgent keeps its own SSH connection instead, and launchd reconnects it
+# after the VM restarts or keepalives fail on wake.
+FORWARDED_PORTS = {"admin_port": 8443, "mcp_port": 18787, "local_admin_port": 18789}
+
+
+def instance(vm):
+    return json.loads(cli.run(["limactl", "list", "--json", vm], capture=True))
+
+
+def boot(vm):
+    """Start the managed VM with no Bridge port left for Lima to forward."""
+    current = instance(vm)
+    if any(rule.get("guestPort") for rule in (current.get("config") or {}).get("portForwards") or []):
+        # VMs created before 0.3.3 ask Lima to forward Bridge's ports, which would race the
+        # LaunchAgent for them. Lima only edits a stopped VM.
+        cli.progress("포트 연결 방식을 바꾸기 위해 가상 머신을 한 번 다시 시작하는 중…")
+        if current["status"] == "Running":
+            cli.run(["limactl", "stop", vm])
+        cli.run(
+            [
+                "limactl",
+                "edit",
+                "--tty=false",
+                "--set",
+                '.portForwards |= map(select(has("guestPort") | not))',
+                vm,
+            ]
+        )
+    cli.progress("가상 머신 시작 중…")
+    cli.run(["limactl", "start", "--tty=false", vm])
+
+
+def forwarding_job(vm):
+    label = "dev.kakaocollector.bridge.ports." + vm
+    return label, Path.home() / "Library/LaunchAgents" / (label + ".plist")
+
+
+def forward(config):
+    """Connect Bridge's ports on this Mac to the running VM and wait until they listen."""
+    vm = config["vm"]
+    label, plist = forwarding_job(vm)
+    ports = {config[name]: guest for name, guest in FORWARDED_PORTS.items() if name in config}
+    # A separate connection: ControlMaster sockets are what die unnoticed during sleep.
+    options = [
+        "ControlMaster=no",
+        "ControlPath=none",
+        "ExitOnForwardFailure=yes",
+        "ServerAliveInterval=5",
+        "ServerAliveCountMax=3",
+    ]
+    command = ["/usr/bin/ssh", "-F", instance(vm)["sshConfigFile"], "-N"]
+    command += [part for option in options for part in ("-o", option)]
+    for host, guest in ports.items():
+        command += ["-L", f"127.0.0.1:{host}:127.0.0.1:{guest}"]
+    job = {
+        "Label": label,
+        # Lima rewrites the SSH config with the VM's new SSH port on every boot.
+        "ProgramArguments": [*command, "lima-" + vm],
+        "RunAtLoad": True,
+        "KeepAlive": True,
+        "ThrottleInterval": 10,
+        "ProcessType": "Background",
+        # Retries while the VM is stopped would only fill a log; the wait below reports.
+        "StandardOutPath": "/dev/null",
+        "StandardErrorPath": "/dev/null",
+    }
+    domain = f"gui/{os.getuid()}"
+    # Reload on every boot so the connection uses the new SSH port right away.
+    subprocess.run(["launchctl", "bootout", f"{domain}/{label}"], capture_output=True, check=False)
+    cli.atomic(plist, plistlib.dumps(job).decode())
+    cli.run(["launchctl", "bootstrap", domain, str(plist)])
+    deadline = time.monotonic() + 30
+    while not all(listening(port) for port in ports):
+        if time.monotonic() > deadline:
+            raise BridgeError(
+                f"Mac의 Bridge 포트({', '.join(map(str, ports))})를 가상 머신에 연결하지 못했습니다. "
+                "다른 프로그램이 이 포트를 쓰고 있지 않은지 확인한 뒤 같은 명령을 다시 실행하세요."
+            )
+        time.sleep(0.5)
+
+
+def stop_forwarding(vm):
+    label, plist = forwarding_job(vm)
+    subprocess.run(
+        ["launchctl", "bootout", f"gui/{os.getuid()}/{label}"], capture_output=True, check=False
+    )
+    plist.unlink(missing_ok=True)
+
+
 def mac(args):
     if not shutil.which("limactl"):
         raise BridgeError("Lima를 먼저 설치하세요: brew install lima (Docker Desktop은 필요하지 않습니다).")
@@ -127,25 +227,11 @@ def mac(args):
             ):
                 raise BridgeError("VM 이름 또는 관리 포트가 올바르지 않습니다.")
             for port in (config["admin_port"], config["mcp_port"]):
-                with socket.socket() as probe:
-                    probe.settimeout(0.2)
-                    if probe.connect_ex(("127.0.0.1", port)) == 0:
-                        raise BridgeError(f"{port} 포트가 이미 사용 중입니다. 기존 서비스는 그대로 두고 비어 있는 포트를 --admin-port로 지정하세요.")
+                if listening(port):
+                    raise BridgeError(f"{port} 포트가 이미 사용 중입니다. 기존 서비스는 그대로 두고 비어 있는 포트를 --admin-port로 지정하세요.")
             if args.command != "install":
                 raise BridgeError("먼저 kakaotalk-bridge up으로 설치하세요.")
-            template = (
-                (cli.ROOT / "deploy/lima.yaml")
-                .read_text()
-                .replace("hostPort: 18443", f"hostPort: {config['admin_port']}")
-            )
-            template = template.replace(
-                "  - guestPortRange:",
-                f"  - guestPort: 18787\n    hostPort: {config['mcp_port']}\n    hostIP: 127.0.0.1\n  - guestPortRange:",
-            )
-            template = template.replace(
-                "  - guestPortRange:",
-                f"  - guestPort: 18789\n    hostPort: {config['local_admin_port']}\n    hostIP: 127.0.0.1\n  - guestPortRange:",
-            )
+            template = (cli.ROOT / "deploy/lima.yaml").read_text()
             if platform.machine() == "x86_64":
                 template = template.replace("arch: aarch64", "arch: x86_64").replace(
                     "vmType: vz", "vmType: qemu"
@@ -159,9 +245,9 @@ def mac(args):
                 cli.progress("가상 머신 만드는 중… 처음 한 번은 몇 분 걸릴 수 있습니다.")
                 cli.run(["limactl", "start", "--tty=false", "--name", vm, str(path)])
         else:
-            cli.progress("가상 머신 시작 중…")
-            cli.run(["limactl", "start", "--tty=false", vm])
+            boot(vm)
         cli.atomic(config_path, json.dumps(config))
+        forward(config)
         cli.progress("설치 파일을 가상 머신으로 복사하는 중…")
         with tempfile.TemporaryDirectory() as folder:
             archive = Path(folder) / "source.tar.gz"
@@ -335,8 +421,8 @@ def mac(args):
             instances = cli.run(["limactl", "list", "--format", "{{.Name}}"], capture=True).splitlines()
             if vm not in instances:
                 raise BridgeError("관리되는 Lima VM이 없습니다. kakaotalk-bridge up을 실행하면 다시 만듭니다.")
-            cli.progress("가상 머신 시작 중…")
-            cli.run(["limactl", "start", "--tty=false", vm])
+            boot(vm)
+            forward(config)
         options = [args.command]
         if args.command == "connect":
             options += ["--url", args.url]

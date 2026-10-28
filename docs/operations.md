@@ -97,6 +97,7 @@ kakaotalk-bridge start   # Applies the saved connection and the .bridge/ Compose
 
 > `docker compose down -v`는 로그인 상태와 DB를 지웁니다. 일상적인 종료에 쓰지 마세요. `docker compose`를 직접 쓰면 `.bridge/`의 Compose 설정(Binder 마운트, 복구한 볼륨)이 빠질 수 있습니다.
 
+- Mac에서는 관리 화면·MCP 포트를 Lima가 아니라 Bridge의 LaunchAgent(`dev.kakaocollector.bridge.ports.<VM 이름>`)가 SSH로 VM에 연결합니다. 연결이 끊기면 launchd가 다시 연결하고, VM을 켤 때마다(`start`, 설치 명령) 새로 연결합니다. Mac을 재시작한 뒤에는 `kakaotalk-bridge start`로 VM과 서비스를 켜세요. macOS 로그인 항목에 `ssh`로 보일 수 있으며, 끄면 관리 화면과 MCP에 연결할 수 없습니다.
 - redroid는 반복 실패를 막기 위해 자동으로 다시 시작하지 않습니다. 필요하면 `kakaotalk-bridge start`를 실행하세요. 다른 서비스는 `unless-stopped`입니다.
 - Linux 자동 복구: `deploy/kakaotalk-bridge-supervisor.service.example`의 경로를 고쳐 설치하세요. 30분에 redroid 재시작을 최대 3회로 제한합니다.
 - 공개 HTTPS는 별도 `dot-ingress`를 거칩니다. `docker/Caddyfile.public`(비밀값 없음)은 UID 10001이 읽을 수 있어야 합니다(보통 0644).
@@ -110,6 +111,7 @@ kakaotalk-bridge start   # Applies the saved connection and the .bridge/ Compose
 | Compose 프로젝트·로컬 이미지 | `kakaotalk-bridge`. `.env`의 `COMPOSE_PROJECT_NAME`을 바꾸면 다른 볼륨을 씀 |
 | 릴리스 이미지 | `ghcr.io/rokrokss/kakaotalk-bridge-*` |
 | Mac VM 설치 경로 | `/srv/kakaotalk-bridge` |
+| Mac 포트 연결 | `~/Library/LaunchAgents/dev.kakaocollector.bridge.ports.<VM 이름>.plist` |
 | 태블릿의 Bridge 파일 | `/data/kakaotalk-bridge/` (root 전용) |
 | Android 키보드 앱 ID | `dev.kakaocollector.bridge`. Android가 이 ID로 활성 키보드를 저장하므로 유지 |
 
@@ -179,7 +181,7 @@ kakaotalk-bridge cleanup --yes   # No prompt
 ```
 
 - 카카오톡 로그인, 수집한 메시지, 패스키, 백업, 설정과 키를 모두 지우며 되돌릴 수 없습니다. 남겨 둘 백업은 먼저 `backups/`와 `secrets/backup_key`를 다른 곳에 복사하세요(Mac은 VM 안에 있음).
-- Mac은 관리되는 Lima VM을, Linux는 이 설치의 컨테이너·볼륨(복구 전 볼륨 포함)·네트워크·이미지, 웹 연결 설정 서비스, Binder 자동 로드 설정을 지웁니다. 다른 컨테이너가 사용 중인 이미지는 남깁니다.
+- Mac은 관리되는 Lima VM과 포트 연결 LaunchAgent를, Linux는 이 설치의 컨테이너·볼륨(복구 전 볼륨 포함)·네트워크·이미지, 웹 연결 설정 서비스, Binder 자동 로드 설정을 지웁니다. 다른 컨테이너가 사용 중인 이미지는 남깁니다.
 - 마지막으로 설치 폴더를 지웁니다. Git 작업 폴더는 소스 코드를 남기고 `.env`, `secrets/`, `.bridge/`, `backups/`, `inputs/`, `artifacts/`만 지웁니다.
 - `kakaotalk-bridge expose`로 켠 Tailscale Funnel은 설정이 그대로일 때만 끕니다.
 - Docker, Homebrew, Lima, Tailscale, uv 같은 공용 도구와 Lima 이미지 캐시는 지우지 않습니다. AI 앱에 추가한 연결과 Tailscale 관리 콘솔의 기기는 직접 지우세요.
