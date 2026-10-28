@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from server import config
 from server.app import create_app
 from server.config import Settings
 from server.models import Observation
@@ -232,6 +233,21 @@ def test_retention_removes_text_and_reports_cursor_gap(client):
     result = client.get("/v1/messages", headers=auth()).json()
     assert result["items"] == []
     assert result["coverage"]["pruned_through_cursor"] > 0
+
+
+def test_zero_retention_keeps_old_messages(client, monkeypatch):
+    post(client, event())
+    store = client.app.state.store
+    with store.connect() as db:
+        db.execute("UPDATE observations SET received_at='2000-01-01T00:00:00+00:00'")
+        db.execute("UPDATE candidates SET received_at='2000-01-01T00:00:00+00:00'")
+    store.prune(0)
+    result = client.get("/v1/messages", headers=auth()).json()
+    assert len(result["items"]) == 1
+    assert not result["coverage"]["pruned_through_cursor"]
+    monkeypatch.setenv("RETENTION_DAYS", "-1")
+    with pytest.raises(ValueError):
+        config._retention_days()
 
 
 def test_restart_preserves_data(tmp_path):

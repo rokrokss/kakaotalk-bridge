@@ -126,7 +126,7 @@ kakaotalk-bridge start   # Applies the saved connection and the .bridge/ Compose
 | `dot-state` | OAuth·터널 승인, 원격 호출 성공 시각, 대화 이벤트 권한·구독·처리 커서·웹훅 대기열 |
 
 - 태블릿의 Bridge 파일: `enrollment.json`(수집 승인, 0600), `iris.apk`, `iris.pid`, `iris-auth.json`, `native/`(이름 조회용 라이브러리). 등록 정보에는 수집 토큰·게이트웨이 주소·인증서가 없습니다.
-- 메시지는 매시간 기본 30일 이전 것을 정리합니다. `RETENTION_DAYS`로 바꾸며, 재전송 중복 제거도 이 기간 안에서 합니다. Android DB와 백업 파일은 정리하지 않습니다.
+- 메시지는 기본적으로 정리하지 않고 계속 보관합니다. `RETENTION_DAYS`를 양수로 지정하면 매시간 그 일수 이전 것을 정리합니다. 재전송 중복 제거도 이 기간 안에서 합니다. Android DB와 백업 파일은 정리하지 않습니다.
 - 컨테이너 로그는 서비스마다 10 MB 파일 3개로 제한합니다.
 
 <a id="back-up-android-and-mcp-state"></a>

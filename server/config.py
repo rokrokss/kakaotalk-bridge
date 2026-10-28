@@ -3,6 +3,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def _retention_days() -> int:
+    value = int(os.getenv("RETENTION_DAYS", "0"))
+    if value < 0:
+        raise ValueError("RETENTION_DAYS must be 0 (unlimited) or a positive day count")
+    return value
+
+
 def secret(name: str) -> str:
     value = Path(os.environ.get(f"{name}_FILE", f"/run/secrets/{name.lower()}")).read_text().strip()
     if len(value) < 32:
@@ -17,7 +24,7 @@ class Settings:
     read_token: str
     device_token: str
     device_id: str = "personal-tablet"
-    retention_days: int = 30
+    retention_days: int = 0  # 0 = unlimited retention
     heartbeat_timeout: int = 180
     send_token: str = ""
 
@@ -37,6 +44,6 @@ class Settings:
             os.getenv("DB_PATH", "/data/collector.db"),
             *tokens,
             device_id=os.getenv("DEVICE_ID", "personal-tablet"),
-            retention_days=max(1, int(os.getenv("RETENTION_DAYS", "30"))),
+            retention_days=_retention_days(),
             send_token=secret("SEND_TOKEN"),
         )

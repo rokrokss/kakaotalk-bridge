@@ -129,7 +129,7 @@ The Mac VM is configured with 6 CPUs and 8 GiB of memory. This is not a measured
 <a id="your-data-and-collection-scope"></a>
 ## Your data and collection scope
 
-- **Retention:** Collected messages are kept on the server you installed for 30 days by default. Results you request are sent to the AI you connected.
+- **Retention:** Collected messages are kept on the server you installed indefinitely by default. Results you request are sent to the AI you connected.
 - **Permissions:** MCP supports search and lookup, plus text sending under a separate permission. It provides no tools for controlling the tablet.
 - **Collection scope:** Only messages shown on the secondary tablet are collected. Your phone's full history, original attachments, and edit or delete sync are not supported.
 - **Read status:** Opening a conversation on the tablet may change its read status.

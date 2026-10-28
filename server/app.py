@@ -52,7 +52,8 @@ def create_app(settings: Settings | None = None):
         async def maintenance():
             while True:
                 try:
-                    await asyncio.to_thread(store.prune, config.retention_days)
+                    if config.retention_days > 0:
+                        await asyncio.to_thread(store.prune, config.retention_days)
                     with store.connect() as db:
                         outgoing.expire(db)
                 except sqlite3.Error:

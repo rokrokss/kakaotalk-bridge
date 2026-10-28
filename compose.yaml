@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
     environment:
       DEVICE_ID: ${DEVICE_ID:-personal-tablet}
-      RETENTION_DAYS: ${RETENTION_DAYS:-30}
+      RETENTION_DAYS: ${RETENTION_DAYS:-0}
       DB_PATH: /data/collector.db
     secrets: [ingest_token, read_token, send_token, device_token, backup_key]
     volumes: [collector-data:/data]

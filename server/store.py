@@ -312,6 +312,8 @@ class Store:
         }
 
     def prune(self, days):
+        if days <= 0:
+            return
         cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
