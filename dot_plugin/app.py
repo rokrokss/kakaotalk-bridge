@@ -642,7 +642,7 @@ def create_app(
                     if version in TUNNEL_PROTOCOLS
                     else TUNNEL_PROTOCOLS[0],
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "kakaotalk-bridge", "version": "0.3.3"},
+                    "serverInfo": {"name": "kakaotalk-bridge", "version": "0.4.0"},
                     "instructions": INSTRUCTIONS,
                 }
             raise RpcError("MCP_2026_07_28_required_use_server_discover", -32022)
@@ -714,7 +714,7 @@ def create_app(
                 "_meta": {
                     "io.modelcontextprotocol/serverInfo": {
                         "name": "kakaotalk-bridge",
-                        "version": "0.3.3",
+                        "version": "0.4.0",
                     }
                 },
             }
