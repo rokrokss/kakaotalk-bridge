@@ -6,7 +6,7 @@
 
 소스 압축 파일 SHA-256: `1b194b137b0912ef360a4a0b511c6ed5169aaaf0da85c1de1cf59b325bebfcd0`
 
-이 빌드는 원본 릴리스가 아닌 수정된 Iris입니다. 실행 진입점은 `CollectorMain.kt`뿐이며 Iris의 KakaoDecrypt, Android 읽기 전용 SQLite 조회, 루프백 전용 Ktor 서버를 사용합니다. 원본의 전송 큐·관찰기·대시보드·토큰 경로·파일 삭제 작업은 시작하지 않습니다. 제한된 메타데이터 경로로 로컬 대화방·발신자 이름을 조회합니다. 미디어와 메시지 수정·삭제는 수집하지 않습니다.
+이 빌드는 원본 릴리스가 아닌 수정된 Iris입니다. 실행 진입점은 `CollectorMain.kt`뿐이며 Iris의 KakaoDecrypt, Android 읽기 전용 SQLite 조회, 루프백 전용 Ktor 서버를 사용합니다. 원본의 전송 큐·관찰기·대시보드·토큰 경로·파일 삭제 작업은 시작하지 않습니다. 제한된 메타데이터 경로로 로컬 대화방·발신자 이름을 조회합니다. 미디어는 수집 페이지에 넣지 않고, `/collector/attachment`가 요청된 한 행만 복호화합니다. 메시지 수정·삭제는 수집하지 않습니다.
 
 수집기는 등록에 묶인 root 전용 키로 데이터 요청을 인증합니다. 호스트가 키를 보내기 전에 상태 challenge로 리스너를 검증합니다. 모든 Netty 모듈은 `4.1.138.Final` BOM으로 맞추며 실제 실행 의존성 보고서는 `/opt/iris-dependencies.txt`에 보관합니다.
 

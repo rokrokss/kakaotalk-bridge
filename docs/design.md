@@ -17,7 +17,7 @@
 | 서비스 | 역할 | 받는 키 |
 | --- | --- | --- |
 | `redroid` | Android 실행. 유일한 특권 컨테이너 | 없음 |
-| `iris-collector` | 이미지의 Iris 설치·시작, 승인 확인, 페이지 조회와 순서대로 저장, 이름 갱신과 승인 계정의 전송 요청 처리 | `ingest_token` |
+| `iris-collector` | 이미지의 Iris 설치·시작, 승인 확인, 페이지 조회와 순서대로 저장, 이름 갱신, 승인 계정의 텍스트 전송, 요청 시 첨부 복호화와 카카오 CDN 다운로드(컨테이너 안 3010, 호스트에 공개하지 않음) | `ingest_token` |
 | `api` | 인증, 중복 제거, 메시지·커서의 원자적 저장, 조회, 전송 대기열, 보관 기간 정리 | `ingest_token`, `send_token`, `read_token`, `device_token`, `backup_key` |
 | `device-agent` | ADB·Android 상태 보고, 키보드 앱 갱신 | `device_token` |
 | `gateway` | 비공개 HTTPS 및 API·관리 화면 라우팅 | `tls_cert`, `tls_key` |

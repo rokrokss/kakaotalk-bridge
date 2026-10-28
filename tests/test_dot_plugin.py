@@ -236,7 +236,7 @@ def test_discovery_401_oauth_metadata_and_complete_results(plugin):
     assert discovery["supportedVersions"] == ["2026-07-28"]
     assert discovery["capabilities"]["events"] == {}
     tools = rpc(client, "tools/list")["result"]["tools"]
-    assert len(tools) == 10
+    assert len(tools) == 13
     assert next(t for t in tools if t["name"] == "send_message")["annotations"]["openWorldHint"]
     assert next(t for t in tools if t["name"] == "get_profile")["_meta"]["openai/profile"] is True
     assert rpc(client, "events/list")["result"]["events"][0]["name"] == EVENT

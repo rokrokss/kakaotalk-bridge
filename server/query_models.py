@@ -48,7 +48,13 @@ class MessageView(BaseModel):
     )
     body: str
     message_type: str | None = Field(
-        description="Raw KakaoTalk type code; attachments are not downloaded by this API."
+        description="Raw KakaoTalk type code. Bytes and CDN URLs are not included in listings."
+    )
+    attachment_type: str | None = Field(
+        description="Hint from the type code only. Text mentions and link previews still require get_message_attachment."
+    )
+    has_attachment: bool = Field(
+        description="True when the type code is a non-text KakaoTalk kind. Listings do not read attachment JSON."
     )
     source: str
     truncated: bool

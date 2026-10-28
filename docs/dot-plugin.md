@@ -28,6 +28,9 @@
 | `search_messages` | 본문 부분 문자열 검색, 대화·발신자·시간 필터 |
 | `list_conversations` | 구분된 대화 목록, 확인 가능한 이름·최근 시각·보관 건수 |
 | `get_conversation_context` | 같은 대화의 특정 메시지 앞뒤 문맥 |
+| `get_message_attachment` | 한 메시지의 첨부 메타데이터 (`kakao.read`) |
+| `get_message_image` | 크기 제한 이미지 (`kakao.read`, 카카오 CDN만) |
+| `get_message_file` | 크기 제한 파일 (`kakao.read`, 명시적 요청) |
 | `get_collector_status` | 수집 상태와 현재 연결의 구독·전달 상태 |
 | `get_profile` | 연결을 식별하는 불투명 프로필 ID |
 | `get_pending_messages` | 소비자의 미처리 메시지 조회 |

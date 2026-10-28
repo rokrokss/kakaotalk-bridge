@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.115,<1",
     "uvicorn>=0.34,<1",
     "mcp>=1.9,<2",
+    "pillow>=13,<14",
     "cryptography>=46,<51",
     "webauthn>=2.7,<3",
 ]

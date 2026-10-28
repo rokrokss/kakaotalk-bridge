@@ -8,6 +8,27 @@ class QueryError(ValueError):
     pass
 
 
+ATTACHMENT_ERRORS = {
+    "message_not_found_or_expired",
+    "attachment_not_in_device_database",
+    "attachment_decrypt_failed",
+    "attachment_too_large",
+    "attachment_not_in_current_database",
+    "attachment_unavailable",
+    "not_an_image",
+    "index_out_of_range",
+    "video_not_downloaded",
+    "thumbnail_unavailable",
+    "image_expired",
+    "image_unavailable",
+    "image_too_large",
+    "host_not_allowed",
+    "not_a_file",
+    "file_too_large",
+    "file_unavailable",
+}
+
+
 class Collector:
     def __init__(self, config):
         self.config = config
@@ -41,6 +62,52 @@ class Collector:
 
     def checkpoint(self):
         return self.get("/v1/checkpoint")
+
+    def attachment(self, message_id):
+        return self._json("/v2/attachments", 25, 1024 * 1024, message_id=message_id)
+
+    def image(self, message_id, variant, index):
+        return self._bytes(
+            "/v2/attachments/image", message_id=message_id, variant=variant, index=index
+        )
+
+    def file(self, message_id):
+        return self._bytes("/v2/attachments/file", message_id=message_id)
+
+    def _json(self, path, timeout, limit, **params):
+        _status, _headers, body = self._open(path, timeout, limit, **params)
+        try:
+            return json.loads(body)
+        except ValueError:
+            raise RuntimeError("collector_unavailable") from None
+
+    def _bytes(self, path, **params):
+        _status, headers, body = self._open(path, 35, 2 * 1024 * 1024, **params)
+        return body, headers
+
+    def _open(self, path, timeout, limit, **params):
+        request = Request(
+            self.config.api_url.rstrip("/")
+            + path
+            + "?"
+            + urlencode({k: v for k, v in params.items() if v is not None}),
+            headers={"Authorization": "Bearer " + self.config.read_token},
+        )
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                body = response.read(limit + 1)
+                headers = {key.lower(): value for key, value in response.headers.items()}
+        except HTTPError as exc:
+            _raise_attachment(exc)
+        except (OSError, ValueError):
+            raise RuntimeError("collector_unavailable") from None
+        if len(body) > limit:
+            if path.endswith("/file"):
+                raise QueryError("file_too_large")
+            if path.endswith("/image"):
+                raise QueryError("image_too_large")
+            raise QueryError("attachment_too_large")
+        return 200, headers, body
 
     def outgoing(self, request_id=None, body=None):
         if not self.config.send_token:
@@ -85,3 +152,13 @@ class Collector:
 
     def messages(self, after, limit=50):
         return self.get("/v1/messages", after=after, limit=limit)
+
+
+def _raise_attachment(exc):
+    try:
+        reason = json.loads(exc.read(4096)).get("error")
+    except (OSError, ValueError, AttributeError):
+        reason = None
+    if isinstance(reason, str) and reason in ATTACHMENT_ERRORS:
+        raise QueryError(reason) from None
+    raise RuntimeError("collector_unavailable") from None

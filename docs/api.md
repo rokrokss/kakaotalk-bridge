@@ -50,4 +50,4 @@ Iris 메시지는 `source=iris_db`입니다. `database_ref`의 DB 메시지·대
 }
 ```
 
-도구는 `get_recent_messages`, `search_messages`, `list_conversations`, `get_conversation_context`, `get_collector_status`, `send_message`, `get_message_send_status`입니다. 전송 두 도구에는 별도 `send_token`이 필요하며, 요청 UUID·정확한 대화 참조·텍스트를 사용합니다. 권한과 결과 상태는 [메시지 전송](sending.md)을 참고하세요. 원격 서버에서는 SSH로 명령을 실행하도록 설정하세요. MCP 서비스는 클라이언트가 `run`으로 시작하며 `up`으로 계속 실행해 두지 않습니다.
+도구는 `get_recent_messages`, `search_messages`, `list_conversations`, `get_conversation_context`, `get_collector_status`, `get_message_attachment`, `get_message_image`, `get_message_file`, `send_message`, `get_message_send_status`입니다. 첨부 세 도구는 읽기 토큰을 쓰며 바이트를 저장하지 않습니다. 전송 두 도구에는 별도 `send_token`이 필요하며, 요청 UUID·정확한 대화 참조·텍스트를 사용합니다. 권한과 결과 상태는 [메시지 전송](sending.md)을 참고하세요. 원격 서버에서는 SSH로 명령을 실행하도록 설정하세요. MCP 서비스는 클라이언트가 `run`으로 시작하며 `up`으로 계속 실행해 두지 않습니다.

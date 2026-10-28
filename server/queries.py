@@ -8,6 +8,7 @@ import secrets
 from datetime import UTC, datetime
 
 from server import name_history
+from server.attachments import hint
 
 INDEX_SQL = """
 INSERT OR IGNORE INTO message_lookup
@@ -154,6 +155,7 @@ class Queries:
             "collected_at": r["received_at"],
             "body": r["body"],
             "message_type": r["message_type"],
+            **hint(r["message_type"]),
             "source": r["source"],
             "truncated": bool(r["truncated"]),
         }

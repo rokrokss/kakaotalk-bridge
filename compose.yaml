@@ -75,6 +75,7 @@ services:
       DEVICE_ID: ${DEVICE_ID:-personal-tablet}
       RETENTION_DAYS: ${RETENTION_DAYS:-0}
       DB_PATH: /data/collector.db
+      IRIS_COLLECTOR_URL: http://iris-collector:3010
     secrets: [ingest_token, read_token, send_token, device_token, backup_key]
     volumes: [collector-data:/data]
     networks: [backend-net, public-read-net]

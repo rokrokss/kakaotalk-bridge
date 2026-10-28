@@ -27,6 +27,7 @@ class Settings:
     retention_days: int = 0  # 0 = unlimited retention
     heartbeat_timeout: int = 180
     send_token: str = ""
+    iris_collector_url: str = "http://iris-collector:3010"
 
     def __post_init__(self):
         if self.send_token and (
@@ -46,4 +47,5 @@ class Settings:
             device_id=os.getenv("DEVICE_ID", "personal-tablet"),
             retention_days=_retention_days(),
             send_token=secret("SEND_TOKEN"),
+            iris_collector_url=os.getenv("IRIS_COLLECTOR_URL", "http://iris-collector:3010"),
         )

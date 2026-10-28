@@ -4,7 +4,7 @@ import time
 from contextlib import asynccontextmanager
 from html import escape
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -21,6 +21,7 @@ from dot_plugin.pages import browser_page, error_page, page
 BROWSER_ROUTES = {"/authorize", "/authorize/passkey/consent"}
 from dot_plugin.storage import State
 from server.app import BodyLimit
+from server.mcp_content import file_result, file_summary, image_result, image_summary
 from server.outgoing import SendMessage, SendStatus
 from server.query_models import ContextPage, ConversationPage, MessagePage
 
@@ -42,6 +43,8 @@ Process each page, then acknowledge_messages with that page's next_cursor and cu
 Repeat while has_more is true, including empty filtered pages. Empty results after acknowledgment mean there is nothing new to report.
 Never infer phone-session health or KakaoTalk unread/read state from these cursors. Do not promise native event subscription until events/subscribe succeeds.
 Subscription webhooks have no protocol replay; the durable pending-message tools provide recovery within collector retention.
+Photos, files and other attachments are not stored. get_message_attachment reads sanitized metadata for one message_id. get_message_image and get_message_file download bytes on demand, only from Kakao CDNs, with a size cap. Listings and webhooks only include attachment_type and has_attachment.
+Sending is text only. A native quote reply and media, link, emoticon or location sends are not available.
 """
 
 # tunnel-client v0.0.15 probes with older MCP protocol versions at startup.
@@ -122,6 +125,18 @@ class Context(Strict):
     after: Annotated[int, Field(ge=0, le=30)] = 5
 
 
+class AttachmentQuery(Strict):
+    message_id: Annotated[
+        int,
+        Field(ge=1, description="Collected message_id. Not a raw KakaoTalk log id."),
+    ]
+
+
+class ImageQuery(AttachmentQuery):
+    variant: Literal["thumbnail", "original"] = "thumbnail"
+    index: Annotated[int, Field(ge=0, le=29)] = 0
+
+
 class Pending(Strict):
     consumer_id: Consumer = "dot"
     limit: Limit = 50
@@ -166,6 +181,18 @@ TOOLS = {
         Context,
         "반환된 message_id와 같은 대화의 앞뒤 메시지를 시간순으로 조회합니다. 수집된 문맥만 제공됩니다. 단독 답변을 해석하기 전에 사용하세요.",
     ),
+    "get_message_attachment": (
+        AttachmentQuery,
+        "메시지 하나의 첨부 메타데이터를 기기 DB에서 그때그때 읽습니다. URL과 바이트는 저장하지 않습니다. 목록의 attachment_type은 종류 코드 힌트이며, 텍스트의 멘션·링크는 이 도구로 확인합니다.",
+    ),
+    "get_message_image": (
+        ImageQuery,
+        "사진·다중 사진·영상 썸네일 등 볼 수 있는 이미지를 받아 반환합니다. variant는 thumbnail 또는 original, index는 0부터입니다. 영상 원본은 받지 않습니다. 카카오 CDN만 허용하고 결과는 2MiB 이하입니다.",
+    ),
+    "get_message_file": (
+        AttachmentQuery,
+        "파일 메시지를 명시적으로 받습니다. 2MiB를 넘으면 거절합니다. 이름·크기·형식을 함께 반환합니다.",
+    ),
     "get_collector_status": (
         Empty,
         "수집 상태, 부분 수집 범위와 현재 연결의 웹훅 전달 수를 확인합니다. 웹훅 수신만으로 Dot의 메시지 처리를 확인할 수는 없습니다.",
@@ -196,7 +223,8 @@ def tool_definitions(*, oauth=True):
                 "readOnlyHint": name not in {"acknowledge_messages", "send_message"},
                 "destructiveHint": name == "send_message",
                 "idempotentHint": True,
-                "openWorldHint": name == "send_message",
+                "openWorldHint": name
+                in {"send_message", "get_message_image", "get_message_file"},
             },
             "securitySchemes": [
                 {
@@ -228,6 +256,18 @@ def tool_definitions(*, oauth=True):
         }.get(name)
         if result_model:
             definition["outputSchema"] = result_model.model_json_schema()
+        if name == "get_message_attachment":
+            definition["outputSchema"] = {
+                "type": "object",
+                "properties": {
+                    "message_id": {"type": "integer"},
+                    "message_type": {"type": ["string", "null"]},
+                    "attachment_type": {"type": ["string", "null"]},
+                    "has_attachment": {"type": "boolean"},
+                },
+                "required": ["message_id", "attachment_type", "has_attachment"],
+                "additionalProperties": True,
+            }
         definitions.append(definition)
     return definitions
 
@@ -525,6 +565,31 @@ def create_app(
             output = collector.get("/v2/conversations", **args)
         elif name == "get_conversation_context":
             output = collector.get("/v2/context", **args)
+        elif name == "get_message_attachment":
+            try:
+                output = collector.attachment(args["message_id"])
+            except QueryError as exc:
+                raise RpcError(str(exc), -32000) from None
+        elif name in {"get_message_image", "get_message_file"}:
+            try:
+                if name == "get_message_image":
+                    data, headers = collector.image(
+                        args["message_id"], args["variant"], args["index"]
+                    )
+                    summary = image_summary(
+                        args["message_id"], args["variant"], args["index"], headers
+                    )
+                    rendered = image_result(
+                        summary, data, headers.get("x-bridge-mime") or "image/jpeg"
+                    )
+                else:
+                    data, headers = collector.file(args["message_id"])
+                    summary = file_summary(args["message_id"], headers, len(data))
+                    rendered = file_result(summary, data, summary["mime"], args["message_id"])
+            except QueryError as exc:
+                raise RpcError(str(exc), -32000) from None
+            state.put("connection_activity", principal["grant_id"], {"last_tool_at": time.time()})
+            return rendered
         elif name == "get_profile":
             output = {"id": auth.profile, "name": "KakaoTalk Bridge"}
         else:

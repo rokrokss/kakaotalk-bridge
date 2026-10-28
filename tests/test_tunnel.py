@@ -174,7 +174,7 @@ def test_oauth_still_works_and_all_tools_are_shared(bridge):
     )
     actual = rpc(private, "tools/list")["result"]["tools"]
     expected = tool_definitions()
-    assert len(actual) == 10
+    assert len(actual) == 13
     for a, e in zip(actual, expected, strict=True):
         assert a.pop("securitySchemes") == [{"type": "noauth"}]
         assert e.pop("securitySchemes")[0]["type"] == "oauth2"
@@ -419,7 +419,7 @@ def test_sidecar_probe_before_approval_and_tool_calls_on_every_protocol(bridge, 
     assert initialized["protocolVersion"] == version
     assert initialized["capabilities"] == {"tools": {}}
     assert "resultType" not in initialized
-    assert len(rpc(private, "tools/list")["result"]["tools"]) == 10
+    assert len(rpc(private, "tools/list")["result"]["tools"]) == 13
     assert private.get("/mcp").status_code == 405
     for method in ("tools/call", "events/list", "events/subscribe"):
         response = private.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": method})
@@ -468,7 +468,7 @@ def test_official_python_mcp_client_can_initialize_list_and_call(bridge):
         ):
             result = await session.initialize()
             assert result.serverInfo.name == "kakaotalk-bridge"
-            assert len((await session.list_tools()).tools) == 10
+            assert len((await session.list_tools()).tools) == 13
             approve(control)
             result = await session.call_tool("get_profile", {})
             assert not result.isError

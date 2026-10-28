@@ -9,16 +9,19 @@ import re
 import secrets
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from device import cli, enrollment
 
-BUILD = "iris-ee1dc978-collector-v6"
+BUILD = "iris-ee1dc978-collector-v7"
+_LISTENER = threading.Lock()
 ENTRY = "party.qwer.iris.CollectorMain"
 LOCAL_APK = "/opt/iris.apk"
 HOME = enrollment.HOME
@@ -30,6 +33,35 @@ KAKAO_PREFS = "/data/user/0/com.kakao.talk/shared_prefs/KakaoTalk.hw.perferences
 # The API accepts 1 MiB bodies; leave room for the JSON envelope.
 MAX_BATCH_BYTES = 768 * 1024
 SKIP_REASONS = {"decrypt_failed", "metadata_unreadable"}
+
+
+def _error_code(exc):
+    try:
+        payload = json.loads(exc.read(4096))
+    except (OSError, ValueError, AttributeError):
+        return None
+    reason = payload.get("error") if isinstance(payload, dict) else None
+    if isinstance(reason, str) and re.fullmatch(r"[a-z_]{3,64}", reason):
+        return reason
+    return None
+
+
+def attachment_request(log_id, token):
+    """Read one decrypted attachment. Raises RuntimeError with a stable code."""
+    if not re.fullmatch(r"[1-9][0-9]{0,18}", str(log_id)):
+        raise RuntimeError("invalid_log_id")
+    url = "http://127.0.0.1:3000/collector/attachment?" + urlencode({"log_id": str(log_id)})
+    req = Request(url, headers={"Authorization": "Bearer " + token})
+    try:
+        with urlopen(req, timeout=20) as response:
+            body = response.read(96 * 1024 + 1)
+            if response.status != 200 or len(body) > 96 * 1024:
+                raise RuntimeError("attachment_unavailable")
+            return json.loads(body)
+    except HTTPError as exc:
+        raise RuntimeError(_error_code(exc) or "attachment_unavailable") from None
+    except (OSError, ValueError):
+        raise RuntimeError("attachment_unavailable") from None
 
 
 def request(url, payload=None, token=None):
@@ -140,6 +172,11 @@ def notification_reply_ready():
 
 def ensure_started(epoch):
     """Authenticate the running listener, or start this image's build. Returns the bearer."""
+    with _LISTENER:
+        return _ensure_started(epoch)
+
+
+def _ensure_started(epoch):
     token = ensure_auth(epoch)
     try:
         healthy(token)
@@ -444,6 +481,12 @@ class Collector:
 
 
 def watch():
+    try:
+        from device.media_service import serve
+
+        serve()
+    except Exception:  # noqa: BLE001 — reason text can embed a path; keep collecting
+        print(json.dumps({"iris_media": "unavailable"}), flush=True)
     collector = Collector()
     while True:
         try:

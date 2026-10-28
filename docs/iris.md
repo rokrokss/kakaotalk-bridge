@@ -50,8 +50,8 @@ docker compose logs --tail 30 iris-collector
 
 - 원본: [dolidolih/Iris](https://github.com/dolidolih/Iris), 커밋 `ee1dc978ec465df11642596e40f74caff497301d`.
 - 빌드 시 압축 파일의 SHA-256 `1b194b137b0912ef360a4a0b511c6ed5169aaaf0da85c1de1cf59b325bebfcd0`을 확인합니다.
-- 수정 빌드는 `iris/CollectorMain.kt`를 추가합니다. 원본 `Main`을 실행하지 않고 DB 읽기·Iris 복호화와 제한된 알림 답장 전송 경로를 사용합니다. Android SQLite `OPEN_READONLY`로 DB를 엽니다. 빌드 식별자는 `iris-ee1dc978-collector-v6`입니다.
-- 원본의 비동기 전송 큐, 알림 폴링, 파일 삭제, 대시보드, `/query`, `/reply`, `/aot`는 실행하지 않습니다. 고정 SELECT용 `/collector/rows`, `/collector/metadata`, 빌드 확인용 `/collector/health`와 인증된 텍스트 전송용 `/collector/send`를 제공합니다. 전송은 현재 승인 계정·등록 세대·DB·방을 검사하고 카카오톡 알림 답장 서비스를 한 번 호출합니다. [전송 권한과 상태](sending.md)를 참고하세요.
+- 수정 빌드는 `iris/CollectorMain.kt`를 추가합니다. 원본 `Main`을 실행하지 않고 DB 읽기·Iris 복호화와 제한된 알림 답장 전송 경로를 사용합니다. Android SQLite `OPEN_READONLY`로 DB를 엽니다. 빌드 식별자는 `iris-ee1dc978-collector-v7`입니다.
+- 원본의 비동기 전송 큐, 알림 폴링, 파일 삭제, 대시보드, `/query`, `/reply`, `/aot`는 실행하지 않습니다. 고정 SELECT용 `/collector/rows`, `/collector/metadata`, 빌드 확인용 `/collector/health`, 인증된 텍스트 전송용 `/collector/send`, 한 행의 `attachment`만 복호화하는 `/collector/attachment`를 제공합니다. 페이지 조회에는 첨부 JSON을 넣지 않습니다. 전송은 현재 승인 계정·등록 세대·DB·방을 검사하고 카카오톡 알림 답장 서비스를 한 번 호출합니다. [전송 권한과 상태](sending.md)를 참고하세요.
 - Android `127.0.0.1:3000`에만 바인딩하고 수집기 내부 루프백 ADB 포워딩으로 접근합니다. Compose는 호스트에 3000 포트를 공개하지 않습니다. root ADB 권한이 있는 호스트·컨테이너는 신뢰 경계 안에 있습니다.
 - 태블릿 쪽 파일은 root 전용 `/data/kakaotalk-bridge/`(0700)에 둡니다. 등록 정보 `enrollment.json`(0600), Iris 빌드 `iris.apk`(0444), 프로세스 ID `iris.pid`, 인증 파일 `iris-auth.json`(0600), SQLCipher 네이티브 라이브러리 `native/`(0700)입니다.
 - Iris는 DB 접근 전에 등록별 무작위 bearer로 인증합니다. nonce/HMAC 상태 확인으로 리스너를 검증한 뒤 Python이 bearer를 보냅니다. 키는 로그나 프로세스 인수에 넣지 않으며 등록 세대가 바뀌면 새로 만듭니다.
@@ -83,7 +83,7 @@ docker compose logs --tail 30 iris-collector
 
 본인 ID는 LocalUser DataStore에서 읽고, 암호화된 오픈채팅 닉네임이 있으면 그 ID로 복호화되는지 확인합니다. ID가 없거나 확인에 실패하면 본인이 보낸 최신 메시지의 발신자 ID를 사용합니다. 사용한 근거는 `/v1/status`의 `identity_metadata.self_identity_source`에 `local_account`, `sent_message`, `unavailable`로 표시합니다. 본인은 **나**, 이름이 없는 나와의 채팅방은 **나와의 채팅**으로 표시합니다.
 
-현재 오픈채팅 프로필이 없으면 API가 같은 방의 보관된 입장·퇴장 이벤트에서 닉네임을 가져오고 과거 이름과 관측 시각임을 명시합니다. 두 근거가 모두 없으면 미확인 상태를 유지합니다. 원본 첨부 파일과 수정·삭제 동기화는 지원하지 않습니다.
+현재 오픈채팅 프로필이 없으면 API가 같은 방의 보관된 입장·퇴장 이벤트에서 닉네임을 가져오고 과거 이름과 관측 시각임을 명시합니다. 두 근거가 모두 없으면 미확인 상태를 유지합니다. 첨부 URL과 바이트는 수집 행에 저장하지 않습니다. 조회 요청이 있을 때만 해당 로그의 attachment를 복호화합니다. 수정·삭제 동기화는 지원하지 않습니다.
 
 Iris가 해독하지 못한 행은 이유와 함께 본문 없는 건너뛰기 기록으로 저장하고 다음 행을 계속 수집합니다. 이유는 `decrypt_failed`(복호화 실패), `metadata_unreadable`(행 메타데이터를 읽지 못함), `unreadable`(그 밖의 읽기 오류)입니다. 서버가 형식 오류로 거부한 행은 `invalid_row`로 기록합니다. 암호문을 정상 본문으로 저장하지 않으며 건너뛴 수는 수집 상태의 `coverage.skipped_rows`에 표시됩니다.
 
