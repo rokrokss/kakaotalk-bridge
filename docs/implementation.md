@@ -30,6 +30,7 @@ Apple Silicon Mac(macOS 27.0.1, Lima 2.2.1)의 실제 설치에서 Lima가 VM �
 - 한국어 설치 출력, `kakaotalk-bridge doctor`, `backup`, `update`, `up`.
 - docker 그룹 계정의 SSH `bridge mcp`.
 - Apple Silicon Mac의 Lima VM에서 릴리스 설치와 소스로 받은 설치의 업데이트, 업데이트 실패 시 이전 코드·서비스로의 복구, `kakaotalk-bridge` 명령의 `doctor`·stdio MCP·`cleanup`.
+- v0.3.3 설치에서 v0.4.0-rc.1로의 업데이트: 인증 키·볼륨·이미지 외 `.env` 유지, `api`의 보관 기간이 30일에서 무제한으로 바뀜, 첨부 조회 경로(`/v2/attachments`) 응답. 등록 전이라 Iris는 실행되지 않아 v7 교체는 확인하지 않았습니다.
 
 <a id="automated-checks"></a>
 
@@ -39,7 +40,7 @@ Apple Silicon Mac(macOS 27.0.1, Lima 2.2.1)의 실제 설치에서 Lima가 VM �
 
 | 검사 | 범위 |
 | --- | --- |
-| `pytest` | 등록·수집 승인 조건, Iris 수집기의 페이지·일괄 저장·건너뛰기·커서 복구·Iris 자동 설치, API 인증·순서 저장·중복 제거·보관 기간, 조회·이름·과거 닉네임, MCP·OAuth·패스키·터널·이벤트, 관리 화면·연결 설정, 설치·업데이트·백업·출력·`doctor`. Caddy가 없으면 로컬 프록시 테스트는 건너뜀 |
+| `pytest` | 등록·수집 승인 조건, Iris 수집기의 페이지·일괄 저장·건너뛰기·커서 복구·Iris 자동 설치, API 인증·순서 저장·중복 제거·보관 기간, 첨부 정보 정리·크기 제한·카카오 CDN 주소 검사, 조회·이름·과거 닉네임, MCP·OAuth·패스키·터널·이벤트, 관리 화면·연결 설정, 설치·업데이트·백업·출력·`doctor`. Caddy가 없으면 로컬 프록시 테스트는 건너뜀 |
 | 전송 합성 검사 | 별도 키와 권한, 단일 전송 시도, 중복·응답 유실·계정 변경 차단, 첫 카카오톡 알림 전 전송 차단, 백업 복구 시 재전송 방지, 브라우저의 OAuth 전송 동의·터널 권한 변경 |
 | Ruff | Python lint |
 | Node (`node --test`) | 설정 흐름과 연결 안내의 JavaScript 판단 |
@@ -65,5 +66,6 @@ Apple Silicon Mac(macOS 27.0.1, Lima 2.2.1)의 실제 설치에서 Lima가 VM �
 - 전체 대화 기록의 완전성, 수집 전후 읽음 상태 전체 비교, 24–72시간 연속 수신과 디스크 사용량.
 - 실제 MCP 이벤트 실행. 자동 구독은 요구 사항이 아닙니다.
 - 그룹·오픈채팅방과 최근 알림이 없는 대화방으로의 실제 전송.
+- 로그인된 기기에서 첨부를 복호화하고 카카오 CDN에서 이미지·파일을 받는 흐름, 실행 중인 Iris가 v7로 교체되는 과정.
 
 현재 동작은 [Iris](iris.md), [관리 화면](web-ui.md), [MCP](dot-plugin.md)를 참고하세요.
