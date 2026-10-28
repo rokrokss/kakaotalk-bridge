@@ -23,13 +23,14 @@ curl -fsSL https://raw.githubusercontent.com/rokrokss/kakaotalk-bridge/main/inst
 
 ## 확인한 범위
 
-자동 테스트와 함께, 이 문제가 재현되는 Apple Silicon Mac(macOS 27.0.1, Lima 2.2.1)의 실제 설치에서 다음을 확인했습니다.
+자동 테스트와 함께, 이 문제가 재현되는 Apple Silicon Mac(macOS 27.0.1, Lima 2.2.1)에서 카카오톡 계정이 연결된 실제 설치로 다음을 확인했습니다.
 
-- 재시작할 때마다 Lima가 VM 안의 포트를 하나도 Mac으로 전달하지 않았습니다. VM 안에서 새로 연 포트도 마찬가지였습니다.
-- 새 LaunchAgent가 실행하는 SSH 명령만으로 관리 화면과 HTTPS 포트가 Mac에서 응답했습니다.
-- 기존 VM의 포트 전달 규칙을 지우는 Lima 설정 변경은 별도로 만든 VM 설정에서 확인했습니다.
+- 0.3.2에서는 Lima가 VM 안의 포트를 하나도 Mac으로 전달하지 않았습니다. Lima가 포트 알림을 받는 연결을 열었지만 VM 안의 에이전트에 도달하지 않았고, Mac이나 VM을 다시 시작해도 같았습니다.
+- 0.3.2 설치에서 설치 명령을 다시 실행해 이 버전의 시험판(v0.3.3-rc.1)으로 업데이트했습니다. VM이 한 번 다시 시작되며 Lima의 포트 전달 규칙이 지워졌고, 관리 화면과 HTTPS 포트가 Mac에서 응답했습니다. 인증 키와 볼륨은 그대로였고 상태 점검이 모두 정상이었습니다. 다시 실행하면 업데이트하지 않았고 VM도 다시 멈추지 않았습니다.
+- 연결을 맡은 SSH 프로세스를 강제로 종료하자 launchd가 바로 다시 연결했습니다. VM 안에서 이 연결의 패킷을 버려 잠자기 뒤처럼 응답 없이 끊긴 상태를 만들자 19초 만에 새로 연결했습니다.
+- VM이 멈춘 동안에는 연결을 다시 시도하며 기다렸고, `kakaotalk-bridge start`로 VM을 켜자 포트가 다시 열렸습니다.
 
-launchd에 등록한 상태에서의 재연결(VM 재시작, Mac 잠자기), 이전 릴리스에서 이 버전으로의 실제 업데이트, 새로 설치, Intel Mac에서는 확인하지 않았습니다. Linux 설치는 바뀌지 않았습니다.
+실제 Mac 잠자기, 새로 설치, `kakaotalk-bridge upgrade` 명령으로의 업데이트, Intel Mac에서는 확인하지 않았습니다. Linux 설치는 바뀌지 않았습니다.
 
 새로 설치하는 방법과 실행 조건은 [설치 안내](https://github.com/rokrokss/kakaotalk-bridge/blob/main/docs/quickstart.md)를 참고하세요.
 
